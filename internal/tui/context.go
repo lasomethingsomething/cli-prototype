@@ -92,27 +92,114 @@ func (c *ContextPanel) SetActiveTab(tab int) {
 	}
 }
 
-// Render renders the context panel with all tabs
+// Render renders the context panel as a side panel (Shopware CLI style)
 func (c *ContextPanel) Render() string {
 	var sb strings.Builder
 	
-	// Separator
-	separator := strings.Repeat("─", 80)
-	sepStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#555555"))
-	sb.WriteString(sepStyle.Render(separator) + "\n")
+	// Panel box
+	boxStyle := lipgloss.NewStyle().
+		BorderStyle(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("#555555")).
+		Padding(1, 2)
 	
-	// Tab bar
-	tabBar := c.renderTabBar()
-	sb.WriteString(tabBar + "\n")
+	// Header
+	headerStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#55AAFF")).
+		Bold(true)
 	
-	// Tab content
-	tabContent := c.renderTabContent()
-	sb.WriteString(tabContent)
+	sb.WriteString(boxStyle.Render(
+		headerStyle.Render(" Context Panel ") + "\n\n" +
+		c.renderPanelContent(),
+	))
 	
-	// Key hints
-	helpText := "[Tab/Shift+Tab: switch tabs | 1-6: select tab]"
-	helpStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#888888"))
-	sb.WriteString(helpStyle.Render(helpText) + "\n")
+	return sb.String()
+}
+
+// RenderSidePanel renders the panel for side-by-side display
+func (c *ContextPanel) RenderSidePanel() string {
+	return c.Render()
+}
+
+// renderPanelContent renders the content of the panel (all info, not tabbed)
+func (c *ContextPanel) renderPanelContent() string {
+	var sb strings.Builder
+	
+	// Progress section
+	progressPercent := (c.CurrentStep * 100) / c.TotalSteps
+	barWidth := 15
+	filled := int(progressPercent * barWidth / 100)
+	empty := barWidth - filled
+	
+	progressBar := lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF88")).Render(strings.Repeat("█", filled)) +
+		lipgloss.NewStyle().Foreground(lipgloss.Color("#555555")).Render(strings.Repeat("░", empty))
+	
+	sectionStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#8888FF"))
+	valueStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FAFAFA"))
+	
+	sb.WriteString(sectionStyle.Render("Progress\n"))
+	sb.WriteString(fmt.Sprintf("  Step %d of %d\n", c.CurrentStep, c.TotalSteps))
+	sb.WriteString(fmt.Sprintf("  %s %d%%\n\n", progressBar, progressPercent))
+	
+	// Config section
+	sb.WriteString(sectionStyle.Render("Configuration\n"))
+	if c.Registry != "" {
+		sb.WriteString(fmt.Sprintf("  Registry:    %s\n", valueStyle.Render(c.Registry)))
+	}
+	if c.GitOps != "" {
+		sb.WriteString(fmt.Sprintf("  GitOps:      %s\n", valueStyle.Render(c.GitOps)))
+	}
+	if c.Signer != "" {
+		sb.WriteString(fmt.Sprintf("  Signer:      %s\n", valueStyle.Render(c.Signer)))
+	}
+	if c.Runtime != "" {
+		sb.WriteString(fmt.Sprintf("  Runtime:     %s\n", valueStyle.Render(c.Runtime)))
+	}
+	sb.WriteString("\n")
+	
+	// Model section
+	sb.WriteString(sectionStyle.Render("Model\n"))
+	if c.ModelName != "" {
+		sb.WriteString(fmt.Sprintf("  Name:        %s\n", valueStyle.Render(c.ModelName)))
+	}
+	if c.ModelPath != "" {
+		sb.WriteString(fmt.Sprintf("  Path:        %s\n", valueStyle.Render(c.ModelPath)))
+	}
+	if c.ArtifactName != "" {
+		sb.WriteString(fmt.Sprintf("  Artifact:    %s\n", valueStyle.Render(c.ArtifactName)))
+	}
+	sb.WriteString("\n")
+	
+	// Status section
+	if c.PackageSucceeded || c.SignSucceeded || c.VerifySucceeded || c.DeploySucceeded {
+		sb.WriteString(sectionStyle.Render("Status\n"))
+		if c.PackageSucceeded {
+			sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF88")).Render("  ✓ Package\n"))
+		}
+		if c.SignSucceeded {
+			sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF88")).Render("  ✓ Sign\n"))
+		}
+		if c.VerifySucceeded {
+			sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF88")).Render("  ✓ Verify\n"))
+		}
+		if c.DeploySucceeded {
+			sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF88")).Render("  ✓ Deploy\n"))
+		}
+	}
+	
+	// Logs section
+	if len(c.Logs) > 0 {
+		sb.WriteString("\n" + sectionStyle.Render("Recent Logs\n"))
+		for i := len(c.Logs) - 1; i >= 0 && i >= len(c.Logs)-3; i-- {
+			if i >= 0 {
+				logStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#888888")).Italic(true)
+				log := c.Logs[i]
+				if len(log) > 40 {
+					log = log[:40] + "..."
+				}
+				sb.WriteString(fmt.Sprintf("  - %s\n", logStyle.Render(log)))
+			}
+		}
+	}
 	
 	return sb.String()
 }
