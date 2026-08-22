@@ -44,6 +44,9 @@ func (w *DeployWorkflow) SetModelInfo(modelName, repoURL, manifestPath string) {
 
 // Run executes the deployment workflow
 func (w *DeployWorkflow) Run() error {
+    if w.modelName == "" {
+        return fmt.Errorf("model info not set: call SetModelInfo before Run()")
+    }
     fmt.Printf("Starting deployment with GitOps: %s, Registry: %s\n", w.gitOps, w.registry)
     
     // Check if GitOps provider is available
