@@ -210,14 +210,25 @@ Examples:
 		fmt.Println(stepStyle.Render("Step 4: Package Model"))
 		fmt.Println()
 
-		pf, err := workflow.NewPackageWorkflow(cfg.Registry)
+		// Check if registry provider is installed before attempting to package
+		registryProvider, err := workflow.GetRegistryProvider(cfg.Registry)
 		if err != nil {
 			return err
 		}
-		pf.SetPackageInfo(modelName, modelPath, artifactName, "", includeRAG, ragPath)
 		
-		if err := pf.Run(); err != nil {
-			return err
+		if !registryProvider.IsInstalled() {
+			fmt.Println(warningStyle.Render("Warning: Registry tool not installed"))
+			fmt.Printf("   Install with: %s\n\n", registryProvider.InstallInstructions())
+		} else {
+			pf, err := workflow.NewPackageWorkflow(cfg.Registry)
+			if err != nil {
+				return err
+			}
+			pf.SetPackageInfo(modelName, modelPath, artifactName, "", includeRAG, ragPath)
+			
+			if err := pf.Run(); err != nil {
+				return err
+			}
 		}
 
 		fullArtifact := artifactName
@@ -272,14 +283,37 @@ Examples:
 			fmt.Println(stepStyle.Render("Step 7: Deploy to Kubernetes"))
 			fmt.Println()
 
-			wf, err := workflow.NewDeployWorkflow(cfg.GitOps, cfg.Registry)
+			// Check if GitOps and registry providers are installed before deploying
+			gitOpsProvider, err := workflow.GetGitOpsProvider(cfg.GitOps)
 			if err != nil {
 				return err
 			}
-			wf.SetModelInfo(modelName, repoURL, manifestPath)
-
-			if err := wf.Run(); err != nil {
+			
+			registryProvider, err := workflow.GetRegistryProvider(cfg.Registry)
+			if err != nil {
 				return err
+			}
+			
+			if !gitOpsProvider.IsInstalled() {
+				fmt.Println(warningStyle.Render("Warning: GitOps tool not installed"))
+				fmt.Printf("   Install with: %s\n", gitOpsProvider.InstallInstructions())
+			}
+			
+			if !registryProvider.IsInstalled() {
+				fmt.Println(warningStyle.Render("Warning: Registry tool not installed"))
+				fmt.Printf("   Install with: %s\n", registryProvider.InstallInstructions())
+			}
+			
+			if gitOpsProvider.IsInstalled() && registryProvider.IsInstalled() {
+				wf, err := workflow.NewDeployWorkflow(cfg.GitOps, cfg.Registry)
+				if err != nil {
+					return err
+				}
+				wf.SetModelInfo(modelName, repoURL, manifestPath)
+
+				if err := wf.Run(); err != nil {
+					return err
+				}
 			}
 			fmt.Println()
 		} else if !skipDeploy {

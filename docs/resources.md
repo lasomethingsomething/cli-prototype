@@ -1,4 +1,4 @@
-### Resources
+# Resources
 
 #### Standards
 - [OCI Specification](https://specs.opencontainers.org/image-spec/) - Open Container Initiative

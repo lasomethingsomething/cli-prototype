@@ -1,4 +1,4 @@
-### TUI (Terminal User Interface)
+# TUI (Terminal User Interface)
 
 Model CLI provides a clean, color-coded TUI built with [huh](https://github.com/charmbracelet/huh) and [lipgloss](https://github.com/charmbracelet/lipgloss).
 
