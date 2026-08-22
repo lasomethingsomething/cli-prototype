@@ -87,6 +87,7 @@ func TestDeployWorkflowMissingTools(t *testing.T) {
 				t.Fatalf("NewDeployWorkflow error = %v", err)
 			}
 
+			wf.SetModelInfo("test-model", "https://github.com/test/repo", "./manifests")
 			err = wf.Run()
 			if (err != nil) != tt.expectError {
 				t.Errorf("Run() error = %v, expectError %v", err, tt.expectError)
@@ -130,5 +131,19 @@ func TestDeployWorkflowWithModelInfo(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "flux not installed") {
 		t.Errorf("Expected flux not installed error, got: %v", err)
+	}
+}
+
+func TestDeployWorkflowRunWithoutModelInfo(t *testing.T) {
+	wf, err := NewDeployWorkflow("flux", "modelpack")
+	if err != nil {
+		t.Fatalf("NewDeployWorkflow error: %v", err)
+	}
+	err = wf.Run()
+	if err == nil {
+		t.Error("Run() without SetModelInfo should return an error")
+	}
+	if !strings.Contains(err.Error(), "model name and repository URL are required") {
+		t.Errorf("unexpected error message: %v", err)
 	}
 }
