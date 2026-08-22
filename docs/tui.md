@@ -1,12 +1,13 @@
 # TUI (Terminal User Interface)
 
-Model CLI provides a clean, color-coded TUI built with [huh](https://github.com/charmbracelet/huh) and [lipgloss](https://github.com/charmbracelet/lipgloss).
+Model CLI provides a clean, color-coded TUI built with [huh](https://github.com/charmbracelet/huh), [lipgloss](https://github.com/charmbracelet/lipgloss), and [bubbletea](https://github.com/charmbracelet/bubbletea) for advanced layouts.
 
 ## Design Principles
 
 - **Clean and uncluttered** - Only show key information
 - **Step-by-step guidance** - Clear workflow progression
 - **Color-coded** - Success (green), warnings (yellow), info (blue)
+- **Context panels** - Shopware CLI-style side panels showing important info
 - **Consistent** - Same look and feel across all commands
 
 ## Styling
@@ -19,6 +20,51 @@ Model CLI provides a clean, color-coded TUI built with [huh](https://github.com/
 | Success | Green (#00FF88), Bold | Success messages with checkmarks |
 | Info | Light Blue (#8888FF) | Information and tips |
 | Warning | Orange (#FFAA00) | Warnings and issues |
+
+## Context Side Panels
+
+The Model CLI TUI features **context panels** inspired by Shopware CLI. These panels appear at key points in the workflow and display important contextual information in an organized, easy-to-read format.
+
+### Panel Layout
+
+```
++----------------------------------------+
+| Main Content Area                     |
+| (huh prompts and workflow steps)       |
++----------------------------------------+
+
++------------------+
+| Context Panel    |
+|==================|
+| Progress         |
+|  Step 2/7 57%   |
+|  [███████░░░░]  |
+|                  |
+| Configuration    |
+|  Registry: oras  |
+|  GitOps: argo    |
+|  Signer: cosign  |
+|                  |
+| Model            |
+|  Name: phi-4-mini|
+|  Artifact: v1    |
+|                  |
+| Status           |
+|  ✓ Package       |
+|  ✓ Sign         |
+|                  |
+| Recent Logs      |
+|  - Package done  |
++------------------+
+```
+
+### Panel Sections
+
+1. **Progress** - Shows current step, total steps, and visual progress bar
+2. **Configuration** - Displays selected tools (registry, GitOps, signer, runtime)
+3. **Model** - Shows model name, path, and artifact name
+4. **Status** - Checkmarks for completed workflow steps
+5. **Recent Logs** - Last 3 log entries from the workflow
 
 ## Interactive vs Non-Interactive Modes
 
