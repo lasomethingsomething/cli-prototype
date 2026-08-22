@@ -28,12 +28,17 @@ func Save(cfg *Config) error {
 	viper.Set("signer", cfg.Signer)
 
 	if err := viper.WriteConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			home, herr := os.UserHomeDir()
-			if herr != nil {
-				return fmt.Errorf("could not determine home directory: %w", herr)
+		_, isNotFound := err.(viper.ConfigFileNotFoundError)
+		if isNotFound || os.IsNotExist(err) {
+			cfgFile := viper.ConfigFileUsed()
+			if cfgFile == "" {
+				home, herr := os.UserHomeDir()
+				if herr != nil {
+					return fmt.Errorf("could not determine home directory: %w", herr)
+				}
+				cfgFile = filepath.Join(home, ".model-cli.yaml")
 			}
-			return viper.WriteConfigAs(filepath.Join(home, ".model-cli.yaml"))
+			return viper.WriteConfigAs(cfgFile)
 		}
 		return err
 	}

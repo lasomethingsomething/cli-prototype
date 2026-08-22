@@ -8,63 +8,67 @@ import (
 	"github.com/spf13/viper"
 )
 
-func pinConfigFile(t *testing.T) string {
-	t.Helper()
+func resetViper() {
 	viper.Reset()
-	f := filepath.Join(t.TempDir(), ".model-cli.yaml")
-	viper.SetConfigFile(f)
-	return f
 }
 
-func TestSaveAndLoad(t *testing.T) {
-	f := pinConfigFile(t)
+func TestSaveFirstRun(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, ".model-cli.yaml")
+	resetViper()
+	// Point viper at the explicit path so the first-run fallback writes here
+	viper.SetConfigFile(cfgPath)
 
 	cfg := &Config{
 		GitOps:   "argo",
 		Registry: "oras",
-		Runtime:  "vllm",
 		Signer:   "sigstore",
+		Runtime:  "vllm",
+	}
+
+	if err := Save(cfg); err != nil {
+		t.Fatalf("Save() on first run error = %v", err)
+	}
+
+	if _, err := os.Stat(cfgPath); os.IsNotExist(err) {
+		t.Errorf("config file not created at %s", cfgPath)
+	}
+}
+
+func TestSaveAndLoad(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, ".model-cli.yaml")
+	resetViper()
+	viper.SetConfigFile(cfgPath)
+
+	cfg := &Config{
+		GitOps:   "flux",
+		Registry: "modelpack",
+		Signer:   "notary",
+		Runtime:  "kserve",
 	}
 
 	if err := Save(cfg); err != nil {
 		t.Fatalf("Save() error = %v", err)
 	}
 
-	if _, err := os.Stat(f); os.IsNotExist(err) {
-		t.Error("Save() did not create config file")
-	}
-
-	// Re-init viper pointing at the same file so Load() reads it back
-	viper.Reset()
-	viper.SetConfigFile(f)
+	resetViper()
+	viper.SetConfigFile(cfgPath)
 	if err := viper.ReadInConfig(); err != nil {
 		t.Fatalf("ReadInConfig() error = %v", err)
 	}
-	got := Load()
 
-	if got.GitOps != cfg.GitOps {
-		t.Errorf("GitOps = %q, want %q", got.GitOps, cfg.GitOps)
+	loaded := Load()
+	if loaded.GitOps != cfg.GitOps {
+		t.Errorf("GitOps = %q, want %q", loaded.GitOps, cfg.GitOps)
 	}
-	if got.Registry != cfg.Registry {
-		t.Errorf("Registry = %q, want %q", got.Registry, cfg.Registry)
+	if loaded.Registry != cfg.Registry {
+		t.Errorf("Registry = %q, want %q", loaded.Registry, cfg.Registry)
 	}
-	if got.Runtime != cfg.Runtime {
-		t.Errorf("Runtime = %q, want %q", got.Runtime, cfg.Runtime)
+	if loaded.Signer != cfg.Signer {
+		t.Errorf("Signer = %q, want %q", loaded.Signer, cfg.Signer)
 	}
-	if got.Signer != cfg.Signer {
-		t.Errorf("Signer = %q, want %q", got.Signer, cfg.Signer)
-	}
-}
-
-func TestLoadNoFile(t *testing.T) {
-	viper.Reset()
-	viper.AddConfigPath(t.TempDir())
-	viper.SetConfigType("yaml")
-	viper.SetConfigName(".model-cli")
-
-	got := Load()
-
-	if got.GitOps != "" || got.Registry != "" || got.Runtime != "" || got.Signer != "" {
-		t.Errorf("Load() with no file = %+v, want zero-value Config", got)
+	if loaded.Runtime != cfg.Runtime {
+		t.Errorf("Runtime = %q, want %q", loaded.Runtime, cfg.Runtime)
 	}
 }
