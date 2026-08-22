@@ -11,6 +11,49 @@ import (
 	"github.com/spf13/cobra"
 )
 
+type wizardResult struct {
+	packageSucceeded bool
+	signSucceeded    bool
+	verifySucceeded  bool
+	deploySucceeded  bool
+	modelName        string
+	signer           string
+	gitOps           string
+	skipSigning      bool
+	skipDeploy       bool
+}
+
+func buildSummaryLines(r wizardResult) []string {
+	var lines []string
+	if r.packageSucceeded {
+		lines = append(lines, fmt.Sprintf("✓ Packaged '%s' as OCI artifact", r.modelName))
+	} else {
+		lines = append(lines, "⚠ Skipped packaging (registry tool not installed)")
+	}
+	if r.skipSigning {
+		lines = append(lines, "⚠ Skipped signing")
+	} else if r.signSucceeded {
+		lines = append(lines, fmt.Sprintf("✓ Signed with %s", r.signer))
+	} else {
+		lines = append(lines, "⚠ Signing tool not installed")
+	}
+	if !r.skipSigning {
+		if r.verifySucceeded {
+			lines = append(lines, "✓ Verified signature")
+		} else if !r.signSucceeded {
+			lines = append(lines, "⚠ Verification tool not installed")
+		}
+	}
+	if r.skipDeploy {
+		lines = append(lines, "⚠ Skipped deployment")
+	} else if r.deploySucceeded {
+		lines = append(lines, fmt.Sprintf("✓ Deployed to Kubernetes with %s", r.gitOps))
+	} else {
+		lines = append(lines, "⚠ Skipped deployment")
+	}
+	return lines
+}
+
 // Styling for clean, uncluttered TUI
 var (
 	titleStyle = lipgloss.NewStyle().
@@ -248,6 +291,9 @@ Examples:
 		}
 		
 		packageSucceeded := false
+		signSucceeded := false
+		verifySucceeded := false
+		deploySucceeded := false
 		if !registryProvider.IsInstalled() {
 			fmt.Println(warningStyle.Render("Warning: Registry tool not installed"))
 			fmt.Printf("   Install with: %s\n\n", registryProvider.InstallInstructions())
@@ -286,6 +332,7 @@ Examples:
 				return err
 			}
 
+			signSucceeded = false
 			if !sp.IsInstalled() {
 				fmt.Println(warningStyle.Render("⚠ Signing tool not installed"))
 				fmt.Printf("   Install with: %s\n\n", sp.InstallInstructions())
@@ -293,6 +340,7 @@ Examples:
 				fmt.Printf("Signing %s with %s...\n", fullArtifact, cfg.Signer)
 				// In real implementation: sp.Sign(fullArtifact, "")
 				fmt.Println(successStyle.Render("✓ Artifact signed"))
+				signSucceeded = true
 			}
 			fmt.Println()
 		}
@@ -307,6 +355,7 @@ Examples:
 				return err
 			}
 
+			verifySucceeded = false
 			if !sp.IsInstalled() {
 				fmt.Println(warningStyle.Render("⚠ Signing tool not installed"))
 				fmt.Printf("   Install with: %s\n\n", sp.InstallInstructions())
@@ -314,6 +363,7 @@ Examples:
 				fmt.Printf("Verifying %s...\n", fullArtifact)
 				// In real implementation: sp.Verify(fullArtifact)
 				fmt.Println(successStyle.Render("✓ Signature verified - artifact is trusted"))
+				verifySucceeded = true
 			}
 			fmt.Println()
 		}
@@ -354,6 +404,7 @@ Examples:
 				if err := wf.Run(); err != nil {
 					return err
 				}
+				deploySucceeded = true
 			}
 			fmt.Println()
 		} else if !skipDeploy {
@@ -368,21 +419,19 @@ Examples:
 		fmt.Println(titleStyle.Render("🎉 Journey Complete!"))
 		fmt.Println()
 		fmt.Println("You've successfully:")
-		if packageSucceeded {
-			fmt.Printf("  %s Packaged '%s' as OCI artifact\n", successStyle.Render("✓"), modelName)
-		} else {
-			fmt.Printf("  %s Skipped packaging (registry tool not installed)\n", warningStyle.Render("⚠"))
+		result := wizardResult{
+			packageSucceeded: packageSucceeded,
+			signSucceeded:    signSucceeded,
+			verifySucceeded:  verifySucceeded,
+			deploySucceeded:  deploySucceeded,
+			modelName:        modelName,
+			signer:           cfg.Signer,
+			gitOps:           cfg.GitOps,
+			skipSigning:      skipSigning,
+			skipDeploy:       skipDeploy,
 		}
-		if !skipSigning {
-			fmt.Printf("  %s Signed with %s\n", successStyle.Render("✓"), cfg.Signer)
-			fmt.Printf("  %s Verified signature\n", successStyle.Render("✓"))
-		} else {
-			fmt.Printf("  %s Skipped signing\n", warningStyle.Render("⚠"))
-		}
-		if hasKubernetes && !skipDeploy {
-			fmt.Printf("  %s Deployed to Kubernetes with %s\n", successStyle.Render("✓"), cfg.GitOps)
-		} else {
-			fmt.Printf("  %s Skipped deployment\n", warningStyle.Render("⚠"))
+		for _, line := range buildSummaryLines(result) {
+			fmt.Printf("  %s\n", line)
 		}
 		fmt.Println()
 		fmt.Println(infoStyle.Render("Your model is now ready for production!"))
