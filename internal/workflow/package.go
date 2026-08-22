@@ -19,6 +19,7 @@ type PackageWorkflow struct {
 	includeMOF        bool
 	annotations      *AnnotationSet
 	manifestPath      string
+	isSkill          bool
 }
 
 // NewPackageWorkflow creates a new packaging workflow
@@ -56,6 +57,11 @@ func (w *PackageWorkflow) SetAnnotations(annotations *AnnotationSet) {
 func (w *PackageWorkflow) SetSecurityOptions(generateSBOM, includeMOF bool) {
 	w.generateSBOM = generateSBOM
 	w.includeMOF = includeMOF
+}
+
+// SetIsSkill sets whether this is a skill package
+func (w *PackageWorkflow) SetIsSkill(isSkill bool) {
+	w.isSkill = isSkill
 }
 
 // ManifestPath returns the path to the OCI manifest written by Run(), or an
@@ -132,6 +138,15 @@ func (w *PackageWorkflow) Run() error {
 	var manifestAnnotations map[string]string
 	if w.annotations != nil {
 		manifestAnnotations = w.annotations.ToMap()
+	} else {
+		manifestAnnotations = make(map[string]string)
+	}
+
+	// Set artifact type based on whether this is a skill or model
+	if w.isSkill {
+		manifestAnnotations[AnnotationArtifactType] = "skill"
+	} else if manifestAnnotations[AnnotationArtifactType] == "" {
+		manifestAnnotations[AnnotationArtifactType] = "model"
 	}
 
 	manifest := NewManifest(manifestAnnotations)
