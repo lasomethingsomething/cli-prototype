@@ -59,12 +59,49 @@ Examples:
 			return err
 		}
 
+		// Phase 5: Large Binary Asset Optimization
+		var modelSize string
+		if err := huh.NewInput().
+			Title("Model size (optional):").
+			Description("Approximate model size for optimization (e.g., 14GB, 70GB)").
+			Value(&modelSize).
+			Run(); err != nil {
+			return err
+		}
+
+		// Phase 5: Reference Skill DLC
+		var loadSkills bool
+		if err := huh.NewConfirm().
+			Title("Load agentic skills?").
+			Description("Enable Reference Skill DLC for dynamic skill loading").
+			Value(&loadSkills).
+			Run(); err != nil {
+			return err
+		}
+
+		var skillRefs []string
+		if loadSkills {
+			// For now, just add one skill reference
+			var skillRef string
+			if err := huh.NewInput().
+				Title("Skill reference:").
+				Description("Skill reference (e.g., my-skill:v1, agentskills.io/skill-name)").
+				Value(&skillRef).
+				Run(); err != nil {
+				return err
+			}
+			skillRefs = append(skillRefs, skillRef)
+			
+			// Could add more skills here in the future
+		}
+
 		// Create serve workflow
 		wf, err := workflow.NewServeWorkflow(runtime)
 		if err != nil {
 			return err
 		}
 		wf.SetServeInfo(modelPath, host, port)
+		wf.SetModelInfo(modelSize, skillRefs)
 
 		return wf.Run()
 	},
