@@ -4,38 +4,59 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/spf13/viper"
 )
 
-func TestInitConfigResetsBetweenCalls(t *testing.T) {
-	original := cfgFile
-	defer func() { cfgFile = original; initConfigErr = nil }()
-
+func TestInitConfigNoFile(t *testing.T) {
+	viper.Reset()
+	origCfgFile := cfgFile
 	cfgFile = ""
-	initConfig()
-	// initConfigErr may be nil (no config file is fine) — just verify it's not the artificial value
-	initConfigErr = os.ErrInvalid
+	defer func() { cfgFile = origCfgFile }()
 
-	cfgFile = ""
 	initConfig()
-	if initConfigErr == os.ErrInvalid {
-		t.Error("initConfig() did not reset initConfigErr at start of call")
+	if initConfigErr != nil {
+		t.Errorf("initConfig() with no file set initConfigErr = %v, want nil (missing file is not an error)", initConfigErr)
 	}
 }
 
-func TestInitConfigBadConfigFile(t *testing.T) {
+func TestInitConfigBadFile(t *testing.T) {
 	dir := t.TempDir()
 	badFile := filepath.Join(dir, "bad.yaml")
-	if err := os.WriteFile(badFile, []byte(":\ninvalid: [yaml"), 0644); err != nil {
-		t.Fatal(err)
+	os.WriteFile(badFile, []byte("key: [invalid yaml"), 0644)
+
+	origCfgFile := cfgFile
+	cfgFile = badFile
+	defer func() { cfgFile = origCfgFile }()
+
+	viper.Reset()
+	initConfig()
+	if initConfigErr == nil {
+		t.Error("initConfig() with invalid YAML file should set initConfigErr, got nil")
+	}
+}
+
+func TestInitConfigErrResetBetweenCalls(t *testing.T) {
+	// Verify that a second call to initConfig() clears a prior error.
+	dir := t.TempDir()
+	badFile := filepath.Join(dir, "bad.yaml")
+	os.WriteFile(badFile, []byte("key: [invalid yaml"), 0644)
+
+	origCfgFile := cfgFile
+	cfgFile = badFile
+	defer func() { cfgFile = origCfgFile }()
+
+	viper.Reset()
+	initConfig()
+	if initConfigErr == nil {
+		t.Fatal("expected error from bad file, got nil")
 	}
 
-	original := cfgFile
-	defer func() { cfgFile = original; initConfigErr = nil }()
-
-	cfgFile = badFile
+	// Now reset to no file — error should clear.
+	cfgFile = ""
+	viper.Reset()
 	initConfig()
-
-	if initConfigErr == nil {
-		t.Error("initConfig() with invalid YAML should set initConfigErr, got nil")
+	if initConfigErr != nil {
+		t.Errorf("initConfig() after reset: initConfigErr = %v, want nil", initConfigErr)
 	}
 }
