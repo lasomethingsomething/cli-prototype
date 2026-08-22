@@ -45,10 +45,16 @@ This will guide you through the complete workflow step-by-step:
 1. **Setup Preferences** - Choose your tools (registry, GitOps, signing)
 2. **Model Details** - Enter your model information
 3. **Kubernetes Setup** - Configure deployment options
-4. **Package** - Create OCI artifact with SBOM and MOF classification
-5. **Sign** - Sign your artifact (optional, can be skipped)
-6. **Verify** - Verify the signature (optional, can be skipped)
-7. **Deploy** - Deploy to Kubernetes (optional, can be skipped)
+4. **Package** - Create OCI artifact
+5. **Hardening & Compliance** - Generate SBOM, apply MOF classification, and security annotations
+6. **Sign** - Sign your artifact (optional, can be skipped)
+7. **Verify** - Verify the signature (optional, can be skipped)
+8. **Deploy** - Deploy to Kubernetes (optional, can be skipped)
+
+The **Step 2: Local Hardening & Compliance** feature includes:
+- **SBOM Generation**: Creates a Software Bill of Materials (using Syft) attached to artifact layers
+- **MOF Classification**: Applies Model Openness Framework classification (Class I, II, or III)
+- **Security Annotations**: Applies signing framework and provenance annotations
 
 ### Wizard Skip Flags
 
@@ -77,14 +83,14 @@ The wizard will prompt you for:
 
 Model CLI checks if required tools are installed and provides installation instructions:
 
-| Tool | Purpose | Install Command |
-|------|---------|----------------|
-| oras | OCI registry | `brew install oras` |
-| argocd | GitOps (UI) | `brew install argoproj/tap/argocd` |
-| flux | GitOps (agents) | `brew install fluxcd/tap/flux` |
-| cosign | Signing (Sigstore) | `brew install sigstore/tap/cosign` |
-| notation | Signing (Notary v2) | `brew install notation` |
-| syft | SBOM generation | `brew install anchore/syft/syft` |
+| Tool | Purpose | Install Command | Required for |
+|------|---------|----------------|---------------|
+| oras | OCI registry | `brew install oras` | Package/Push |
+| argocd | GitOps (UI) | `brew install argoproj/tap/argocd` | Deploy |
+| flux | GitOps (agents) | `brew install fluxcd/tap/flux` | Deploy |
+| cosign | Signing (Sigstore) | `brew install sigstore/tap/cosign` | Sign/Verify |
+| notation | Signing (Notary v2) | `brew install notation` | Sign/Verify |
+| syft | SBOM generation | `brew install anchore/syft/syft` | Hardening |
 
 ## Individual Commands
 

@@ -66,6 +66,25 @@ The Model CLI TUI features **context panels** inspired by Shopware CLI. These pa
 4. **Status** - Checkmarks for completed workflow steps
 5. **Recent Logs** - Last 3 log entries from the workflow
 
+### Hardening TUI (Step 2)
+
+The **Local Hardening & Compliance** workflow (`internal/tui/harden/`) features specialized tabs:
+
+1. **Progress** - Step progress through hardening workflow
+2. **Config** - Tool configuration
+3. **Model** - Model information
+4. **SBOM** - SBOM generation status, path, and tool info
+5. **MOF** - MOF classification status, class, and version
+6. **Logs** - Recent hardening operation logs
+7. **Help** - Keyboard shortcuts
+8. **Env** - Environment information
+
+The hardening TUI provides:
+- Interactive panels explaining SBOM and MOF concepts
+- Real-time progress feedback during SBOM generation and MOF classification
+- Results summary with SBOM path and MOF class
+- Security annotations application status
+
 ## Interactive vs Non-Interactive Modes
 
 Every command that supports interactive prompts also supports **non-interactive mode** via command-line flags. This provides parity between the two modes.
@@ -276,6 +295,43 @@ model-cli schedule \
   --list-nodes \
   --dry-run
 ```
+
+### harden
+
+Performs local hardening and compliance checks (SBOM + MOF).
+
+**Interactive panels:**
+- Introduction explaining hardening concepts
+- SBOM generation configuration with explanations
+- MOF classification configuration with class descriptions
+- Review of all hardening options
+- Progress display during hardening operations
+
+**Features:**
+- Generates SBOM using Syft and attaches to artifact layers
+- Applies MOF classification (Class I, II, or III)
+- Applies security annotations (Sigstore, SLSA)
+- Context panel with SBOM, MOF, and progress tabs
+
+**Non-interactive flags:**
+```bash
+model-cli harden \
+  --model phi-4-mini \
+  --model-path ./models \
+  --artifact my-model:v1 \
+  --generate-sbom \
+  --include-mof
+```
+
+**Interactive TUI tabs (when run interactively):**
+- Progress: Shows hardening step progress
+- Config: Tool configuration
+- Model: Model information
+- SBOM: SBOM status and results
+- MOF: MOF classification status and results
+- Logs: Operation logs
+- Help: Keyboard shortcuts
+- Env: Environment info
 
 ## TUI Best Practices
 
