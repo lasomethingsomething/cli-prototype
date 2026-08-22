@@ -25,6 +25,15 @@ model-cli verify
 model-cli deploy
 ```
 
+## Contributing
+
+Follow the provider pattern for new tool integrations:
+
+1. Add interface in internal/workflow/providers.go
+2. Implement concrete provider
+3. Register in factory function (Get*Provider)
+4. Update CLI commands to use it
+
 ## License
 
 Apache License 2.0
