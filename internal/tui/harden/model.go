@@ -99,12 +99,7 @@ func New(registry string) *Model {
 
 // Init initializes the model
 func (m *Model) Init() tea.Cmd {
-	var err error
-	m.workflow, err = workflow.NewHardenWorkflow(m.registry)
-	if err != nil {
-		m.err = err
-		m.logs = append(m.logs, fmt.Sprintf("Error: %v", err))
-	}
+	m.workflow = workflow.NewHardenWorkflow(m.registry)
 	return nil
 }
 
