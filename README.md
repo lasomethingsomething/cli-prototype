@@ -4,15 +4,21 @@ Your tour guide through the secure ML model deployment journey.
 
 Model CLI makes it easy to package, sign, verify, and deploy ML models with a clean, guided TUI (Terminal User Interface).
 
-## Get Started in 2 Minutes
+## Get Started
+
+### If you already have the repository:
 
 ```bash
-# 1. Clone and build
+go build -o model-cli .
+./model-cli wizard
+```
+
+### If you're starting fresh:
+
+```bash
 git clone https://github.com/lasomethingsomething/cli-prototype.git
 cd cli-prototype
 go build -o model-cli .
-
-# 2. Try the wizard
 ./model-cli wizard
 ```
 

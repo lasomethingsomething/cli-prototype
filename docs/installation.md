@@ -2,7 +2,19 @@
 
 ## Quick Install
 
-### From Source (Recommended)
+### Option 1: Build from source in current directory
+
+If you already have the repository cloned:
+
+```bash
+# Build the CLI
+go build -o model-cli .
+
+# Verify it works
+./model-cli --help
+```
+
+### Option 2: Clone and build (if starting fresh)
 
 ```bash
 # Clone the repository
@@ -16,7 +28,7 @@ go build -o model-cli .
 ./model-cli --help
 ```
 
-### Using Go Install
+### Option 3: Using Go Install
 
 ```bash
 go install github.com/lasomethingsomething/cli-prototype@latest
