@@ -147,7 +147,9 @@ Model CLI itself only needs Go. The tools it integrates with are optional and ch
 | flux | `brew install fluxcd/tap/flux` | GitOps (agents) |
 | cosign | `brew install sigstore/tap/cosign` | Signing |
 | notation | `brew install notation` | Signing |
-| syft | `brew install anchore/syft/syft` | SBOM generation |
+| syft | `brew install anchore/syft/syft` | SBOM generation (SPDX, CycloneDX) |
+| trivy | `brew install aquasecurity/trivy/trivy` | SBOM generation (SPDX, CycloneDX) |
+| cdxgen | `npm install -g @cyclonedx/cdxgen` | SBOM generation (CycloneDX) |
 
 If a tool isn't installed, Model CLI will tell you exactly how to install it.
 

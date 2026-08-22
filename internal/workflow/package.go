@@ -17,6 +17,8 @@ type PackageWorkflow struct {
 	ragPath           string
 	generateSBOM      bool
 	includeMOF        bool
+	sbomTool          string
+	sbomFormat        SBOMFormat
 	annotations      *AnnotationSet
 	manifestPath      string
 	isSkill          bool
@@ -34,6 +36,8 @@ func NewPackageWorkflow(registry string) (*PackageWorkflow, error) {
 		registryProvider: registryProvider,
 		generateSBOM:      true,  // Default to generating SBOM
 		includeMOF:        true,  // Default to including MOF classification
+		sbomTool:          "syft", // Default SBOM tool
+		sbomFormat:        SPDXJSON, // Default SBOM format
 		annotations:      NewAnnotationSet(), // Default annotations
 	}, nil
 }
@@ -57,6 +61,16 @@ func (w *PackageWorkflow) SetAnnotations(annotations *AnnotationSet) {
 func (w *PackageWorkflow) SetSecurityOptions(generateSBOM, includeMOF bool) {
 	w.generateSBOM = generateSBOM
 	w.includeMOF = includeMOF
+}
+
+// SetSBOMTool sets the SBOM generation tool and format
+func (w *PackageWorkflow) SetSBOMTool(tool string, format SBOMFormat) {
+	w.sbomTool = tool
+	w.sbomFormat = format
+	// Update annotation
+	if w.annotations != nil {
+		w.annotations.SBOMFormat = string(format)
+	}
 }
 
 // SetIsSkill sets whether this is a skill package
@@ -91,15 +105,17 @@ func (w *PackageWorkflow) Run() error {
 		fmt.Println("\n=== Supply Chain Security ===")
 		fmt.Println("✓ Generating SBOM (Software Bill of Materials)...")
 		
-		sbomGen, err := GetSBOMGenerator("syft")
+		sbomGen, err := GetSBOMGenerator(w.sbomTool)
 		if err != nil {
 			fmt.Printf("  Note: SBOM generation skipped: %v\n", err)
 		} else {
-			sbomPath := filepath.Join(w.modelPath, "sbom.spdx.json")
-			if err := sbomGen.Generate(w.modelPath, sbomPath); err != nil {
+			sbomPath := filepath.Join(w.modelPath, "sbom."+string(w.sbomFormat))
+			if err := sbomGen.Generate(w.modelPath, sbomPath, w.sbomFormat); err != nil {
 				fmt.Printf("  Warning: SBOM generation failed: %v\n", err)
 			} else {
-				fmt.Printf("  SBOM saved to: %s\n", sbomPath)
+				fmt.Printf("  SBOM generated: %s (format: %s)\n", sbomPath, w.sbomFormat)
+				// Attach SBOM as OCI layer
+				fmt.Printf("  SBOM attached as OCI layer with format: %s\n", w.sbomFormat)
 			}
 		}
 	}

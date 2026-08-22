@@ -96,9 +96,18 @@ Model CLI checks if required tools are installed and provides installation instr
 | flux | GitOps (agents) | `brew install fluxcd/tap/flux` | Deploy |
 | cosign | Signing (Sigstore) | `brew install sigstore/tap/cosign` | Sign/Verify |
 | notation | Signing (Notary v2) | `brew install notation` | Sign/Verify |
-| syft | SBOM generation | `brew install anchore/syft/syft` | Hardening/Check |
+| syft | SBOM generation (SPDX, CycloneDX) | `brew install anchore/syft/syft` | Hardening/Check |
+| trivy | SBOM generation (SPDX, CycloneDX) | `brew install aquasecurity/trivy/trivy` | Hardening/Check |
+| cdxgen | SBOM generation (CycloneDX) | `npm install -g @cyclonedx/cdxgen` | Hardening/Check |
 
-**Note:** The `check` command validates local artifacts and requires SBOM (from Syft) and MOF classification to be present.
+**Note:** The `check` command validates local artifacts and requires SBOM (from Syft/Trivy/cdxgen) and MOF classification to be present.
+
+**SBOM Tools:** Multiple SBOM generators are supported:
+- **Syft** (default): Generates SPDX and CycloneDX formats
+- **Trivy**: Generates SPDX and CycloneDX formats with vulnerability scanning
+- **cdxgen**: Generates CycloneDX format
+
+Use `--sbom-tool` and `--sbom-format` flags to select your preferred generator and format.
 
 ## Individual Commands
 
