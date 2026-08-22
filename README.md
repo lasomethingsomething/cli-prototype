@@ -1,176 +1,151 @@
 # Model CLI
 
-Your tour guide through the secure ML model deployment journey.
+**Your tour guide through the secure ML model deployment journey.**
 
-Model CLI makes it easy to package, sign, verify, and deploy ML models with a clean, guided TUI.
+Model CLI makes it easy to package, sign, verify, and deploy ML models with a clean, guided TUI (Terminal User Interface).
 
-## Overview
-
-Start with the full guided journey:
+## Get Started in 2 Minutes
 
 ```bash
-model-cli wizard
+# 1. Clone and build
+git clone https://github.com/lasomethingsomething/cli-prototype.git
+cd cli-prototype
+go build -o model-cli .
+
+# 2. Try the wizard
+./model-cli wizard
 ```
 
-This walks you through packaging, signing, verifying, and deploying your model.
+That's it! The wizard will guide you through every step.
 
-Individual commands are also available:
+## What is Model CLI?
+
+Model CLI is a **tour guide** CLI that helps you:
+
+- ✅ Package ML models as OCI artifacts
+- ✅ Generate SBOMs for supply chain transparency
+- ✅ Classify models with MOF (Model Openness Framework)
+- ✅ Sign artifacts with Sigstore or Notary v2
+- ✅ Verify signatures before deployment
+- ✅ Deploy to Kubernetes with Argo or Flux
+- ✅ Serve models with vLLM or KServe
+
+All through a **clean, colorful, step-by-step TUI** that shows you exactly what's happening.
+
+## Quick Examples
+
+### Full Guided Journey (Recommended)
 
 ```bash
-model-cli package    # Package model as OCI artifact
-model-cli sign       # Sign with Sigstore or Notary v2
-model-cli verify     # Verify artifact signature
-model-cli deploy     # Deploy to Kubernetes
-model-cli serve      # Serve with vLLM or KServe
-model-cli push       # Push artifact to registry
-model-cli admit      # Evaluate artifact for GitOps admission
-model-cli validate   # Validate artifact manifest
-model-cli schedule   # Schedule workload to appropriate node
+./model-cli wizard
+```
+
+Follow the prompts. The wizard will:
+1. Ask about your model (name, path, etc.)
+2. Ask about your tool preferences (registry, GitOps, etc.)
+3. Package your model as an OCI artifact
+4. Optionally sign and verify
+5. Optionally deploy to Kubernetes
+
+### Skip Steps You Don't Need
+
+```bash
+# Just package, skip signing and deployment
+./model-cli wizard --skip-signing --skip-deploy
+
+# Package and sign, but skip deployment
+./model-cli wizard --skip-deploy
+```
+
+### Individual Commands
+
+```bash
+# Package only
+./model-cli package --model phi-4-mini --model-path ./models
+
+# Sign only
+./model-cli sign --artifact my-model:v1 --signer sigstore
+
+# Deploy only
+./model-cli deploy --gitops argo --registry oras --model my-model
 ```
 
 ## Features
 
-### Pluggable Architecture
+### 🎯 Tour Guide Experience
+- Interactive TUI with [huh](https://github.com/charmbracelet/huh)
+- Clean, color-coded output with [lipgloss](https://github.com/charmbracelet/lipgloss)
+- Step-by-step guidance through complex workflows
+- Clear success (✓) and warning (⚠) indicators
 
-All tools are pluggable via a common provider interface:
+### 🔧 Pluggable Architecture
+All tools are pluggable via interfaces:
+- **GitOps**: Argo CD, Flux
+- **Registry**: ORAS, ModelPack
+- **Signing**: Sigstore (cosign), Notary v2 (notation)
+- **SBOM**: Syft
+- **Runtime**: vLLM, KServe
 
-- GitOps: Argo CD, Flux
-- Registry: ORAS, ModelPack
-- Signing: Sigstore (cosign), Notary v2 (notation)
-- SBOM: Syft
-- Runtime: vLLM, KServe
-
-### Secure Supply Chain
-
-- SBOM Generation via Syft
-- Cryptographic Signing with Sigstore or Notary v2
+### 🔒 Secure Supply Chain
+- SBOM Generation (Syft)
+- Cryptographic Signing (Sigstore/Notary v2)
 - Signature Verification
 - MOF Classification
-- OCI Artifacts
+- OCI Artifact format
 
-### Clean TUI
-
-Built with huh and lipgloss:
-- Step-by-step guided workflows
-- Clear success and warning indicators
-- Minimal clutter, maximum clarity
-
-All interactive commands also support non-interactive mode via flags for CI/CD and automation.
-
-### Configuration
-
-Preferences saved to ~/.model-cli.yaml:
-
-```yaml
-gitops: argo
-registry: oras
-signer: sigstore
-```
-
-## Workflows
-
-### Local Development
+### ⚡ Non-Interactive Mode
+Every interactive command also supports non-interactive mode via flags for CI/CD and automation:
 
 ```bash
-model-cli wizard --skip-deploy --skip-signing
-```
-
-### Production Deployment
-
-```bash
-model-cli package
-model-cli sign
-model-cli verify
-model-cli deploy
-```
-
-### CI/CD Pipeline
-
-```bash
-model-cli package --model phi-4-mini --registry oras
-model-cli sign --artifact my-model:v1 --signer sigstore --key $SIGNING_KEY
-model-cli verify --artifact my-model:v1
-model-cli deploy --gitops argo --repo $REPO_URL --path ./manifests
-```
-
-## Non-Interactive Mode (Parity)
-
-Every command that supports interactive prompts also supports non-interactive mode via flags:
-
-```bash
-# Package without prompts
-model-cli package \
+# Same as interactive, but via flags
+./model-cli package \
   --model phi-4-mini \
   --model-path ./models \
   --artifact my-model:v1 \
-  --registry oras \
-  --runtime vllm \
-  --accelerator nvidia-gpu
-
-# Deploy without prompts
-model-cli deploy \
-  --gitops argo \
-  --registry oras \
-  --model my-model \
-  --has-k8s \
-  --repo https://github.com/org/manifests \
-  --path ./k8s
-
-# Sign without prompts
-model-cli sign \
-  --artifact my-model:v1 \
-  --signer sigstore \
-  --key cosign-key.pub
+  --registry oras
 ```
 
-## Standards
+## Tool Requirements
 
-- OCI Specification
-- OSSF Model Signing Spec
-- Model Openness Framework
-- SBOM
-- GitOps
+Model CLI itself only needs Go. The tools it integrates with are optional and checked at runtime:
 
-## Architecture
+| Tool | Install | Purpose |
+|------|---------|---------|
+| oras | `brew install oras` | OCI registry |
+| argocd | `brew install argoproj/tap/argocd` | GitOps (UI) |
+| flux | `brew install fluxcd/tap/flux` | GitOps (agents) |
+| cosign | `brew install sigstore/tap/cosign` | Signing |
+| notation | `brew install notation` | Signing |
 
-```
-User -> TUI -> Commands -> Workflows -> Providers
-```
-
-Providers:
-- GitOps: Argo, Flux
-- Registry: ORAS, ModelPack
-- Signing: Sigstore, Notary v2
-- SBOM: Syft
-- Runtime: vLLM, KServe
+If a tool isn't installed, Model CLI will tell you exactly how to install it.
 
 ## Documentation
 
-See [docs](docs/) for details:
-
-- [Installation](docs/installation.md)
-- [Quick Start](docs/quick-start.md)
-- [Architecture](docs/architecture.md)
-- [TUI (Terminal User Interface)](docs/tui.md)
-- [Resources](docs/resources.md)
+- [Installation](docs/installation.md) - Get Model CLI installed
+- [Quick Start](docs/quick-start.md) - Try the wizard
+- [Architecture](docs/architecture.md) - Understand how it works
+- [TUI](docs/tui.md) - Learn about the terminal interface
+- [Resources](docs/resources.md) - Standards and tools
 
 ## Skills
 
-AI agent guidance is available in [skills/model-cli/SKILL.md](skills/model-cli/SKILL.md)
+AI agent guidance: [skills/model-cli/SKILL.md](skills/model-cli/SKILL.md)
+
+## Standards
+
+Model CLI aligns with:
+- [OCI Specification](https://specs.opencontainers.org/image-spec/) - Artifact format
+- [OSSF Model Signing Spec](https://github.com/ossf/model-signing-spec) - Signing standards
+- [Model Openness Framework](https://github.com/Adopt-MOF/MOF) - Classification
+- GitOps principles - Deployment patterns
 
 ## Contributing
 
-Follow the provider pattern:
-
-1. Add interface in internal/workflow/providers.go
+1. Add interface in `internal/workflow/providers.go`
 2. Implement concrete provider
-3. Register in factory function (Get*Provider)
-4. Update CLI commands to use it
-
-When adding new commands:
-- Support both interactive (huh prompts) and non-interactive (flags) modes
-- Add clear examples in command help text
-- Use consistent naming conventions
+3. Register in factory function (`Get*Provider`)
+4. Add CLI command
+5. Support both interactive and non-interactive modes
 
 ## License
 
