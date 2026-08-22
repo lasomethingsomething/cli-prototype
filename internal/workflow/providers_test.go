@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"os"
 	"testing"
 )
 
@@ -286,5 +287,19 @@ func TestProviderNameConsistency(t *testing.T) {
 				t.Errorf("%s provider %s Name() = %q, want %q", tt.providerType, tt.providerName, name, tt.expected)
 			}
 		})
+	}
+}
+
+func TestModelPackProviderIsInstalled(t *testing.T) {
+	original := os.Getenv("PATH")
+	os.Setenv("PATH", "")
+	defer os.Setenv("PATH", original)
+
+	p, err := GetRegistryProvider("modelpack")
+	if err != nil {
+		t.Fatalf("GetRegistryProvider(\"modelpack\") error = %v", err)
+	}
+	if p.IsInstalled() {
+		t.Error("ModelPackProvider.IsInstalled() = true with empty PATH, want false")
 	}
 }
