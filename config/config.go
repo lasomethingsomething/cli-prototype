@@ -30,6 +30,10 @@ func Save(cfg *Config) error {
 	if err := viper.WriteConfig(); err != nil {
 		_, isNotFound := err.(viper.ConfigFileNotFoundError)
 		if isNotFound || os.IsNotExist(err) {
+			// First run: no config file exists yet. Write to the path viper knows about
+			// (set via viper.SetConfigFile), or fall back to ~/.model-cli.yaml.
+			// Tests must call viper.SetConfigFile(path) before Save() to avoid
+			// writing to the real home directory.
 			cfgFile := viper.ConfigFileUsed()
 			if cfgFile == "" {
 				home, herr := os.UserHomeDir()
@@ -38,7 +42,11 @@ func Save(cfg *Config) error {
 				}
 				cfgFile = filepath.Join(home, ".model-cli.yaml")
 			}
-			return viper.WriteConfigAs(cfgFile)
+			if err := viper.WriteConfigAs(cfgFile); err != nil {
+				return err
+			}
+			viper.SetConfigFile(cfgFile)
+			return nil
 		}
 		return err
 	}
