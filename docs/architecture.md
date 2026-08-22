@@ -4,26 +4,30 @@
 User
   |
   v
-TUI (huh + lipgloss)
+TUI (huh + lipgloss + bubbletea)
   - Clean, color-coded interface
   - Step-by-step guidance
+  - Context side panels (Shopware CLI style)
   - Minimal clutter
   |
   v
 Commands (cobra)
   - wizard, package, sign, verify, deploy
+  - serve, push, admit, validate, schedule
   |
   v
 Workflows (internal/workflow)
   - DeployWorkflow, PackageWorkflow
+  - SignWorkflow, VerifyWorkflow
   |
   v
 Providers (pluggable tools)
   - GitOps: Argo, Flux
   - Registry: ORAS, ModelPack
-  - Signing: Sigstore, Notary v2
+  - Signing: Sigstore (cosign), Notary v2 (notation)
   - SBOM: Syft
   - MOF: Classifier
+  - Runtime: vLLM, KServe
 ```
 
 #### Provider Pattern
