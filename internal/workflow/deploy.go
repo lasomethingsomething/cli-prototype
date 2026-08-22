@@ -44,8 +44,12 @@ func (w *DeployWorkflow) SetModelInfo(modelName, repoURL, manifestPath string) {
 
 // Run executes the deployment workflow
 func (w *DeployWorkflow) Run() error {
+    if w.modelName == "" || w.repoURL == "" {
+        return fmt.Errorf("model info not set: call SetModelInfo before Run()")
+    }
+
     fmt.Printf("Starting deployment with GitOps: %s, Registry: %s\n", w.gitOps, w.registry)
-    
+
     // Check if GitOps provider is available
     if !w.gitOpsProvider.IsInstalled() {
         return fmt.Errorf("%s not installed. Install with: %s", w.gitOpsProvider.Name(), w.gitOpsProvider.InstallInstructions())
@@ -57,14 +61,10 @@ func (w *DeployWorkflow) Run() error {
     }
     
     // Deploy using GitOps provider
-    if w.modelName != "" && w.repoURL != "" {
-        fmt.Printf("Deploying model '%s' from repository '%s' with %s...\n", 
-            w.modelName, w.repoURL, w.gitOps)
-        if err := w.gitOpsProvider.Deploy(w.modelName, w.repoURL, w.manifestPath); err != nil {
-            return err
-        }
-    } else {
-        fmt.Printf("Running %s deployment...\n", w.gitOps)
+    fmt.Printf("Deploying model '%s' from repository '%s' with %s...\n",
+        w.modelName, w.repoURL, w.gitOps)
+    if err := w.gitOpsProvider.Deploy(w.modelName, w.repoURL, w.manifestPath); err != nil {
+        return err
     }
     
     // Use registry provider
