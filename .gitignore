@@ -1,0 +1,6 @@
+# Build output
+cli-prototype
+dist/
+
+# Go workspace
+vendor/
