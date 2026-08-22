@@ -30,6 +30,7 @@ That's it! The wizard will guide you through every step.
 Model CLI is a tour guide CLI that helps you:
 
 - Package ML models as OCI artifacts
+- Package agentic skills using the agentskills.io standard format
 - Generate SBOMs for supply chain transparency
 - Classify models with MOF (Model Openness Framework)
 - Sign artifacts with Sigstore or Notary v2
@@ -76,6 +77,24 @@ Follow the prompts. The wizard will:
 # Deploy only
 ./model-cli deploy --gitops argo --registry oras --model my-model
 ```
+
+### Agentic Skills
+
+Package agentic skills using the agentskills.io standard format:
+
+```bash
+# Package a skill directory
+./model-cli package --model my-skill --model-path ./skills/my-skill --skill
+
+# Or use the short form
+./model-cli package --skill --model-path ./my-skill --artifact my-org/my-skill:v1
+```
+
+Agentic skills are packaged as OCI artifacts with the `org.cncf.ai.artifact.type=skill` annotation,
+following the agentskills.io standard format. This enables:
+- Skill discovery and reuse across projects
+- Composable AI workflows
+- Standardized skill packaging
 
 ## Features
 
