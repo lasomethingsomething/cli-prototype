@@ -114,22 +114,31 @@ func (w *PackageWorkflow) Run() error {
 		w.annotations.Print()
 		fmt.Println()
 	}
-	
-	fmt.Println("✓ Creating OCI artifact manifest...")
-	fmt.Println("✓ Injecting CNCF AI Interoperability Profile annotations...")
 
+	// Create OCI artifact manifest
+	fmt.Println("→ Creating OCI artifact manifest...")
+	
+	// Inject CNCF AI Interoperability Profile annotations
+	fmt.Println("→ Injecting CNCF AI Interoperability Profile annotations...")
+	
 	if w.includeRAG && w.ragPath != "" {
-		fmt.Printf("✓ Adding RAG context from '%s'\n", w.ragPath)
+		fmt.Printf("→ Adding RAG context from '%s'...\n", w.ragPath)
 	}
 
-	fmt.Printf("✓ Packaging model files from '%s'\n", w.modelPath)
-	fmt.Printf("✓ Packaged as OCI artifact: %s\n", fullArtifact)
+	// Package model files
+	fmt.Printf("→ Packaging model files from '%s'...\n", w.modelPath)
+	fmt.Printf("→ Packaged as OCI artifact: %s\n", fullArtifact)
 
+	// Push to registry if URL is provided
 	if w.registryURL != "" {
-		fmt.Printf("✓ Pushing to registry: %s\n", w.registryURL)
-		// In real implementation: w.registryProvider.Push(w.artifactName, w.registryURL)
+		fmt.Printf("→ Pushing to registry '%s'...\n", w.registryURL)
+		if err := w.registryProvider.Push(w.artifactName, w.registryURL); err != nil {
+			return fmt.Errorf("failed to push artifact: %v", err)
+		}
+		fmt.Printf("✓ Successfully pushed %s to %s\n", fullArtifact, w.registryURL)
 	} else {
 		fmt.Println("✓ Saved locally (not pushed to registry)")
+		fmt.Printf("  Artifact ready at: %s\n", fullArtifact)
 	}
 
 	fmt.Println("\n=== Summary ===")

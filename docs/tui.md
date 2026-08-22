@@ -50,8 +50,8 @@ The Model CLI TUI features **context panels** inspired by Shopware CLI. These pa
 |  Artifact: v1    |
 |                  |
 | Status           |
-|  ✓ Package       |
-|  ✓ Sign         |
+|  [x] Package     |
+|  [x] Sign       |
 |                  |
 | Recent Logs      |
 |  - Package done  |
