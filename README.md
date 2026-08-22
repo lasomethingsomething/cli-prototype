@@ -33,6 +33,7 @@ Model CLI is a tour guide CLI that helps you:
 - Package agentic skills using the agentskills.io standard format
 - Generate SBOMs for supply chain transparency
 - Classify models with MOF (Model Openness Framework)
+- Run local compliance checks before push
 - Sign artifacts with Sigstore or Notary v2
 - Verify signatures before deployment
 - Deploy to Kubernetes with Argo or Flux
@@ -70,6 +71,9 @@ Follow the prompts. The wizard will:
 ```bash
 # Package only
 ./model-cli package --model phi-4-mini --model-path ./models
+
+# Local compliance check
+./model-cli check --model-path ./models --artifact-path ./output
 
 # Sign only
 ./model-cli sign --artifact my-model:v1 --signer sigstore
@@ -118,6 +122,7 @@ All tools are pluggable via interfaces:
 - Signature Verification
 - MOF Classification
 - OCI Artifact format
+- Local Compliance Checks (annotations, SBOM, MOF)
 
 ### Non-Interactive Mode
 Every interactive command also supports non-interactive mode via flags for CI/CD and automation:
@@ -142,6 +147,7 @@ Model CLI itself only needs Go. The tools it integrates with are optional and ch
 | flux | `brew install fluxcd/tap/flux` | GitOps (agents) |
 | cosign | `brew install sigstore/tap/cosign` | Signing |
 | notation | `brew install notation` | Signing |
+| syft | `brew install anchore/syft/syft` | SBOM generation |
 
 If a tool isn't installed, Model CLI will tell you exactly how to install it.
 

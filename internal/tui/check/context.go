@@ -1,5 +1,5 @@
-// Package tui provides interactive TUI components following Shopware CLI pattern
-package tui
+// Package checktui provides the context panel for compliance checking
+package checktui
 
 import (
 	"fmt"
@@ -16,12 +16,14 @@ const (
 	TabProgress Tab = iota
 	TabConfig
 	TabModel
+	TabChecks
+	TabResults
 	TabLogs
 	TabHelp
 	TabEnv
 )
 
-// ContextModel is the interactive context panel model
+// ContextModel is the interactive context panel model for compliance checking
 type ContextModel struct {
 	// Configuration
 	Registry string
@@ -33,16 +35,18 @@ type ContextModel struct {
 	ModelName    string
 	ModelPath    string
 	ArtifactName string
+	ArtifactPath string
+
+	// Results
+	Passed          bool
+	SBOMCheck       bool
+	MOFCheck        bool
+	Missing         []string
+	AnnotationsCheck []string
 
 	// Step progress
 	CurrentStep int
 	TotalSteps  int
-
-	// Results
-	PackageSucceeded bool
-	SignSucceeded    bool
-	VerifySucceeded   bool
-	DeploySucceeded   bool
 
 	// Logs
 	Logs []string
@@ -55,15 +59,19 @@ type ContextModel struct {
 	height int
 }
 
-// NewContextModel creates a new interactive context model
-func NewContextModel() *ContextModel {
+// NewCheckContextModel creates a new interactive context model for compliance checking
+func NewCheckContextModel() *ContextModel {
 	return &ContextModel{
-		CurrentStep: 1,
-		TotalSteps:  8,
-		ActiveTab:   TabProgress,
-		Logs:       make([]string, 0),
-		width:      40,
-		height:     15,
+		CurrentStep:  1,
+		TotalSteps:   4,
+		ActiveTab:    TabProgress,
+		Logs:        make([]string, 0),
+		width:       40,
+		height:      15,
+		Passed:      false,
+		SBOMCheck:   false,
+		MOFCheck:    false,
+		Missing:     make([]string, 0),
 	}
 }
 
@@ -114,29 +122,29 @@ func (m *ContextModel) renderHeader() string {
 
 // renderTabBar renders the tab navigation bar
 func (m *ContextModel) renderTabBar() string {
-	tabs := []string{"Progress", "Config", "Model", "Logs", "Help", "Env"}
-	
+	tabs := []string{"Progress", "Config", "Model", "Checks", "Results", "Logs", "Help", "Env"}
+
 	var sb strings.Builder
-	
+
 	for i, tab := range tabs {
 		style := lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#555555")).
 			Padding(0, 1)
-		
+
 		if i == int(m.ActiveTab) {
 			style = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("#FAFAFA")).
 				Bold(true).
 				Underline(true)
 		}
-		
+
 		sb.WriteString(style.Render(tab))
-		
+
 		if i < len(tabs)-1 {
 			sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#555555")).Render("|"))
 		}
 	}
-	
+
 	return sb.String()
 }
 
@@ -149,6 +157,10 @@ func (m *ContextModel) renderTabContent() string {
 		return m.renderConfigTab()
 	case TabModel:
 		return m.renderModelTab()
+	case TabChecks:
+		return m.renderChecksTab()
+	case TabResults:
+		return m.renderResultsTab()
 	case TabLogs:
 		return m.renderLogsTab()
 	case TabHelp:
@@ -175,8 +187,8 @@ func (m *ContextModel) renderProgressTab() string {
 	sb.WriteString(fmt.Sprintf("%s %d%%\n\n", progressBar, progressPercent))
 
 	// Status of each step
-	sb.WriteString("Workflow Steps:\n")
-	steps := []string{"Setup", "Model Details", "K8s Setup", "Package", "Compliance", "Sign", "Verify", "Deploy"}
+	sb.WriteString("Check Steps:\n")
+	steps := []string{"Intro", "Checking", "Results", "Complete"}
 	for i, step := range steps {
 		symbol := "·"
 		if i < m.CurrentStep {
@@ -188,16 +200,16 @@ func (m *ContextModel) renderProgressTab() string {
 		if i > m.CurrentStep {
 			symbol = "·"
 		}
-		
+
 		// Color based on results
 		color := "#555555"
-		if i == int(m.CurrentStep) {
+		if i == m.CurrentStep {
 			color = "#55AAFF"
 		}
 		if i < m.CurrentStep {
 			color = "#00FF88"
 		}
-		
+
 		style := lipgloss.NewStyle().Foreground(lipgloss.Color(color))
 		sb.WriteString(fmt.Sprintf("  %s %s\n", symbol, style.Render(step)))
 	}
@@ -250,23 +262,65 @@ func (m *ContextModel) renderModelTab() string {
 	if m.ArtifactName != "" {
 		sb.WriteString(fmt.Sprintf("%s: %s\n", keyStyle.Render("Artifact"), valueStyle.Render(m.ArtifactName)))
 	}
+	if m.ArtifactPath != "" {
+		sb.WriteString(fmt.Sprintf("%s: %s\n", keyStyle.Render("Artifact Path"), valueStyle.Render(m.ArtifactPath)))
+	}
 
-	// Status indicators
-	if m.PackageSucceeded || m.SignSucceeded || m.VerifySucceeded || m.DeploySucceeded {
+	return sb.String()
+}
+
+// renderChecksTab renders the checks tab
+func (m *ContextModel) renderChecksTab() string {
+	var sb strings.Builder
+
+	sb.WriteString("Compliance Checks\n")
+	sb.WriteString(strings.Repeat("─", 17) + "\n\n")
+
+	sb.WriteString("Required checks:\n")
+	sb.WriteString("  • Required annotations\n")
+	sb.WriteString("  • SBOM presence\n")
+	sb.WriteString("  • MOF classification\n")
+
+	return sb.String()
+}
+
+// renderResultsTab renders the results tab
+func (m *ContextModel) renderResultsTab() string {
+	var sb strings.Builder
+
+	sb.WriteString("Check Results\n")
+	sb.WriteString(strings.Repeat("─", 13) + "\n\n")
+
+	if !m.Passed && len(m.Missing) == 0 && !m.SBOMCheck && !m.MOFCheck {
+		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#888888")).Render("Checks not yet run"))
+		return sb.String()
+	}
+
+	// Overall status
+	if m.Passed {
+		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF88")).Render("✓ ALL PASSED\n\n"))
+	} else {
+		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#FF5555")).Render("✗ FAILED\n\n"))
+	}
+
+	// Individual checks
+	status := "✓"
+	if !m.SBOMCheck {
+		status = "✗"
+	}
+	sb.WriteString(fmt.Sprintf("%s SBOM\n", status))
+
+	status = "✓"
+	if !m.MOFCheck {
+		status = "✗"
+	}
+	sb.WriteString(fmt.Sprintf("%s MOF Classification\n", status))
+
+	if len(m.Missing) > 0 {
 		sb.WriteString("\n")
-		sb.WriteString("Status:\n")
-		
-		if m.PackageSucceeded {
-			sb.WriteString("  ✓ Package\n")
-		}
-		if m.SignSucceeded {
-			sb.WriteString("  ✓ Sign\n")
-		}
-		if m.VerifySucceeded {
-			sb.WriteString("  ✓ Verify\n")
-		}
-		if m.DeploySucceeded {
-			sb.WriteString("  ✓ Deploy\n")
+		sb.WriteString("Missing:\n")
+		for _, item := range m.Missing {
+			sb.WriteString(fmt.Sprintf("  ✗ %s\n", item))
 		}
 	}
 
@@ -294,8 +348,8 @@ func (m *ContextModel) renderLogsTab() string {
 	for i := start; i < len(m.Logs); i++ {
 		log := m.Logs[i]
 		// Truncate long logs
-		if len(log) > 50 {
-			log = log[:50] + "..."
+		if len(log) > 40 {
+			log = log[:40] + "..."
 		}
 		sb.WriteString(fmt.Sprintf("  - %s\n", log))
 	}
@@ -313,7 +367,7 @@ func (m *ContextModel) renderHelpTab() string {
 	helpStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#888888"))
 
 	sb.WriteString(fmt.Sprintf("%s\n", helpStyle.Render("Tab / Shift+Tab: Switch tabs")))
-	sb.WriteString(fmt.Sprintf("%s\n", helpStyle.Render("1-6: Select specific tab")))
+	sb.WriteString(fmt.Sprintf("%s\n", helpStyle.Render("1-8: Select specific tab")))
 	sb.WriteString(fmt.Sprintf("%s\n", helpStyle.Render("Enter: Continue / Select")))
 	sb.WriteString(fmt.Sprintf("%s\n", helpStyle.Render("Esc: Back / Cancel")))
 	sb.WriteString(fmt.Sprintf("%s\n", helpStyle.Render("Ctrl+C: Quit")))
@@ -351,18 +405,19 @@ func (m *ContextModel) SetConfig(registry, gitOps, signer, runtime string) {
 }
 
 // SetModelInfo sets the model information
-func (m *ContextModel) SetModelInfo(name, path, artifact string) {
+func (m *ContextModel) SetModelInfo(name, path, artifact, artifactPath string) {
 	m.ModelName = name
 	m.ModelPath = path
 	m.ArtifactName = artifact
+	m.ArtifactPath = artifactPath
 }
 
-// SetResults sets the success flags
-func (m *ContextModel) SetResults(packageSucceeded, signSucceeded, verifySucceeded, deploySucceeded bool) {
-	m.PackageSucceeded = packageSucceeded
-	m.SignSucceeded = signSucceeded
-	m.VerifySucceeded = verifySucceeded
-	m.DeploySucceeded = deploySucceeded
+// SetResults sets the check results
+func (m *ContextModel) SetResults(passed, sbomCheck, mofCheck bool, missing []string) {
+	m.Passed = passed
+	m.SBOMCheck = sbomCheck
+	m.MOFCheck = mofCheck
+	m.Missing = missing
 }
 
 // AddLog adds a log message
@@ -377,10 +432,10 @@ func (m *ContextModel) AddLog(message string) {
 func (m *ContextModel) HandleKey(key string) {
 	switch key {
 	case "tab":
-		m.ActiveTab = (m.ActiveTab + 1) % 6
+		m.ActiveTab = (m.ActiveTab + 1) % 8
 
 	case "shift+tab":
-		m.ActiveTab = (m.ActiveTab - 1 + 6) % 6
+		m.ActiveTab = (m.ActiveTab - 1 + 8) % 8
 
 	case "1":
 		m.ActiveTab = TabProgress
@@ -392,12 +447,18 @@ func (m *ContextModel) HandleKey(key string) {
 		m.ActiveTab = TabModel
 
 	case "4":
-		m.ActiveTab = TabLogs
+		m.ActiveTab = TabChecks
 
 	case "5":
-		m.ActiveTab = TabHelp
+		m.ActiveTab = TabResults
 
 	case "6":
+		m.ActiveTab = TabLogs
+
+	case "7":
+		m.ActiveTab = TabHelp
+
+	case "8":
 		m.ActiveTab = TabEnv
 	}
 }

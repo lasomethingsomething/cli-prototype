@@ -333,6 +333,41 @@ model-cli harden \
 - Help: Keyboard shortcuts
 - Env: Environment info
 
+### check
+
+Performs local compliance check before pushing artifact to registry.
+
+**Interactive panels:**
+- Introduction explaining compliance check concepts
+- Progress display during checks
+- Results showing passed/failed checks
+- Completion summary
+
+**Features:**
+- Validates required annotations (org.cncf.ai.artifact.type, runtime, accelerator)
+- Checks SBOM presence in artifact layers
+- Checks MOF classification presence
+- Fails/blocks with clear message when required pieces are missing
+- Wired into wizard flow ahead of push/sign steps
+
+**Non-interactive flags:**
+```bash
+model-cli check \
+  --model-path ./models \
+  --artifact-path ./output \
+  --strict
+```
+
+**Interactive TUI tabs (when run interactively):**
+- Progress: Shows check step progress
+- Config: Tool configuration
+- Model: Model information
+- Checks: List of required checks
+- Results: Pass/fail status of each check
+- Logs: Operation logs
+- Help: Keyboard shortcuts
+- Env: Environment info
+
 ## TUI Best Practices
 
 1. **For users**: Start with `model-cli wizard` for the complete guided experience
