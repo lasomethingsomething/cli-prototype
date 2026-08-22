@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -10,11 +9,16 @@ import (
 
 var cfgFile string
 
+var initConfigErr error
+
 var rootCmd = &cobra.Command{
 	Use:   "model-cli",
 	Short: "A CLI to orchestrate model workflows",
 	Long: `A lightweight CLI to guide users through model deployment, serving, and testing workflows.
 It delegates to external tools like Argo, Flux, ORAS, or ModelPack.`,
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		return initConfigErr
+	},
 }
 
 func Execute() error {
@@ -32,8 +36,8 @@ func initConfig() {
 	} else {
 		home, err := os.UserHomeDir()
 		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
+			initConfigErr = err
+			return
 		}
 		viper.AddConfigPath(home)
 		viper.SetConfigType("yaml")
@@ -41,8 +45,7 @@ func initConfig() {
 	}
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
-			fmt.Println("Error reading config file:", err)
-			os.Exit(1)
+			initConfigErr = err
 		}
 	}
 }
