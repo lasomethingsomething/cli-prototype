@@ -156,9 +156,8 @@ func (m *ModelPackProvider) Name() string {
 }
 
 func (m *ModelPackProvider) IsInstalled() bool {
-	// ModelPack might be a CLI tool or a library - check for command
-	// For now, we assume it's available (it's a Go library approach)
-	return true
+	_, err := exec.LookPath("modelpack")
+	return err == nil
 }
 
 func (m *ModelPackProvider) InstallInstructions() string {
