@@ -1,0 +1,191 @@
+package workflow
+
+import "fmt"
+
+// Annotation constants for CNCF AI Interoperability Profile
+// Based on: https://github.com/opencontainers/image-spec/blob/main/annotations.md
+// These are sample annotations while the final spec is being worked out.
+
+// Profile annotations (MUST)
+const (
+	// ProfileVersion identifies the interoperability profile version
+	// Value: semantic version (e.g., "1.0.0")
+	AnnotationProfileVersion = "org.cncf.ai.interop.profile.version"
+
+	// ArtifactType identifies the type of AI artifact
+	// Value: "model" (v1), future: "skill", "rag-context", "workflow", etc.
+	AnnotationArtifactType = "org.cncf.ai.artifact.type"
+)
+
+// MOF (Model Openness Framework) annotations (MUST when applicable)
+const (
+	// MOFClass identifies the openness class of the model
+	// Value: "I", "II", or "III"
+	AnnotationMOFClass = "org.cncf.ai.model.mof.class"
+
+	// MOFVersion identifies the MOF specification version
+	// Value: semantic version (e.g., "1.0")
+	AnnotationMOFVersion = "org.cncf.ai.model.mof.version"
+
+	// MOFComponents lists which MOF components are present
+	// Value: comma-separated list (e.g., "weights,training-data,code")
+	AnnotationMOFComponents = "org.cncf.ai.model.mof.components"
+)
+
+// Security annotations (MUST/SHOULD)
+const (
+	// SigningFramework identifies the signing framework used
+	// Value: "sigstore-cosign", "notation", etc.
+	AnnotationSigningFramework = "org.cncf.ai.security.signing.framework"
+
+	// SBOMFormat identifies the SBOM format
+	// Value: "spdx-json", "cyclonedx", etc.
+	AnnotationSBOMFormat = "org.cncf.ai.security.sbom.format"
+
+	// ProvenanceType identifies the provenance attestation type
+	// Value: "slsa-v1.0", "in-toto", etc.
+	AnnotationProvenanceType = "org.cncf.ai.security.provenance.type"
+
+	// PackagingFormat identifies the packaging format
+	// Value: "modelpack", "none", etc.
+	AnnotationPackagingFormat = "org.cncf.ai.packaging.format"
+)
+
+// Runtime annotations for deployment
+const (
+	// Runtime identifies the serving runtime
+	// Value: "vllm", "kserve", "tensorrt-llm", etc.
+	AnnotationRuntime = "org.cncf.ai.runtime"
+
+	// Accelerator identifies the hardware accelerator requirement
+	// Value: "nvidia-gpu", "amd-gpu", "intel-gpu", "cpu", "none"
+	AnnotationAccelerator = "org.cncf.ai.accelerator"
+
+	// CUDAVersionMin identifies minimum CUDA version required
+	// Value: semantic version (e.g., "12.1")
+	AnnotationCUDAVersionMin = "org.cncf.ai.accelerator.cuda.min"
+
+	// MemoryMin identifies minimum memory required
+	// Value: string with unit (e.g., "24GiB")
+	AnnotationMemoryMin = "org.cncf.ai.resource.memory.min"
+)
+
+// AnnotationSet represents a collection of annotations for an OCI artifact
+type AnnotationSet struct {
+	// Core interop profile
+	ProfileVersion string
+	ArtifactType   string
+
+	// MOF classification
+	MOFClass    string
+	MOFVersion  string
+	MOFComponents string
+
+	// Security
+	SigningFramework string
+	SBOMFormat       string
+	ProvenanceType   string
+	PackagingFormat  string
+
+	// Runtime requirements
+	Runtime      string
+	Accelerator  string
+	CUDAMin      string
+	MemoryMin    string
+}
+
+// NewAnnotationSet creates a new annotation set with sensible defaults
+func NewAnnotationSet() *AnnotationSet {
+	return &AnnotationSet{
+		ProfileVersion:  "1.0.0",
+		ArtifactType:    "model",
+		MOFVersion:     "1.0",
+		SigningFramework: "sigstore-cosign",
+		SBOMFormat:      "spdx-json",
+		ProvenanceType:  "slsa-v1.0",
+		PackagingFormat: "modelpack",
+		Runtime:        "vllm",
+		Accelerator:    "nvidia-gpu",
+		CUDAMin:        "12.1",
+		MemoryMin:      "24GiB",
+	}
+}
+
+// ToMap converts the annotation set to a map for OCI manifest
+func (a *AnnotationSet) ToMap() map[string]string {
+	annotations := make(map[string]string)
+
+	// Profile annotations (MUST)
+	if a.ProfileVersion != "" {
+		annotations[AnnotationProfileVersion] = a.ProfileVersion
+	}
+	if a.ArtifactType != "" {
+		annotations[AnnotationArtifactType] = a.ArtifactType
+	}
+
+	// MOF annotations (MUST when applicable)
+	if a.MOFClass != "" {
+		annotations[AnnotationMOFClass] = a.MOFClass
+	}
+	if a.MOFVersion != "" {
+		annotations[AnnotationMOFVersion] = a.MOFVersion
+	}
+	if a.MOFComponents != "" {
+		annotations[AnnotationMOFComponents] = a.MOFComponents
+	}
+
+	// Security annotations
+	if a.SigningFramework != "" {
+		annotations[AnnotationSigningFramework] = a.SigningFramework
+	}
+	if a.SBOMFormat != "" {
+		annotations[AnnotationSBOMFormat] = a.SBOMFormat
+	}
+	if a.ProvenanceType != "" {
+		annotations[AnnotationProvenanceType] = a.ProvenanceType
+	}
+	if a.PackagingFormat != "" {
+		annotations[AnnotationPackagingFormat] = a.PackagingFormat
+	}
+
+	// Runtime annotations
+	if a.Runtime != "" {
+		annotations[AnnotationRuntime] = a.Runtime
+	}
+	if a.Accelerator != "" {
+		annotations[AnnotationAccelerator] = a.Accelerator
+	}
+	if a.CUDAMin != "" {
+		annotations[AnnotationCUDAVersionMin] = a.CUDAMin
+	}
+	if a.MemoryMin != "" {
+		annotations[AnnotationMemoryMin] = a.MemoryMin
+	}
+
+	return annotations
+}
+
+// Print returns a human-readable representation of the annotations
+func (a *AnnotationSet) Print() {
+	fmt.Println("OCI Annotations (CNCF AI Interoperability Profile):")
+	fmt.Println("  Profile:")
+	fmt.Printf("    %s: %s\n", AnnotationProfileVersion, a.ProfileVersion)
+	fmt.Printf("    %s: %s\n", AnnotationArtifactType, a.ArtifactType)
+
+	fmt.Println("  MOF:")
+	fmt.Printf("    %s: %s\n", AnnotationMOFClass, a.MOFClass)
+	fmt.Printf("    %s: %s\n", AnnotationMOFVersion, a.MOFVersion)
+	fmt.Printf("    %s: %s\n", AnnotationMOFComponents, a.MOFComponents)
+
+	fmt.Println("  Security:")
+	fmt.Printf("    %s: %s\n", AnnotationSigningFramework, a.SigningFramework)
+	fmt.Printf("    %s: %s\n", AnnotationSBOMFormat, a.SBOMFormat)
+	fmt.Printf("    %s: %s\n", AnnotationProvenanceType, a.ProvenanceType)
+	fmt.Printf("    %s: %s\n", AnnotationPackagingFormat, a.PackagingFormat)
+
+	fmt.Println("  Runtime:")
+	fmt.Printf("    %s: %s\n", AnnotationRuntime, a.Runtime)
+	fmt.Printf("    %s: %s\n", AnnotationAccelerator, a.Accelerator)
+	fmt.Printf("    %s: %s\n", AnnotationCUDAVersionMin, a.CUDAMin)
+	fmt.Printf("    %s: %s\n", AnnotationMemoryMin, a.MemoryMin)
+}
