@@ -245,6 +245,8 @@ Examples:
 		}
 		
 		packageSucceeded := false
+		signSucceeded := false
+		verifySucceeded := false
 		if !registryProvider.IsInstalled() {
 			fmt.Println(warningStyle.Render("Warning: Registry tool not installed"))
 			fmt.Printf("   Install with: %s\n\n", registryProvider.InstallInstructions())
@@ -290,6 +292,7 @@ Examples:
 				fmt.Printf("Signing %s with %s...\n", fullArtifact, cfg.Signer)
 				// In real implementation: sp.Sign(fullArtifact, "")
 				fmt.Println(successStyle.Render("✓ Artifact signed"))
+				signSucceeded = true
 			}
 			fmt.Println()
 		}
@@ -311,6 +314,7 @@ Examples:
 				fmt.Printf("Verifying %s...\n", fullArtifact)
 				// In real implementation: sp.Verify(fullArtifact)
 				fmt.Println(successStyle.Render("✓ Signature verified - artifact is trusted"))
+				verifySucceeded = true
 			}
 			fmt.Println()
 		}
@@ -365,21 +369,8 @@ Examples:
 		fmt.Println(titleStyle.Render("🎉 Journey Complete!"))
 		fmt.Println()
 		fmt.Println("You've successfully:")
-		if packageSucceeded {
-			fmt.Printf("  %s Packaged '%s' as OCI artifact\n", successStyle.Render("✓"), modelName)
-		} else {
-			fmt.Printf("  %s Skipped packaging (registry tool not installed)\n", warningStyle.Render("⚠"))
-		}
-		if !skipSigning {
-			fmt.Printf("  %s Signed with %s\n", successStyle.Render("✓"), cfg.Signer)
-			fmt.Printf("  %s Verified signature\n", successStyle.Render("✓"))
-		} else {
-			fmt.Printf("  %s Skipped signing\n", warningStyle.Render("⚠"))
-		}
-		if hasKubernetes && !skipDeploy {
-			fmt.Printf("  %s Deployed to Kubernetes with %s\n", successStyle.Render("✓"), cfg.GitOps)
-		} else {
-			fmt.Printf("  %s Skipped deployment\n", warningStyle.Render("⚠"))
+		for _, line := range buildWizardSummary(packageSucceeded, signSucceeded, verifySucceeded, skipSigning, hasKubernetes, skipDeploy, modelName, cfg.Signer, cfg.GitOps) {
+			fmt.Printf("  %s\n", line)
 		}
 		fmt.Println()
 		fmt.Println(infoStyle.Render("Your model is now ready for production!"))
@@ -387,6 +378,35 @@ Examples:
 
 		return nil
 	},
+}
+
+func buildWizardSummary(packageSucceeded, signSucceeded, verifySucceeded, skipSigning, hasKubernetes, skipDeploy bool, modelName, signer, gitOps string) []string {
+	var lines []string
+	if packageSucceeded {
+		lines = append(lines, fmt.Sprintf("packaged '%s' as OCI artifact", modelName))
+	} else {
+		lines = append(lines, "skipped packaging (registry tool not installed)")
+	}
+	if skipSigning {
+		lines = append(lines, "skipped signing")
+	} else if signSucceeded {
+		lines = append(lines, fmt.Sprintf("signed with %s", signer))
+	} else {
+		lines = append(lines, fmt.Sprintf("skipped signing (%s not installed)", signer))
+	}
+	if !skipSigning {
+		if verifySucceeded {
+			lines = append(lines, "verified signature")
+		} else {
+			lines = append(lines, "skipped verification (signing tool not installed)")
+		}
+	}
+	if hasKubernetes && !skipDeploy {
+		lines = append(lines, fmt.Sprintf("deployed to Kubernetes with %s", gitOps))
+	} else {
+		lines = append(lines, "skipped deployment")
+	}
+	return lines
 }
 
 func init() {
