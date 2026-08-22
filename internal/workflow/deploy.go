@@ -48,12 +48,12 @@ func (w *DeployWorkflow) Run() error {
     
     // Check if GitOps provider is available
     if !w.gitOpsProvider.IsInstalled() {
-        return fmt.Errorf("%s not installed. Install with: %s", w.gitOps, w.gitOpsProvider.InstallInstructions())
+        return fmt.Errorf("%s not installed. Install with: %s", w.gitOpsProvider.Name(), w.gitOpsProvider.InstallInstructions())
     }
     
     // Check if registry provider is available
     if !w.registryProvider.IsInstalled() {
-        return fmt.Errorf("%s not installed. Install with: %s", w.registry, w.registryProvider.InstallInstructions())
+        return fmt.Errorf("%s not installed. Install with: %s", w.registryProvider.Name(), w.registryProvider.InstallInstructions())
     }
     
     // Deploy using GitOps provider

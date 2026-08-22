@@ -58,7 +58,7 @@ Examples:
 
 		// Check if tool is installed
 		if !sp.IsInstalled() {
-			return fmt.Errorf("%s not installed. Install with: %s", signer, sp.InstallInstructions())
+			return fmt.Errorf("%s not installed. Install with: %s", sp.Name(), sp.InstallInstructions())
 		}
 
 		fmt.Printf("\nVerifying artifact '%s' with %s...\n", artifact, signer)

@@ -242,3 +242,49 @@ func findSubstring(s, substr string) bool {
 	}
 	return false
 }
+
+// Test provider Name() method consistency for error messages
+func TestProviderNameConsistency(t *testing.T) {
+	// Test that each provider's Name() returns the expected value
+	// This ensures error messages use consistent naming
+	nameTests := []struct {
+		providerType string
+		providerName string
+		getFunc      func() (interface{}, error)
+		expected     string
+	}{
+		{"GitOps", "argo", func() (interface{}, error) { return GetGitOpsProvider("argo") }, "argocd"},
+		{"GitOps", "flux", func() (interface{}, error) { return GetGitOpsProvider("flux") }, "flux"},
+		{"Registry", "oras", func() (interface{}, error) { return GetRegistryProvider("oras") }, "oras"},
+		{"Registry", "modelpack", func() (interface{}, error) { return GetRegistryProvider("modelpack") }, "modelpack"},
+		{"Signing", "sigstore", func() (interface{}, error) { return GetSigningProvider("sigstore") }, "sigstore"},
+		{"Signing", "notary", func() (interface{}, error) { return GetSigningProvider("notary") }, "notaryv2"},
+		{"Runtime", "vllm", func() (interface{}, error) { return GetRuntimeProvider("vllm") }, "vllm"},
+		{"Runtime", "kserve", func() (interface{}, error) { return GetRuntimeProvider("kserve") }, "kserve"},
+	}
+
+	for _, tt := range nameTests {
+		t.Run(tt.providerType+"_"+tt.providerName, func(t *testing.T) {
+			provider, err := tt.getFunc()
+			if err != nil {
+				t.Fatalf("Failed to get %s provider %s: %v", tt.providerType, tt.providerName, err)
+			}
+
+			var name string
+			switch p := provider.(type) {
+			case GitOpsProvider:
+				name = p.Name()
+			case RegistryProvider:
+				name = p.Name()
+			case SigningProvider:
+				name = p.Name()
+			case RuntimeProvider:
+				name = p.Name()
+			}
+
+			if name != tt.expected {
+				t.Errorf("%s provider %s Name() = %q, want %q", tt.providerType, tt.providerName, name, tt.expected)
+			}
+		})
+	}
+}

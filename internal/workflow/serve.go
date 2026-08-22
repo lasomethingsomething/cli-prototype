@@ -49,7 +49,7 @@ func (w *ServeWorkflow) Run() error {
 
 	// Check if runtime is available
 	if !w.runtimeProvider.IsInstalled() {
-		return fmt.Errorf("%s not installed. Install with: %s", w.runtime, w.runtimeProvider.InstallInstructions())
+		return fmt.Errorf("%s not installed. Install with: %s", w.runtimeProvider.Name(), w.runtimeProvider.InstallInstructions())
 	}
 
 	// === Step 1: Large Binary Asset Optimization ===
