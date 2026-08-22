@@ -1,0 +1,40 @@
+# Go
+/bin/
+/model-cli
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Go dependencies
+/go/
+vendor/
+
+# Build artifacts
+dist/
+build/
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Test output
+/coverage.txt
+/.coverage
+
+# Config
+.model-cli.yaml
+
+# Temporary files
+tmp/
+temp/
