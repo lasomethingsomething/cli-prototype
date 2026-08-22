@@ -68,7 +68,7 @@ Examples:
 
 		// Check if tool is installed
 		if !provider.IsInstalled() {
-			return fmt.Errorf("%s not installed. Install with: %s", registry, provider.InstallInstructions())
+			return fmt.Errorf("%s not installed. Install with: %s", provider.Name(), provider.InstallInstructions())
 		}
 
 		fmt.Printf("\nPushing '%s' to '%s' using %s...\n", artifact, destination, registry)

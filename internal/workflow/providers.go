@@ -71,9 +71,6 @@ func (a *ArgoCDProvider) InstallInstructions() string {
 }
 
 func (a *ArgoCDProvider) Deploy(modelName, repoURL, path string) error {
-	if !a.IsInstalled() {
-		return fmt.Errorf("ArgoCD not installed. Install with: %s", a.InstallInstructions())
-	}
 	// argocd app create <name> --repo <url> --path <path> --dest-namespace <namespace>
 	cmd := exec.Command("argocd", "app", "create", modelName, "--repo", repoURL, "--path", path, "--dest-namespace", "default")
 	if err := cmd.Run(); err != nil {
@@ -100,9 +97,6 @@ func (f *FluxProvider) InstallInstructions() string {
 }
 
 func (f *FluxProvider) Deploy(modelName, repoURL, path string) error {
-	if !f.IsInstalled() {
-		return fmt.Errorf("Flux not installed. Install with: %s", f.InstallInstructions())
-	}
 	// flux create source git <name> --url <url> --branch <branch>
 	// flux create kustomization <name> --source <source> --path <path>
 	cmd := exec.Command("flux", "create", "source", "git", modelName+"-"+"git", "--url", repoURL, "--branch", "main")
@@ -134,9 +128,6 @@ func (o *ORASProvider) InstallInstructions() string {
 }
 
 func (o *ORASProvider) Push(artifact, registry string) error {
-	if !o.IsInstalled() {
-		return fmt.Errorf("ORAS not installed. Install with: %s", o.InstallInstructions())
-	}
 	// oras push <registry>/<artifact> <local-path>
 	cmd := exec.Command("oras", "push", registry+"/"+artifact, artifact)
 	if err := cmd.Run(); err != nil {
@@ -147,9 +138,6 @@ func (o *ORASProvider) Push(artifact, registry string) error {
 }
 
 func (o *ORASProvider) Pull(artifact, registry string) error {
-	if !o.IsInstalled() {
-		return fmt.Errorf("ORAS not installed. Install with: %s", o.InstallInstructions())
-	}
 	// oras pull <registry>/<artifact>
 	cmd := exec.Command("oras", "pull", registry+"/"+artifact)
 	if err := cmd.Run(); err != nil {

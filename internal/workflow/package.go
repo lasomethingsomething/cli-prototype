@@ -63,7 +63,7 @@ func (w *PackageWorkflow) Run() error {
 
 	// Check if registry provider is available
 	if !w.registryProvider.IsInstalled() {
-		return fmt.Errorf("%s not installed. Install with: %s", w.registry, w.registryProvider.InstallInstructions())
+		return fmt.Errorf("%s not installed. Install with: %s", w.registryProvider.Name(), w.registryProvider.InstallInstructions())
 	}
 
 	fullArtifact := w.artifactName

@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -51,5 +52,83 @@ func TestSetModelInfo(t *testing.T) {
 	}
 	if wf.manifestPath != "/manifests" {
 		t.Errorf("manifestPath = %q, want %q", wf.manifestPath, "/manifests")
+	}
+}
+
+// Test DeployWorkflow Run with missing tools
+func TestDeployWorkflowMissingTools(t *testing.T) {
+	tests := []struct {
+		name        string
+		gitOps      string
+		registry   string
+		expectError bool
+		errorSubstr string
+	}{
+		{
+			name:        "flux not installed",
+			gitOps:      "flux",
+			registry:   "modelpack",
+			expectError: true,
+			errorSubstr: "flux not installed",
+		},
+		{
+			name:        "argo not installed",
+			gitOps:      "argo",
+			registry:   "modelpack",
+			expectError: true,
+			errorSubstr: "argocd not installed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			wf, err := NewDeployWorkflow(tt.gitOps, tt.registry)
+			if err != nil {
+				t.Fatalf("NewDeployWorkflow error = %v", err)
+			}
+
+			err = wf.Run()
+			if (err != nil) != tt.expectError {
+				t.Errorf("Run() error = %v, expectError %v", err, tt.expectError)
+				return
+			}
+
+			if tt.expectError && !strings.Contains(err.Error(), tt.errorSubstr) {
+				t.Errorf("Run() error = %v, expected to contain %q", err, tt.errorSubstr)
+			}
+		})
+	}
+}
+
+// Test DeployWorkflow Run with model info
+func TestDeployWorkflowWithModelInfo(t *testing.T) {
+	// Using modelpack for registry (which doesn't require external tools to be installed)
+	// and flux for gitops (which will fail the check, but we're testing SetModelInfo)
+	wf, err := NewDeployWorkflow("flux", "modelpack")
+	if err != nil {
+		t.Fatalf("NewDeployWorkflow error: %v", err)
+	}
+
+	wf.SetModelInfo("test-model", "https://github.com/test/repo", "./manifests")
+
+	// Verify model info was set correctly
+	if wf.modelName != "test-model" {
+		t.Errorf("modelName = %q, want %q", wf.modelName, "test-model")
+	}
+	if wf.repoURL != "https://github.com/test/repo" {
+		t.Errorf("repoURL = %q, want %q", wf.repoURL, "https://github.com/test/repo")
+	}
+	if wf.manifestPath != "./manifests" {
+		t.Errorf("manifestPath = %q, want %q", wf.manifestPath, "./manifests")
+	}
+
+	// Run will fail due to flux not being installed, but that's expected
+	// We're just testing that SetModelInfo works and the data is stored
+	err = wf.Run()
+	if err == nil {
+		t.Error("Expected error from flux not being installed")
+	}
+	if !strings.Contains(err.Error(), "flux not installed") {
+		t.Errorf("Expected flux not installed error, got: %v", err)
 	}
 }
