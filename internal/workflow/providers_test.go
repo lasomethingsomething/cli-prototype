@@ -244,6 +244,57 @@ func findSubstring(s, substr string) bool {
 	return false
 }
 
+func TestAllProvidersIsInstalledNoPanic(t *testing.T) {
+	providers := []struct {
+		name string
+		fn   func() bool
+	}{
+		{"ArgoCD", func() bool { p, _ := GetGitOpsProvider("argo"); return p.IsInstalled() }},
+		{"Flux", func() bool { p, _ := GetGitOpsProvider("flux"); return p.IsInstalled() }},
+		{"ORAS", func() bool { p, _ := GetRegistryProvider("oras"); return p.IsInstalled() }},
+		{"ModelPack", func() bool { p, _ := GetRegistryProvider("modelpack"); return p.IsInstalled() }},
+		{"Sigstore", func() bool { p, _ := GetSigningProvider("sigstore"); return p.IsInstalled() }},
+		{"NotaryV2", func() bool { p, _ := GetSigningProvider("notary"); return p.IsInstalled() }},
+		{"vLLM", func() bool { p, _ := GetRuntimeProvider("vllm"); return p.IsInstalled() }},
+		{"KServe", func() bool { p, _ := GetRuntimeProvider("kserve"); return p.IsInstalled() }},
+	}
+
+	for _, tt := range providers {
+		t.Run(tt.name, func(t *testing.T) {
+			defer func() {
+				if r := recover(); r != nil {
+					t.Errorf("IsInstalled() panicked: %v", r)
+				}
+			}()
+			_ = tt.fn()
+		})
+	}
+}
+
+func TestSigningProviderGetSignaturePath(t *testing.T) {
+	tests := []struct {
+		provider string
+		artifact string
+		want     string
+	}{
+		{"sigstore", "my-model:v1", "my-model:v1.sig"},
+		{"notary", "my-model:v1", "my-model:v1.notation"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.provider, func(t *testing.T) {
+			p, err := GetSigningProvider(tt.provider)
+			if err != nil {
+				t.Fatalf("GetSigningProvider(%q) error = %v", tt.provider, err)
+			}
+			got := p.GetSignaturePath(tt.artifact)
+			if got != tt.want {
+				t.Errorf("GetSignaturePath(%q) = %q, want %q", tt.artifact, got, tt.want)
+			}
+		})
+	}
+}
+
 // Test provider Name() method consistency for error messages
 func TestProviderNameConsistency(t *testing.T) {
 	// Test that each provider's Name() returns the expected value
