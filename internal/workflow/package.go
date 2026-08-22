@@ -17,6 +17,7 @@ type PackageWorkflow struct {
 	ragPath           string
 	generateSBOM      bool
 	includeMOF        bool
+	annotations      *AnnotationSet
 }
 
 // NewPackageWorkflow creates a new packaging workflow
@@ -31,6 +32,7 @@ func NewPackageWorkflow(registry string) (*PackageWorkflow, error) {
 		registryProvider: registryProvider,
 		generateSBOM:      true,  // Default to generating SBOM
 		includeMOF:        true,  // Default to including MOF classification
+		annotations:      NewAnnotationSet(), // Default annotations
 	}, nil
 }
 
@@ -42,6 +44,11 @@ func (w *PackageWorkflow) SetPackageInfo(modelName, modelPath, artifactName, reg
 	w.registryURL = registryURL
 	w.includeRAG = includeRAG
 	w.ragPath = ragPath
+}
+
+// SetAnnotations sets the CNCF AI Interoperability Profile annotations
+func (w *PackageWorkflow) SetAnnotations(annotations *AnnotationSet) {
+	w.annotations = annotations
 }
 
 // SetSecurityOptions configures SBOM and MOF options
@@ -101,7 +108,15 @@ func (w *PackageWorkflow) Run() error {
 	// === Packaging Steps ===
 
 	fmt.Println("\n=== Packaging ===")
+	
+	// Display annotations that will be included
+	if w.annotations != nil {
+		w.annotations.Print()
+		fmt.Println()
+	}
+	
 	fmt.Println("✓ Creating OCI artifact manifest...")
+	fmt.Println("✓ Injecting CNCF AI Interoperability Profile annotations...")
 
 	if w.includeRAG && w.ragPath != "" {
 		fmt.Printf("✓ Adding RAG context from '%s'\n", w.ragPath)

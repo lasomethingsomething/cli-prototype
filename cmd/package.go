@@ -97,6 +97,61 @@ Examples:
 			}
 		}
 
+		// Collect CNCF AI Interoperability Profile annotations
+		annotations := workflow.NewAnnotationSet()
+
+		// Runtime annotations
+		if err := huh.NewInput().
+			Title("Runtime:").
+			Description("Serving runtime (e.g., vllm, kserve)").
+			Value(&annotations.Runtime).
+			Run(); err != nil {
+			return err
+		}
+
+		if err := huh.NewSelect[string]().
+			Title("Accelerator:").
+			Description("Hardware accelerator requirement").
+			Options(huh.NewOptions("nvidia-gpu", "amd-gpu", "intel-gpu", "cpu", "none")...).
+			Value(&annotations.Accelerator).
+			Run(); err != nil {
+			return err
+		}
+
+		if err := huh.NewInput().
+			Title("Minimum CUDA version:").
+			Description("Minimum CUDA version required (e.g., 12.1, leave empty if not applicable)").
+			Value(&annotations.CUDAMin).
+			Run(); err != nil {
+			return err
+		}
+
+		if err := huh.NewInput().
+			Title("Minimum memory:").
+			Description("Minimum memory required (e.g., 24GiB)").
+			Value(&annotations.MemoryMin).
+			Run(); err != nil {
+			return err
+		}
+
+		// MOF classification
+		if err := huh.NewSelect[string]().
+			Title("MOF Class:").
+			Description("Model Openness Framework classification").
+			Options(huh.NewOptions("I", "II", "III")...).
+			Value(&annotations.MOFClass).
+			Run(); err != nil {
+			return err
+		}
+
+		if err := huh.NewInput().
+			Title("MOF Components:").
+			Description("Comma-separated list of MOF components (e.g., weights,training-data,code)").
+			Value(&annotations.MOFComponents).
+			Run(); err != nil {
+			return err
+		}
+
 		// Create packaging workflow
 		pf, err := workflow.NewPackageWorkflow(cfg.Registry)
 		if err != nil {
@@ -105,6 +160,7 @@ Examples:
 
 		// Set packaging info
 		pf.SetPackageInfo(modelName, modelPath, artifactName, registryURL, includeRAG, ragPath)
+		pf.SetAnnotations(annotations)
 
 		fmt.Println("\nPackaging your model...")
 		return pf.Run()
