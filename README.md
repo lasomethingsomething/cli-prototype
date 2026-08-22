@@ -9,6 +9,7 @@ Model CLI makes it easy to package, sign, verify, and deploy ML models with a cl
 ### If you already have the repository:
 
 ```bash
+cd cli-prototype
 go build -o model-cli .
 ./model-cli wizard
 ```
