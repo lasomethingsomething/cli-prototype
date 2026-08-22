@@ -2,13 +2,16 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/lasomethingsomething/cli-prototype/config"
 	"github.com/lasomethingsomething/cli-prototype/internal/tui"
 	"github.com/lasomethingsomething/cli-prototype/internal/workflow"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 type wizardResult struct {
@@ -80,17 +83,6 @@ var (
 		Foreground(lipgloss.Color("#FFAA00"))
 )
 
-// displayContextPanel shows a context panel with important information
-func displayContextPanel(ctxPanel *tui.ContextPanel, step int, modelName, artifactName string) {
-	// Update panel state
-	ctxPanel.SetStep(step)
-	ctxPanel.SetModelInfo(modelName, "", artifactName)
-	
-	// Render the panel
-	fmt.Println()
-	fmt.Println(ctxPanel.Render())
-}
-
 var wizardCmd = &cobra.Command{
 	Use:   "wizard",
 	Short: "Interactive tour guide through the full ML model workflow",
@@ -117,10 +109,10 @@ Examples:
 
 		cfg := config.Load()
 		
-		// Initialize context panel for persistent display
-		ctxPanel := tui.NewContextPanel()
-		ctxPanel.SetStep(1)
-		ctxPanel.SetConfig(cfg.Registry, cfg.GitOps, cfg.Signer, "")
+		// Initialize context model for interactive TUI
+		ctxModel := tui.NewContextModel()
+		ctxModel.SetStep(1)
+		ctxModel.SetConfig(cfg.Registry, cfg.GitOps, cfg.Signer, "")
 
 		// === Welcome Screen ===
 		fmt.Println()
@@ -181,10 +173,10 @@ Examples:
 		}
 		fmt.Println()
 		
-		// Update context panel with config
-		ctxPanel.SetConfig(cfg.Registry, cfg.GitOps, cfg.Signer, "")
-		ctxPanel.SetStep(1)
-		fmt.Println(ctxPanel.Render())
+		// Update context model with config
+		ctxModel.SetConfig(cfg.Registry, cfg.GitOps, cfg.Signer, "")
+		ctxModel.SetStep(1)
+		displayInteractiveContext(ctxModel)
 		fmt.Println()
 
 		// === Step 2: Model Information ===
@@ -240,10 +232,10 @@ Examples:
 		fmt.Println(successStyle.Render("✓ Model details collected"))
 		fmt.Println()
 		
-		// Show context panel with current progress
-		ctxPanel.SetStep(2)
-		ctxPanel.SetModelInfo(modelName, modelPath, artifactName)
-		fmt.Println(ctxPanel.Render())
+		// Show interactive context panel with current progress
+		ctxModel.SetStep(2)
+		ctxModel.SetModelInfo(modelName, modelPath, artifactName)
+		displayInteractiveContext(ctxModel)
 
 		// === Step 3: Kubernetes Setup ===
 		fmt.Println(stepStyle.Render("Step 3: Kubernetes Setup"))
@@ -313,12 +305,12 @@ Examples:
 		fullArtifact := artifactName
 		// In real implementation, would push to registry
 
-		// Update context panel
-		ctxPanel.SetStep(4)
-		ctxPanel.SetResults(packageSucceeded, false, false, false)
-		ctxPanel.AddLog(fmt.Sprintf("Packaged artifact: %s", artifactName))
+		// Update context model
+		ctxModel.SetStep(4)
+		ctxModel.SetResults(packageSucceeded, false, false, false)
+		ctxModel.AddLog(fmt.Sprintf("Packaged artifact: %s", artifactName))
 		fmt.Println()
-		fmt.Println(ctxPanel.Render())
+		displayInteractiveContext(ctxModel)
 
 		fmt.Println()
 
@@ -439,6 +431,31 @@ Examples:
 
 		return nil
 	},
+}
+
+// displayInteractiveContext displays an interactive context panel with tabs
+func displayInteractiveContext(ctxModel *tui.ContextModel) {
+	// Check if stdin is a TTY (interactive terminal)
+	if !isTTY() {
+		// Non-interactive mode: just print the first tab
+		fmt.Println()
+		fmt.Println(ctxModel.View())
+		return
+	}
+	
+	fmt.Println()
+	fmt.Println("Press Tab/Shift+Tab to switch views, 1-6 to select tab, Enter to continue")
+	fmt.Println()
+	
+	// Run the interactive context model
+	p := tea.NewProgram(ctxModel)
+	_, _ = p.Run()
+	fmt.Println()
+}
+
+// isTTY checks if stdin is a TTY (interactive terminal)
+func isTTY() bool {
+	return term.IsTerminal(int(os.Stdin.Fd()))
 }
 
 func init() {
