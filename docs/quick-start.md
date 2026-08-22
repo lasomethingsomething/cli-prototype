@@ -1,4 +1,4 @@
-### Quick Start
+# Quick Start
 
 Get started with Model CLI in just a few minutes.
 
