@@ -8,6 +8,7 @@ require (
 	github.com/charmbracelet/lipgloss v0.11.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
+	golang.org/x/term v0.6.0
 )
 
 require (
