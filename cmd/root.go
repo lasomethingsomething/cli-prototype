@@ -31,6 +31,7 @@ func init() {
 }
 
 func initConfig() {
+	initConfigErr = nil
 	if cfgFile != "" {
 		viper.SetConfigFile(cfgFile)
 	} else {
