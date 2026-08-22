@@ -1,6 +1,10 @@
 package config
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
+
 	"github.com/spf13/viper"
 )
 
@@ -22,5 +26,16 @@ func Save(cfg *Config) error {
 	viper.Set("registry", cfg.Registry)
 	viper.Set("runtime", cfg.Runtime)
 	viper.Set("signer", cfg.Signer)
-	return viper.WriteConfig()
+
+	if err := viper.WriteConfig(); err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+			home, herr := os.UserHomeDir()
+			if herr != nil {
+				return fmt.Errorf("could not determine home directory: %w", herr)
+			}
+			return viper.WriteConfigAs(filepath.Join(home, ".model-cli.yaml"))
+		}
+		return err
+	}
+	return nil
 }
