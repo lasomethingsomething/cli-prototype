@@ -288,6 +288,9 @@ Examples:
 		}
 		
 		packageSucceeded := false
+		signSucceeded := false
+		verifySucceeded := false
+		deploySucceeded := false
 		if !registryProvider.IsInstalled() {
 			fmt.Println(warningStyle.Render("Warning: Registry tool not installed"))
 			fmt.Printf("   Install with: %s\n\n", registryProvider.InstallInstructions())
@@ -326,6 +329,7 @@ Examples:
 				return err
 			}
 
+			signSucceeded = false
 			if !sp.IsInstalled() {
 				fmt.Println(warningStyle.Render("⚠ Signing tool not installed"))
 				fmt.Printf("   Install with: %s\n\n", sp.InstallInstructions())
@@ -333,6 +337,7 @@ Examples:
 				fmt.Printf("Signing %s with %s...\n", fullArtifact, cfg.Signer)
 				// In real implementation: sp.Sign(fullArtifact, "")
 				fmt.Println(successStyle.Render("✓ Artifact signed"))
+				signSucceeded = true
 			}
 			fmt.Println()
 		}
@@ -347,6 +352,7 @@ Examples:
 				return err
 			}
 
+			verifySucceeded = false
 			if !sp.IsInstalled() {
 				fmt.Println(warningStyle.Render("⚠ Signing tool not installed"))
 				fmt.Printf("   Install with: %s\n\n", sp.InstallInstructions())
@@ -354,6 +360,7 @@ Examples:
 				fmt.Printf("Verifying %s...\n", fullArtifact)
 				// In real implementation: sp.Verify(fullArtifact)
 				fmt.Println(successStyle.Render("✓ Signature verified - artifact is trusted"))
+				verifySucceeded = true
 			}
 			fmt.Println()
 		}
@@ -394,6 +401,7 @@ Examples:
 				if err := wf.Run(); err != nil {
 					return err
 				}
+				deploySucceeded = true
 			}
 			fmt.Println()
 		} else if !skipDeploy {
@@ -408,21 +416,19 @@ Examples:
 		fmt.Println(titleStyle.Render("🎉 Journey Complete!"))
 		fmt.Println()
 		fmt.Println("You've successfully:")
-		if packageSucceeded {
-			fmt.Printf("  %s Packaged '%s' as OCI artifact\n", successStyle.Render("✓"), modelName)
-		} else {
-			fmt.Printf("  %s Skipped packaging (registry tool not installed)\n", warningStyle.Render("⚠"))
+		result := wizardResult{
+			packageSucceeded: packageSucceeded,
+			signSucceeded:    signSucceeded,
+			verifySucceeded:  verifySucceeded,
+			deploySucceeded:  deploySucceeded,
+			modelName:        modelName,
+			signer:           cfg.Signer,
+			gitOps:           cfg.GitOps,
+			skipSigning:      skipSigning,
+			skipDeploy:       skipDeploy,
 		}
-		if !skipSigning {
-			fmt.Printf("  %s Signed with %s\n", successStyle.Render("✓"), cfg.Signer)
-			fmt.Printf("  %s Verified signature\n", successStyle.Render("✓"))
-		} else {
-			fmt.Printf("  %s Skipped signing\n", warningStyle.Render("⚠"))
-		}
-		if hasKubernetes && !skipDeploy {
-			fmt.Printf("  %s Deployed to Kubernetes with %s\n", successStyle.Render("✓"), cfg.GitOps)
-		} else {
-			fmt.Printf("  %s Skipped deployment\n", warningStyle.Render("⚠"))
+		for _, line := range buildSummaryLines(result) {
+			fmt.Printf("  %s\n", line)
 		}
 		fmt.Println()
 		fmt.Println(infoStyle.Render("Your model is now ready for production!"))
