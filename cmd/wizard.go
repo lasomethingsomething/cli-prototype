@@ -11,6 +11,49 @@ import (
 	"github.com/spf13/cobra"
 )
 
+type wizardResult struct {
+	packageSucceeded bool
+	signSucceeded    bool
+	verifySucceeded  bool
+	deploySucceeded  bool
+	modelName        string
+	signer           string
+	gitOps           string
+	skipSigning      bool
+	skipDeploy       bool
+}
+
+func buildSummaryLines(r wizardResult) []string {
+	var lines []string
+	if r.packageSucceeded {
+		lines = append(lines, fmt.Sprintf("✓ Packaged '%s' as OCI artifact", r.modelName))
+	} else {
+		lines = append(lines, "⚠ Skipped packaging (registry tool not installed)")
+	}
+	if r.skipSigning {
+		lines = append(lines, "⚠ Skipped signing")
+	} else if r.signSucceeded {
+		lines = append(lines, fmt.Sprintf("✓ Signed with %s", r.signer))
+	} else {
+		lines = append(lines, "⚠ Signing tool not installed")
+	}
+	if !r.skipSigning {
+		if r.verifySucceeded {
+			lines = append(lines, "✓ Verified signature")
+		} else if !r.signSucceeded {
+			lines = append(lines, "⚠ Verification tool not installed")
+		}
+	}
+	if r.skipDeploy {
+		lines = append(lines, "⚠ Skipped deployment")
+	} else if r.deploySucceeded {
+		lines = append(lines, fmt.Sprintf("✓ Deployed to Kubernetes with %s", r.gitOps))
+	} else {
+		lines = append(lines, "⚠ Skipped deployment")
+	}
+	return lines
+}
+
 // Styling for clean, uncluttered TUI
 var (
 	titleStyle = lipgloss.NewStyle().
