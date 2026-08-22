@@ -108,7 +108,7 @@ func (c *ContextPanel) Render() string {
 		Bold(true)
 	
 	sb.WriteString(boxStyle.Render(
-		headerStyle.Render(" Context Panel ") + "\n\n" +
+		headerStyle.Render("Context Panel") + "\n\n" +
 		c.renderPanelContent(),
 	))
 	
@@ -126,77 +126,84 @@ func (c *ContextPanel) renderPanelContent() string {
 	
 	// Progress section
 	progressPercent := (c.CurrentStep * 100) / c.TotalSteps
-	barWidth := 15
+	barWidth := 12
 	filled := int(progressPercent * barWidth / 100)
 	empty := barWidth - filled
 	
 	progressBar := lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF88")).Render(strings.Repeat("█", filled)) +
 		lipgloss.NewStyle().Foreground(lipgloss.Color("#555555")).Render(strings.Repeat("░", empty))
 	
-	sectionStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#8888FF"))
+	sectionStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#8888FF")).Bold(true)
 	valueStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FAFAFA"))
+	successStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF88"))
+	logStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#888888")).Italic(true)
 	
-	sb.WriteString(sectionStyle.Render("Progress\n"))
+	// Progress
+	sb.WriteString(sectionStyle.Render("Progress") + "\n")
 	sb.WriteString(fmt.Sprintf("  Step %d of %d\n", c.CurrentStep, c.TotalSteps))
 	sb.WriteString(fmt.Sprintf("  %s %d%%\n\n", progressBar, progressPercent))
 	
-	// Config section
-	sb.WriteString(sectionStyle.Render("Configuration\n"))
-	if c.Registry != "" {
-		sb.WriteString(fmt.Sprintf("  Registry:    %s\n", valueStyle.Render(c.Registry)))
+	// Configuration
+	if c.Registry != "" || c.GitOps != "" || c.Signer != "" || c.Runtime != "" {
+		sb.WriteString(sectionStyle.Render("Configuration") + "\n")
+		if c.Registry != "" {
+			sb.WriteString(fmt.Sprintf("  Registry:  %s\n", valueStyle.Render(c.Registry)))
+		}
+		if c.GitOps != "" {
+			sb.WriteString(fmt.Sprintf("  GitOps:    %s\n", valueStyle.Render(c.GitOps)))
+		}
+		if c.Signer != "" {
+			sb.WriteString(fmt.Sprintf("  Signer:    %s\n", valueStyle.Render(c.Signer)))
+		}
+		if c.Runtime != "" {
+			sb.WriteString(fmt.Sprintf("  Runtime:   %s\n", valueStyle.Render(c.Runtime)))
+		}
+		sb.WriteString("\n")
 	}
-	if c.GitOps != "" {
-		sb.WriteString(fmt.Sprintf("  GitOps:      %s\n", valueStyle.Render(c.GitOps)))
-	}
-	if c.Signer != "" {
-		sb.WriteString(fmt.Sprintf("  Signer:      %s\n", valueStyle.Render(c.Signer)))
-	}
-	if c.Runtime != "" {
-		sb.WriteString(fmt.Sprintf("  Runtime:     %s\n", valueStyle.Render(c.Runtime)))
-	}
-	sb.WriteString("\n")
 	
-	// Model section
-	sb.WriteString(sectionStyle.Render("Model\n"))
-	if c.ModelName != "" {
-		sb.WriteString(fmt.Sprintf("  Name:        %s\n", valueStyle.Render(c.ModelName)))
+	// Model
+	if c.ModelName != "" || c.ModelPath != "" || c.ArtifactName != "" {
+		sb.WriteString(sectionStyle.Render("Model") + "\n")
+		if c.ModelName != "" {
+			sb.WriteString(fmt.Sprintf("  Name:      %s\n", valueStyle.Render(c.ModelName)))
+		}
+		if c.ModelPath != "" {
+			sb.WriteString(fmt.Sprintf("  Path:      %s\n", valueStyle.Render(c.ModelPath)))
+		}
+		if c.ArtifactName != "" {
+			sb.WriteString(fmt.Sprintf("  Artifact:  %s\n", valueStyle.Render(c.ArtifactName)))
+		}
+		sb.WriteString("\n")
 	}
-	if c.ModelPath != "" {
-		sb.WriteString(fmt.Sprintf("  Path:        %s\n", valueStyle.Render(c.ModelPath)))
-	}
-	if c.ArtifactName != "" {
-		sb.WriteString(fmt.Sprintf("  Artifact:    %s\n", valueStyle.Render(c.ArtifactName)))
-	}
-	sb.WriteString("\n")
 	
-	// Status section
+	// Status
 	if c.PackageSucceeded || c.SignSucceeded || c.VerifySucceeded || c.DeploySucceeded {
-		sb.WriteString(sectionStyle.Render("Status\n"))
+		sb.WriteString(sectionStyle.Render("Status") + "\n")
 		if c.PackageSucceeded {
-			sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF88")).Render("  ✓ Package\n"))
+			sb.WriteString("  " + successStyle.Render("✓ Package") + "\n")
 		}
 		if c.SignSucceeded {
-			sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF88")).Render("  ✓ Sign\n"))
+			sb.WriteString("  " + successStyle.Render("✓ Sign") + "\n")
 		}
 		if c.VerifySucceeded {
-			sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF88")).Render("  ✓ Verify\n"))
+			sb.WriteString("  " + successStyle.Render("✓ Verify") + "\n")
 		}
 		if c.DeploySucceeded {
-			sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF88")).Render("  ✓ Deploy\n"))
+			sb.WriteString("  " + successStyle.Render("✓ Deploy") + "\n")
 		}
+		sb.WriteString("\n")
 	}
 	
-	// Logs section
+	// Recent Logs
 	if len(c.Logs) > 0 {
-		sb.WriteString("\n" + sectionStyle.Render("Recent Logs\n"))
+		sb.WriteString(sectionStyle.Render("Recent Logs") + "\n")
 		for i := len(c.Logs) - 1; i >= 0 && i >= len(c.Logs)-3; i-- {
 			if i >= 0 {
-				logStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#888888")).Italic(true)
 				log := c.Logs[i]
-				if len(log) > 40 {
-					log = log[:40] + "..."
+				if len(log) > 45 {
+					log = log[:45] + "..."
 				}
-				sb.WriteString(fmt.Sprintf("  - %s\n", logStyle.Render(log)))
+				sb.WriteString("  - " + logStyle.Render(log) + "\n")
 			}
 		}
 	}
