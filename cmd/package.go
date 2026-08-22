@@ -11,15 +11,21 @@ import (
 
 var packageCmd = &cobra.Command{
 	Use:   "package",
-	Short: "Package a model as an OCI artifact",
-	Long: `Package your model as an OCI artifact for distribution and deployment.
+	Short: "Package a model or agentic skill as an OCI artifact",
+	Long: `Package your model or agentic skill as an OCI artifact for distribution and deployment.
 
-This command helps you package models, prompts, and RAG context into a single
-OCI artifact that can be stored in registries and deployed anywhere.
+This command helps you package models, prompts, RAG context, or agentic skills
+(conforming to agentskills.io standard format) into a single OCI artifact that can be
+stored in registries and deployed anywhere.
 
 Examples:
+  # Package a model
   model-cli package
-  model-cli package --model phi-4-mini --registry oras --output my-model:latest`,
+  model-cli package --model phi-4-mini --registry oras --output my-model:latest
+
+  # Package an agentic skill
+  model-cli package --model my-skill --model-path ./skills/my-skill --skill
+  model-cli package --skill --model-path ./my-skill --artifact my-org/my-skill:v1`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := config.Load()
 
@@ -37,6 +43,7 @@ Examples:
 		memoryMinFlag, _ := cmd.Flags().GetString("memory-min")
 		mofClassFlag, _ := cmd.Flags().GetString("mof-class")
 		mofComponentsFlag, _ := cmd.Flags().GetString("mof-components")
+		isSkillFlag, _ := cmd.Flags().GetBool("skill")
 
 		// Interactive prompts if not set in config or via flags
 		if cfg.Registry == "" && registryFlag == "" {
@@ -228,8 +235,14 @@ Examples:
 		// Set packaging info
 		pf.SetPackageInfo(modelName, modelPath, artifactName, registryURL, includeRAG, ragPath)
 		pf.SetAnnotations(annotations)
+		pf.SetIsSkill(isSkillFlag)
 
-		fmt.Println("\nPackaging your model...")
+		artifactType := "model"
+		if isSkillFlag {
+			artifactType = "skill"
+		}
+		fmt.Printf("\nPackaging your %s...", artifactType)
+		fmt.Println()
 		return pf.Run()
 	},
 }
@@ -249,4 +262,5 @@ func init() {
 	packageCmd.Flags().String("memory-min", "", "Minimum memory (e.g., 24GiB)")
 	packageCmd.Flags().String("mof-class", "", "MOF Class: I, II, or III")
 	packageCmd.Flags().String("mof-components", "", "MOF components (comma-separated)")
+	packageCmd.Flags().Bool("skill", false, "Package as an agentic skill (agentskills.io format)")
 }
