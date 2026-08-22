@@ -305,12 +305,12 @@ model-cli deploy --gitops argo ...
 ## Success Metrics
 
 Users should be able to:
-- ✅ Package a model in under 2 minutes
-- ✅ Sign and verify in under 1 minute
-- ✅ Deploy to K8s in under 5 minutes
-- ✅ Understand exactly what's happening at each step
-- ✅ Feel confident about supply chain security
-- ✅ Have fun using the CLI
+- [x] Package a model in under 2 minutes
+- [x] Sign and verify in under 1 minute
+- [x] Deploy to K8s in under 5 minutes
+- [x] Understand exactly what's happening at each step
+- [x] Feel confident about supply chain security
+- [x] Have fun using the CLI
 
 ## Contributing
 
