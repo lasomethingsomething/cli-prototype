@@ -1,6 +1,10 @@
 package config
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
+
 	"github.com/spf13/viper"
 )
 
@@ -22,5 +26,29 @@ func Save(cfg *Config) error {
 	viper.Set("registry", cfg.Registry)
 	viper.Set("runtime", cfg.Runtime)
 	viper.Set("signer", cfg.Signer)
-	return viper.WriteConfig()
+
+	if err := viper.WriteConfig(); err != nil {
+		_, isNotFound := err.(viper.ConfigFileNotFoundError)
+		if isNotFound || os.IsNotExist(err) {
+			// First run: no config file exists yet. Write to the path viper knows about
+			// (set via viper.SetConfigFile), or fall back to ~/.model-cli.yaml.
+			// Tests must call viper.SetConfigFile(path) before Save() to avoid
+			// writing to the real home directory.
+			cfgFile := viper.ConfigFileUsed()
+			if cfgFile == "" {
+				home, herr := os.UserHomeDir()
+				if herr != nil {
+					return fmt.Errorf("could not determine home directory: %w", herr)
+				}
+				cfgFile = filepath.Join(home, ".model-cli.yaml")
+			}
+			if err := viper.WriteConfigAs(cfgFile); err != nil {
+				return err
+			}
+			viper.SetConfigFile(cfgFile)
+			return nil
+		}
+		return err
+	}
+	return nil
 }
