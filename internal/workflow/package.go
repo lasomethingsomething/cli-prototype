@@ -18,6 +18,7 @@ type PackageWorkflow struct {
 	generateSBOM      bool
 	includeMOF        bool
 	annotations      *AnnotationSet
+	manifestPath      string
 }
 
 // NewPackageWorkflow creates a new packaging workflow
@@ -55,6 +56,12 @@ func (w *PackageWorkflow) SetAnnotations(annotations *AnnotationSet) {
 func (w *PackageWorkflow) SetSecurityOptions(generateSBOM, includeMOF bool) {
 	w.generateSBOM = generateSBOM
 	w.includeMOF = includeMOF
+}
+
+// ManifestPath returns the path to the OCI manifest written by Run(), or an
+// empty string if Run() has not been called yet.
+func (w *PackageWorkflow) ManifestPath() string {
+	return w.manifestPath
 }
 
 // Run executes the packaging workflow
@@ -117,10 +124,23 @@ func (w *PackageWorkflow) Run() error {
 
 	// Create OCI artifact manifest
 	fmt.Println("→ Creating OCI artifact manifest...")
-	
-	// Inject CNCF AI Interoperability Profile annotations
+
+	// Inject CNCF AI Interoperability Profile annotations into the manifest
+	// and write it to disk alongside the packaged model files.
 	fmt.Println("→ Injecting CNCF AI Interoperability Profile annotations...")
-	
+
+	var manifestAnnotations map[string]string
+	if w.annotations != nil {
+		manifestAnnotations = w.annotations.ToMap()
+	}
+
+	manifest := NewManifest(manifestAnnotations)
+	w.manifestPath = filepath.Join(w.modelPath, "manifest.json")
+	if err := WriteManifest(manifest, w.manifestPath); err != nil {
+		return fmt.Errorf("failed to write OCI manifest: %v", err)
+	}
+	fmt.Printf("  Manifest written to: %s\n", w.manifestPath)
+
 	if w.includeRAG && w.ragPath != "" {
 		fmt.Printf("→ Adding RAG context from '%s'...\n", w.ragPath)
 	}
@@ -132,7 +152,7 @@ func (w *PackageWorkflow) Run() error {
 	// Push to registry if URL is provided
 	if w.registryURL != "" {
 		fmt.Printf("→ Pushing to registry '%s'...\n", w.registryURL)
-		if err := w.registryProvider.Push(w.artifactName, w.registryURL); err != nil {
+		if err := w.registryProvider.Push(w.artifactName, w.registryURL, manifestAnnotations); err != nil {
 			return fmt.Errorf("failed to push artifact: %v", err)
 		}
 		fmt.Printf("✓ Successfully pushed %s to %s\n", fullArtifact, w.registryURL)

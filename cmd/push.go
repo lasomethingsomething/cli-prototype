@@ -29,6 +29,7 @@ Examples:
 		artifactFlag, _ := cmd.Flags().GetString("artifact")
 		registryFlag, _ := cmd.Flags().GetString("registry")
 		destinationFlag, _ := cmd.Flags().GetString("destination")
+		manifestFlag, _ := cmd.Flags().GetString("manifest")
 
 		// Interactive prompts
 		var artifact string
@@ -86,19 +87,32 @@ Examples:
 			return fmt.Errorf("%s not installed. Install with: %s", provider.Name(), provider.InstallInstructions())
 		}
 
+		// If a manifest produced by `model-cli package` was given, read its
+		// CNCF AI annotations so they're attached to the manifest on push.
+		var annotations map[string]string
+		if manifestFlag != "" {
+			manifest, err := workflow.ReadManifest(manifestFlag)
+			if err != nil {
+				return err
+			}
+			annotations = manifest.Annotations
+		}
+
 		fmt.Printf("\nPushing '%s' to '%s' using %s...\n", artifact, destination, registry)
-		
+
 		fullArtifact := destination + "/" + artifact
 
 		// Push the artifact
-		if err := provider.Push(artifact, destination); err != nil {
+		if err := provider.Push(artifact, destination, annotations); err != nil {
 			return err
 		}
 
 		fmt.Printf("\n✓ Pushed artifact: %s\n", fullArtifact)
 		fmt.Println("✓ OCI layers stored in registry")
-		fmt.Println("✓ Manifest with CNCF AI annotations available for validation")
-		
+		if len(annotations) > 0 {
+			fmt.Println("✓ Manifest with CNCF AI annotations available for validation")
+		}
+
 		fmt.Println("\nPhase 2 Complete: Enterprise OCI Registry")
 		fmt.Println("Next: Run manifest-level validation with model-cli validate")
 
@@ -111,4 +125,5 @@ func init() {
 	pushCmd.Flags().String("artifact", "", "OCI artifact reference to push (e.g., my-model:latest)")
 	pushCmd.Flags().String("registry", "", "Registry tool: oras or modelpack")
 	pushCmd.Flags().String("destination", "", "Destination registry (e.g., ghcr.io/my-org)")
+	pushCmd.Flags().String("manifest", "", "Path to the OCI manifest.json produced by 'model-cli package', used to attach CNCF AI annotations")
 }
