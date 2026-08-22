@@ -1,31 +1,27 @@
 package tui
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 )
 
-func TestProgressPercent(t *testing.T) {
+func TestProgressPercentInRender(t *testing.T) {
 	tests := []struct {
 		step    int
-		total   int
-		wantPct int
+		wantPct string
 	}{
-		{1, 7, 14},
-		{4, 7, 57},
-		{7, 7, 100},
-		{0, 7, 0},
+		{1, "14%"},
+		{4, "57%"},
+		{7, "100%"},
 	}
 
 	for _, tt := range tests {
-		t.Run(fmt.Sprintf("step%dof%d", tt.step, tt.total), func(t *testing.T) {
+		t.Run(tt.wantPct, func(t *testing.T) {
 			p := NewContextPanel()
-			p.TotalSteps = tt.total
 			p.SetStep(tt.step)
-			got := (p.CurrentStep * 100) / p.TotalSteps
-			if got != tt.wantPct {
-				t.Errorf("progress percent = %d, want %d", got, tt.wantPct)
+			out := p.Render()
+			if !strings.Contains(out, tt.wantPct) {
+				t.Errorf("Render() at step %d does not contain %q\ngot: %s", tt.step, tt.wantPct, out)
 			}
 		})
 	}
@@ -35,8 +31,8 @@ func TestRenderContainsStepCounter(t *testing.T) {
 	p := NewContextPanel()
 	p.SetStep(3)
 	out := p.Render()
-	if !strings.Contains(out, "3") {
-		t.Errorf("Render() output does not contain step number 3:\n%s", out)
+	if !strings.Contains(out, "3 of 7") {
+		t.Errorf("Render() output does not contain '3 of 7':\n%s", out)
 	}
 }
 
@@ -59,5 +55,33 @@ func TestRenderContainsModelInfo(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("Render() output does not contain %q:\n%s", want, out)
 		}
+	}
+}
+
+func TestRenderSetResultsPackage(t *testing.T) {
+	p := NewContextPanel()
+	p.SetResults(true, false, false, false)
+	out := p.Render()
+	if !strings.Contains(out, "Package") {
+		t.Errorf("Render() output does not contain 'Package' after SetResults(true,...):\n%s", out)
+	}
+}
+
+func TestRenderAddLog(t *testing.T) {
+	p := NewContextPanel()
+	p.AddLog("artifact pushed successfully")
+	out := p.Render()
+	if !strings.Contains(out, "artifact pushed") {
+		t.Errorf("Render() output does not contain log message:\n%s", out)
+	}
+}
+
+func TestLogTruncation(t *testing.T) {
+	p := NewContextPanel()
+	for i := 0; i < 15; i++ {
+		p.AddLog("log entry")
+	}
+	if len(p.Logs) > 10 {
+		t.Errorf("Logs length = %d, want <= 10", len(p.Logs))
 	}
 }
