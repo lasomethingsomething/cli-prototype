@@ -1,6 +1,6 @@
 # Model CLI
 
-**Your tour guide through the secure ML model deployment journey.**
+Your tour guide through the secure ML model deployment journey.
 
 Model CLI makes it easy to package, sign, verify, and deploy ML models with a clean, guided TUI (Terminal User Interface).
 
@@ -20,17 +20,17 @@ That's it! The wizard will guide you through every step.
 
 ## What is Model CLI?
 
-Model CLI is a **tour guide** CLI that helps you:
+Model CLI is a tour guide CLI that helps you:
 
-- ✅ Package ML models as OCI artifacts
-- ✅ Generate SBOMs for supply chain transparency
-- ✅ Classify models with MOF (Model Openness Framework)
-- ✅ Sign artifacts with Sigstore or Notary v2
-- ✅ Verify signatures before deployment
-- ✅ Deploy to Kubernetes with Argo or Flux
-- ✅ Serve models with vLLM or KServe
+- Package ML models as OCI artifacts
+- Generate SBOMs for supply chain transparency
+- Classify models with MOF (Model Openness Framework)
+- Sign artifacts with Sigstore or Notary v2
+- Verify signatures before deployment
+- Deploy to Kubernetes with Argo or Flux
+- Serve models with vLLM or KServe
 
-All through a **clean, colorful, step-by-step TUI** that shows you exactly what's happening.
+All through a clean, colorful, step-by-step TUI that shows you exactly what's happening.
 
 ## Quick Examples
 
@@ -72,28 +72,28 @@ Follow the prompts. The wizard will:
 
 ## Features
 
-### 🎯 Tour Guide Experience
-- Interactive TUI with [huh](https://github.com/charmbracelet/huh)
-- Clean, color-coded output with [lipgloss](https://github.com/charmbracelet/lipgloss)
+### Tour Guide Experience
+- Interactive TUI with huh and lipgloss
+- Clean, color-coded output
 - Step-by-step guidance through complex workflows
-- Clear success (✓) and warning (⚠) indicators
+- Clear success and warning indicators
 
-### 🔧 Pluggable Architecture
+### Pluggable Architecture
 All tools are pluggable via interfaces:
-- **GitOps**: Argo CD, Flux
-- **Registry**: ORAS, ModelPack
-- **Signing**: Sigstore (cosign), Notary v2 (notation)
-- **SBOM**: Syft
-- **Runtime**: vLLM, KServe
+- GitOps: Argo CD, Flux
+- Registry: ORAS, ModelPack
+- Signing: Sigstore (cosign), Notary v2 (notation)
+- SBOM: Syft
+- Runtime: vLLM, KServe
 
-### 🔒 Secure Supply Chain
+### Secure Supply Chain
 - SBOM Generation (Syft)
 - Cryptographic Signing (Sigstore/Notary v2)
 - Signature Verification
 - MOF Classification
 - OCI Artifact format
 
-### ⚡ Non-Interactive Mode
+### Non-Interactive Mode
 Every interactive command also supports non-interactive mode via flags for CI/CD and automation:
 
 ```bash
@@ -141,9 +141,9 @@ Model CLI aligns with:
 
 ## Contributing
 
-1. Add interface in `internal/workflow/providers.go`
+1. Add interface in internal/workflow/providers.go
 2. Implement concrete provider
-3. Register in factory function (`Get*Provider`)
+3. Register in factory function (Get*Provider)
 4. Add CLI command
 5. Support both interactive and non-interactive modes
 

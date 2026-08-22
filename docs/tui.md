@@ -243,7 +243,7 @@ model-cli schedule \
 The TUI uses color coding that works with most terminal color schemes. For accessibility:
 - Colors are secondary to text content
 - All information is readable without color
-- Success indicators use text symbols (✓) in addition to colors
+- Success indicators use text symbols (checkmarks) in addition to colors
 
 ## Customization
 
