@@ -16,8 +16,13 @@ func TestSaveFirstRun(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, ".model-cli.yaml")
 	resetViper()
-	// Point viper at the explicit path so the first-run fallback writes here
-	viper.SetConfigFile(cfgPath)
+	// Override HOME so the first-run fallback writes to the temp dir, not ~/.model-cli.yaml.
+	t.Setenv("HOME", dir)
+	// Use SetConfigName/AddConfigPath (not SetConfigFile) so viper.ConfigFileUsed()
+	// returns "" on first Save(), exercising the true first-run fallback path.
+	viper.SetConfigName(".model-cli")
+	viper.SetConfigType("yaml")
+	viper.AddConfigPath(dir)
 
 	cfg := &Config{
 		GitOps:   "argo",
@@ -32,6 +37,12 @@ func TestSaveFirstRun(t *testing.T) {
 
 	if _, err := os.Stat(cfgPath); os.IsNotExist(err) {
 		t.Errorf("config file not created at %s", cfgPath)
+	}
+
+	// Second Save() should succeed via WriteConfig() now that viper knows the file path.
+	cfg.GitOps = "flux"
+	if err := Save(cfg); err != nil {
+		t.Fatalf("Save() on second run error = %v", err)
 	}
 }
 
