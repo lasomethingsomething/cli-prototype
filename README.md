@@ -21,6 +21,7 @@ model-cli package    # Package model as OCI artifact
 model-cli sign       # Sign with Sigstore or Notary v2
 model-cli verify     # Verify artifact signature
 model-cli deploy     # Deploy to Kubernetes
+model-cli serve      # Serve with vLLM or KServe
 ```
 
 ## Features
@@ -33,6 +34,7 @@ All tools are pluggable via a common provider interface:
 - Registry: ORAS, ModelPack
 - Signing: Sigstore (cosign), Notary v2 (notation)
 - SBOM: Syft
+- Runtime: vLLM, KServe
 
 ### Secure Supply Chain
 
@@ -104,6 +106,7 @@ Providers:
 - Registry: ORAS, ModelPack
 - Signing: Sigstore, Notary v2
 - SBOM: Syft
+- Runtime: vLLM, KServe
 
 ## Documentation
 
