@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/charmbracelet/huh"
 	"github.com/lasomethingsomething/cli-prototype/internal/workflow"
@@ -29,6 +30,7 @@ Examples:
 		// Get flags
 		artifactFlag, _ := cmd.Flags().GetString("artifact")
 		checkRelationshipsFlag, _ := cmd.Flags().GetBool("check-relationships")
+		manifestFlag, _ := cmd.Flags().GetString("manifest")
 
 		// Interactive prompts
 		var artifact string
@@ -59,27 +61,48 @@ Examples:
 
 		fmt.Printf("\nValidating manifest for: %s\n\n", artifact)
 
-		// In a real implementation, this would:
-		// 1. Pull the manifest from the registry
-		// 2. Parse the CNCF AI Interoperability Profile annotations
-		// 3. Validate required fields are present
-		// 4. Check annotation formats are valid
-		// 5. If checkRelationships, resolve and validate relationships
+		var manifestAnnotations map[string]string
+		if manifestFlag != "" {
+			// Read the real OCI manifest written by 'model-cli package' and
+			// validate the CNCF AI annotations that actually landed on it.
+			fmt.Println("✓ Reading manifest from disk...")
+			manifest, err := workflow.ReadManifest(manifestFlag)
+			if err != nil {
+				return err
+			}
+			fmt.Println("✓ Reading Standardized Metadata Contract...")
 
-		// For now, simulate the validation
-		fmt.Println("✓ Fetching manifest from registry...")
-		fmt.Println("✓ Reading Standardized Metadata Contract...")
+			manifestAnnotations = manifest.Annotations
+			if len(manifestAnnotations) == 0 {
+				return fmt.Errorf("manifest at %s has no CNCF AI annotations", manifestFlag)
+			}
 
-		// Create a sample annotation set to demonstrate what would be validated
-		annotations := workflow.NewAnnotationSet()
-		annotations.Runtime = "vllm"
-		annotations.Accelerator = "nvidia-gpu"
-		annotations.CUDAMin = "12.1"
-		annotations.MOFClass = "I"
-		annotations.MOFComponents = "weights,training-data"
+			required := []string{workflow.AnnotationProfileVersion, workflow.AnnotationArtifactType}
+			for _, key := range required {
+				if _, ok := manifestAnnotations[key]; !ok {
+					return fmt.Errorf("manifest at %s is missing required annotation %q", manifestFlag, key)
+				}
+			}
+		} else {
+			// No local manifest given: simulate what a registry pull would
+			// return, since this prototype does not yet pull real manifests
+			// over the network.
+			fmt.Println("✓ Fetching manifest from registry...")
+			fmt.Println("✓ Reading Standardized Metadata Contract...")
+
+			annotations := workflow.NewAnnotationSet()
+			annotations.Runtime = "vllm"
+			annotations.Accelerator = "nvidia-gpu"
+			annotations.CUDAMin = "12.1"
+			annotations.MOFClass = "I"
+			annotations.MOFComponents = "weights,training-data"
+			manifestAnnotations = annotations.ToMap()
+		}
 
 		fmt.Println("\n  Detected Annotations:")
-		annotations.Print()
+		for _, key := range sortedKeys(manifestAnnotations) {
+			fmt.Printf("    %s: %s\n", key, manifestAnnotations[key])
+		}
 
 		fmt.Println("\n✓ Profile annotations valid")
 		fmt.Println("✓ MOF classification valid")
@@ -105,4 +128,15 @@ func init() {
 	rootCmd.AddCommand(validateCmd)
 	validateCmd.Flags().String("artifact", "", "OCI artifact reference to validate")
 	validateCmd.Flags().Bool("check-relationships", false, "Map and validate artifact relationships")
+	validateCmd.Flags().String("manifest", "", "Path to a local OCI manifest.json (e.g. produced by 'model-cli package') to validate instead of simulating a registry fetch")
+}
+
+// sortedKeys returns the keys of m in sorted order, for deterministic output.
+func sortedKeys(m map[string]string) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }

@@ -1,8 +1,28 @@
 package workflow
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 )
+
+// fakeRegistryProvider is a test double for RegistryProvider that records the
+// annotations it was pushed with instead of shelling out to a real tool.
+type fakeRegistryProvider struct {
+	installed         bool
+	pushedAnnotations map[string]string
+	pushCalled        bool
+}
+
+func (f *fakeRegistryProvider) Name() string                         { return "fake" }
+func (f *fakeRegistryProvider) IsInstalled() bool                    { return f.installed }
+func (f *fakeRegistryProvider) InstallInstructions() string          { return "n/a" }
+func (f *fakeRegistryProvider) Pull(artifact, registry string) error { return nil }
+func (f *fakeRegistryProvider) Push(artifact, registry string, annotations map[string]string) error {
+	f.pushCalled = true
+	f.pushedAnnotations = annotations
+	return nil
+}
 
 // Test NewPackageWorkflow
 func TestNewPackageWorkflow(t *testing.T) {
@@ -94,5 +114,76 @@ func TestPackageWorkflowDefaults(t *testing.T) {
 	}
 	if pf.annotations == nil {
 		t.Error("annotations default is nil, want non-nil")
+	}
+}
+
+// TestPackageWorkflowRunWritesManifestWithAnnotations verifies that Run()
+// writes a real OCI manifest.json to disk containing the CNCF AI annotations,
+// and forwards that same annotation map to the registry provider's Push.
+func TestPackageWorkflowRunWritesManifestWithAnnotations(t *testing.T) {
+	modelPath := t.TempDir()
+
+	fake := &fakeRegistryProvider{installed: true}
+	pf := &PackageWorkflow{
+		registry:         "fake",
+		registryProvider: fake,
+		annotations:      NewAnnotationSet(),
+	}
+	pf.annotations.Runtime = "vllm"
+	pf.annotations.Accelerator = "nvidia-gpu"
+
+	pf.SetPackageInfo("phi-4-mini", modelPath, "my-model:v1", "ghcr.io/my-org", false, "")
+
+	if err := pf.Run(); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	wantManifestPath := filepath.Join(modelPath, "manifest.json")
+	if pf.ManifestPath() != wantManifestPath {
+		t.Errorf("ManifestPath() = %q, want %q", pf.ManifestPath(), wantManifestPath)
+	}
+
+	if _, err := os.Stat(wantManifestPath); err != nil {
+		t.Fatalf("expected manifest file at %s: %v", wantManifestPath, err)
+	}
+
+	manifest, err := ReadManifest(wantManifestPath)
+	if err != nil {
+		t.Fatalf("ReadManifest() error = %v", err)
+	}
+	if manifest.Annotations[AnnotationRuntime] != "vllm" {
+		t.Errorf("manifest annotation %s = %q, want %q", AnnotationRuntime, manifest.Annotations[AnnotationRuntime], "vllm")
+	}
+	if manifest.Annotations[AnnotationAccelerator] != "nvidia-gpu" {
+		t.Errorf("manifest annotation %s = %q, want %q", AnnotationAccelerator, manifest.Annotations[AnnotationAccelerator], "nvidia-gpu")
+	}
+
+	if !fake.pushCalled {
+		t.Fatal("expected registry provider Push() to be called")
+	}
+	if fake.pushedAnnotations[AnnotationRuntime] != "vllm" {
+		t.Errorf("Push() annotations[%s] = %q, want %q", AnnotationRuntime, fake.pushedAnnotations[AnnotationRuntime], "vllm")
+	}
+}
+
+// TestPackageWorkflowRunNotInstalled verifies Run() fails fast (without
+// writing a manifest) when the registry provider isn't installed.
+func TestPackageWorkflowRunNotInstalled(t *testing.T) {
+	modelPath := t.TempDir()
+
+	fake := &fakeRegistryProvider{installed: false}
+	pf := &PackageWorkflow{
+		registry:         "fake",
+		registryProvider: fake,
+		annotations:      NewAnnotationSet(),
+	}
+	pf.SetPackageInfo("phi-4-mini", modelPath, "my-model:v1", "", false, "")
+
+	if err := pf.Run(); err == nil {
+		t.Fatal("Run() expected error when registry provider is not installed, got nil")
+	}
+
+	if _, err := os.Stat(filepath.Join(modelPath, "manifest.json")); !os.IsNotExist(err) {
+		t.Error("expected no manifest.json to be written when provider is not installed")
 	}
 }
