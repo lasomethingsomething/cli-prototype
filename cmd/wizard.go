@@ -38,28 +38,14 @@ var (
 )
 
 // displayContextPanel shows a context panel with important information
-func displayContextPanel(step int, totalSteps int, cfg config.Config, modelName, artifactName string) {
-	// Create tabs for different context views
-	tabBar := tui.NewTabBar([]string{"Progress", "Config", "Model"})
+func displayContextPanel(ctxPanel *tui.ContextPanel, step int, modelName, artifactName string) {
+	// Update panel state
+	ctxPanel.SetStep(step)
+	ctxPanel.SetModelInfo(modelName, "", artifactName)
 	
-	// Set content for each tab
-	progressContent := fmt.Sprintf("Step %d of %d\n%s", step, totalSteps, 
-		lipgloss.NewStyle().Foreground(lipgloss.Color("#55AAFF")).Render("In progress..."))
-	
-	configContent := fmt.Sprintf("Registry: %s\nGitOps: %s\nSigner: %s",
-		cfg.Registry, cfg.GitOps, cfg.Signer)
-	
-	modelContent := fmt.Sprintf("Name: %s\nArtifact: %s", modelName, artifactName)
-	
-	tabBar.SetContent(0, progressContent)
-	tabBar.SetContent(1, configContent)
-	tabBar.SetContent(2, modelContent)
-	
-	// Render the active tab (Progress by default)
+	// Render the panel
 	fmt.Println()
-	fmt.Println(lipgloss.NewStyle().Foreground(lipgloss.Color("#555555")).Render("─── Context ─────────────────────────────────────────────────"))
-	fmt.Println(tabBar.RenderWithContent())
-	fmt.Println()
+	fmt.Println(ctxPanel.Render())
 }
 
 var wizardCmd = &cobra.Command{
@@ -87,6 +73,11 @@ Examples:
 		skipDeploy, _ := cmd.Flags().GetBool("skip-deploy")
 
 		cfg := config.Load()
+		
+		// Initialize context panel for persistent display
+		ctxPanel := tui.NewContextPanel()
+		ctxPanel.SetStep(1)
+		ctxPanel.SetConfig(cfg.Registry, cfg.GitOps, cfg.Signer, "")
 
 		// === Welcome Screen ===
 		fmt.Println()
@@ -143,6 +134,12 @@ Examples:
 		config.Save(cfg)
 		fmt.Println(successStyle.Render("✓ Preferences saved"))
 		fmt.Println()
+		
+		// Update context panel with config
+		ctxPanel.SetConfig(cfg.Registry, cfg.GitOps, cfg.Signer, "")
+		ctxPanel.SetStep(1)
+		fmt.Println(ctxPanel.Render())
+		fmt.Println()
 
 		// === Step 2: Model Information ===
 		fmt.Println(stepStyle.Render("Step 2: Model Details"))
@@ -198,7 +195,9 @@ Examples:
 		fmt.Println()
 		
 		// Show context panel with current progress
-		displayContextPanel(2, 7, *cfg, modelName, artifactName)
+		ctxPanel.SetStep(2)
+		ctxPanel.SetModelInfo(modelName, modelPath, artifactName)
+		fmt.Println(ctxPanel.Render())
 
 		// === Step 3: Kubernetes Setup ===
 		fmt.Println(stepStyle.Render("Step 3: Kubernetes Setup"))
@@ -264,6 +263,13 @@ Examples:
 
 		fullArtifact := artifactName
 		// In real implementation, would push to registry
+
+		// Update context panel
+		ctxPanel.SetStep(4)
+		ctxPanel.SetResults(packageSucceeded, false, false, false)
+		ctxPanel.AddLog(fmt.Sprintf("Packaged artifact: %s", artifactName))
+		fmt.Println()
+		fmt.Println(ctxPanel.Render())
 
 		fmt.Println()
 
