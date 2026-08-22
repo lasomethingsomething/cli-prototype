@@ -317,6 +317,49 @@ func TestProviderNameConsistency(t *testing.T) {
 	}
 }
 
+// TestAnnotationArgs verifies annotationArgs produces deterministic,
+// sorted "--annotation key=value" pairs for the ORAS CLI.
+func TestAnnotationArgs(t *testing.T) {
+	annotations := map[string]string{
+		AnnotationAccelerator: "nvidia-gpu",
+		AnnotationRuntime:     "vllm",
+	}
+
+	got := annotationArgs(annotations)
+	want := []string{
+		"--annotation", AnnotationAccelerator + "=nvidia-gpu",
+		"--annotation", AnnotationRuntime + "=vllm",
+	}
+
+	if len(got) != len(want) {
+		t.Fatalf("annotationArgs() = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("annotationArgs()[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+
+	if args := annotationArgs(nil); len(args) != 0 {
+		t.Errorf("annotationArgs(nil) = %v, want empty", args)
+	}
+}
+
+// TestModelPackProviderPushWithAnnotations verifies ModelPackProvider.Push
+// accepts and does not error on an annotation map (ModelPack push itself is
+// simulated in this prototype and does not shell out).
+func TestModelPackProviderPushWithAnnotations(t *testing.T) {
+	p, err := GetRegistryProvider("modelpack")
+	if err != nil {
+		t.Fatalf("GetRegistryProvider(\"modelpack\") error = %v", err)
+	}
+
+	annotations := NewAnnotationSet().ToMap()
+	if err := p.Push("my-model:v1", "ghcr.io/my-org", annotations); err != nil {
+		t.Errorf("Push() with annotations error = %v, want nil", err)
+	}
+}
+
 func TestModelPackProviderIsInstalled(t *testing.T) {
 	original := os.Getenv("PATH")
 	os.Setenv("PATH", "")
