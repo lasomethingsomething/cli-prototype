@@ -6,6 +6,7 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/lasomethingsomething/cli-prototype/config"
+	"github.com/lasomethingsomething/cli-prototype/internal/tui"
 	"github.com/lasomethingsomething/cli-prototype/internal/workflow"
 	"github.com/spf13/cobra"
 )
@@ -35,6 +36,31 @@ var (
 	warningStyle = lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#FFAA00"))
 )
+
+// displayContextPanel shows a context panel with important information
+func displayContextPanel(step int, totalSteps int, cfg config.Config, modelName, artifactName string) {
+	// Create tabs for different context views
+	tabBar := tui.NewTabBar([]string{"Progress", "Config", "Model"})
+	
+	// Set content for each tab
+	progressContent := fmt.Sprintf("Step %d of %d\n%s", step, totalSteps, 
+		lipgloss.NewStyle().Foreground(lipgloss.Color("#55AAFF")).Render("In progress..."))
+	
+	configContent := fmt.Sprintf("Registry: %s\nGitOps: %s\nSigner: %s",
+		cfg.Registry, cfg.GitOps, cfg.Signer)
+	
+	modelContent := fmt.Sprintf("Name: %s\nArtifact: %s", modelName, artifactName)
+	
+	tabBar.SetContent(0, progressContent)
+	tabBar.SetContent(1, configContent)
+	tabBar.SetContent(2, modelContent)
+	
+	// Render the active tab (Progress by default)
+	fmt.Println()
+	fmt.Println(lipgloss.NewStyle().Foreground(lipgloss.Color("#555555")).Render("─── Context ─────────────────────────────────────────────────"))
+	fmt.Println(tabBar.RenderWithContent())
+	fmt.Println()
+}
 
 var wizardCmd = &cobra.Command{
 	Use:   "wizard",
@@ -170,6 +196,9 @@ Examples:
 
 		fmt.Println(successStyle.Render("✓ Model details collected"))
 		fmt.Println()
+		
+		// Show context panel with current progress
+		displayContextPanel(2, 7, *cfg, modelName, artifactName)
 
 		// === Step 3: Kubernetes Setup ===
 		fmt.Println(stepStyle.Render("Step 3: Kubernetes Setup"))
