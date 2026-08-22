@@ -55,7 +55,9 @@ Examples:
 		}
 
 		// Save config for future use
-		config.Save(cfg)
+		if err := config.Save(cfg); err != nil {
+			return fmt.Errorf("failed to save config: %w", err)
+		}
 
 		// Get packaging information
 		var modelName string

@@ -131,8 +131,11 @@ Examples:
 			cfg.Signer = signerTool
 		}
 
-		config.Save(cfg)
-		fmt.Println(successStyle.Render("✓ Preferences saved"))
+		if err := config.Save(cfg); err != nil {
+			fmt.Printf("Warning: failed to save config: %v\n", err)
+		} else {
+			fmt.Println(successStyle.Render("✓ Preferences saved"))
+		}
 		fmt.Println()
 		
 		// Update context panel with config
