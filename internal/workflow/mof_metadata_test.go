@@ -69,6 +69,36 @@ func TestMOFMetadataGeneratorSetReleaseInfo(t *testing.T) {
 	}
 }
 
+func TestMOFMetadataDefaultLicense(t *testing.T) {
+	// Test that the default license is CC-BY-4.0 when not specified
+	gen := NewMOFMetadataGenerator()
+	gen.SetModelInfo("test-model", "/path/to/model", "ghcr.io/test:1.0")
+	gen.SetMOFClassification("I", []string{"weights"}, "Full")
+	gen.SetReleaseInfo("test-model", "1.0.0", "2026-01-01", "model")
+	// Note: NOT setting license - should default to CC-BY-4.0
+	
+	metadata := gen.Generate()
+	
+	if metadata.Release.License != "CC-BY-4.0" {
+		t.Errorf("Expected default license 'CC-BY-4.0', got '%s'", metadata.Release.License)
+	}
+}
+
+func TestMOFMetadataCustomLicense(t *testing.T) {
+	// Test that custom license can be set
+	gen := NewMOFMetadataGenerator()
+	gen.SetModelInfo("test-model", "/path/to/model", "ghcr.io/test:1.0")
+	gen.SetMOFClassification("I", []string{"weights"}, "Full")
+	gen.SetReleaseInfo("test-model", "1.0.0", "2026-01-01", "model")
+	gen.SetReleaseLicense("MIT")
+	
+	metadata := gen.Generate()
+	
+	if metadata.Release.License != "MIT" {
+		t.Errorf("Expected license 'MIT', got '%s'", metadata.Release.License)
+	}
+}
+
 func TestMOFMetadataGeneratorGenerate(t *testing.T) {
 	gen := NewMOFMetadataGenerator()
 	gen.SetModelInfo("test-model", "/path/to/model", "ghcr.io/test:1.0")

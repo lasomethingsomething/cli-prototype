@@ -123,6 +123,7 @@ All tools are pluggable via interfaces:
 - MOF Classification
 - OCI Artifact format
 - Local Compliance Checks (annotations, SBOM, MOF)
+- MOF metadata generation with CC-BY-4.0 license by default
 
 ### Non-Interactive Mode
 Every interactive command also supports non-interactive mode via flags for CI/CD and automation:
@@ -152,6 +153,22 @@ Model CLI itself only needs Go. The tools it integrates with are optional and ch
 | cdxgen | `npm install -g @cyclonedx/cdxgen` | SBOM generation (CycloneDX) |
 
 If a tool isn't installed, Model CLI will tell you exactly how to install it.
+
+## MOF Metadata License
+
+When generating MOF/MOT-compliant metadata config files (`mof.json`), the default license is **CC-BY-4.0** as recommended by the MOF specification for metadata and documentation. You can override this via:
+
+- `--license` flag on the `model-cli harden` command
+- Configuration file setting
+
+Example:
+```bash
+# Use default CC-BY-4.0
+./model-cli harden
+
+# Override with custom license
+./model-cli harden --license MIT
+```
 
 ## Documentation
 
