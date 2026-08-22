@@ -245,6 +245,8 @@ Examples:
 		}
 		
 		packageSucceeded := false
+		signSucceeded := false
+		verifySucceeded := false
 		if !registryProvider.IsInstalled() {
 			fmt.Println(warningStyle.Render("Warning: Registry tool not installed"))
 			fmt.Printf("   Install with: %s\n\n", registryProvider.InstallInstructions())
@@ -290,6 +292,7 @@ Examples:
 				fmt.Printf("Signing %s with %s...\n", fullArtifact, cfg.Signer)
 				// In real implementation: sp.Sign(fullArtifact, "")
 				fmt.Println(successStyle.Render("✓ Artifact signed"))
+				signSucceeded = true
 			}
 			fmt.Println()
 		}
@@ -311,6 +314,7 @@ Examples:
 				fmt.Printf("Verifying %s...\n", fullArtifact)
 				// In real implementation: sp.Verify(fullArtifact)
 				fmt.Println(successStyle.Render("✓ Signature verified - artifact is trusted"))
+				verifySucceeded = true
 			}
 			fmt.Println()
 		}
@@ -370,11 +374,19 @@ Examples:
 		} else {
 			fmt.Printf("  %s Skipped packaging (registry tool not installed)\n", warningStyle.Render("⚠"))
 		}
-		if !skipSigning {
-			fmt.Printf("  %s Signed with %s\n", successStyle.Render("✓"), cfg.Signer)
-			fmt.Printf("  %s Verified signature\n", successStyle.Render("✓"))
-		} else {
+		if skipSigning {
 			fmt.Printf("  %s Skipped signing\n", warningStyle.Render("⚠"))
+		} else if signSucceeded {
+			fmt.Printf("  %s Signed with %s\n", successStyle.Render("✓"), cfg.Signer)
+		} else {
+			fmt.Printf("  %s Skipped signing (tool not installed)\n", warningStyle.Render("⚠"))
+		}
+		if !skipSigning {
+			if verifySucceeded {
+				fmt.Printf("  %s Verified signature\n", successStyle.Render("✓"))
+			} else if !signSucceeded {
+				fmt.Printf("  %s Skipped verification (tool not installed)\n", warningStyle.Render("⚠"))
+			}
 		}
 		if hasKubernetes && !skipDeploy {
 			fmt.Printf("  %s Deployed to Kubernetes with %s\n", successStyle.Render("✓"), cfg.GitOps)
