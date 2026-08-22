@@ -216,6 +216,7 @@ Examples:
 			return err
 		}
 		
+		packageSucceeded := false
 		if !registryProvider.IsInstalled() {
 			fmt.Println(warningStyle.Render("Warning: Registry tool not installed"))
 			fmt.Printf("   Install with: %s\n\n", registryProvider.InstallInstructions())
@@ -229,6 +230,7 @@ Examples:
 			if err := pf.Run(); err != nil {
 				return err
 			}
+			packageSucceeded = true
 		}
 
 		fullArtifact := artifactName
@@ -328,7 +330,11 @@ Examples:
 		fmt.Println(titleStyle.Render("🎉 Journey Complete!"))
 		fmt.Println()
 		fmt.Println("You've successfully:")
-		fmt.Printf("  %s Packaged '%s' as OCI artifact\n", successStyle.Render("✓"), modelName)
+		if packageSucceeded {
+			fmt.Printf("  %s Packaged '%s' as OCI artifact\n", successStyle.Render("✓"), modelName)
+		} else {
+			fmt.Printf("  %s Skipped packaging (registry tool not installed)\n", warningStyle.Render("⚠"))
+		}
 		if !skipSigning {
 			fmt.Printf("  %s Signed with %s\n", successStyle.Render("✓"), cfg.Signer)
 			fmt.Printf("  %s Verified signature\n", successStyle.Render("✓"))
