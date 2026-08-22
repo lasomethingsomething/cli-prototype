@@ -20,6 +20,7 @@ type HardenWorkflow struct {
 	generateMOFConfig bool
 	sbomTool          string
 	sbomFormat        SBOMFormat
+	license          string
 
 	// Results
 	sbomPath      string
@@ -40,6 +41,7 @@ func NewHardenWorkflow(registry string) *HardenWorkflow {
 		generateMOFConfig: true,
 		sbomTool:         "syft",
 		sbomFormat:       SPDXJSON,
+		license:         "CC-BY-4.0", // Default license
 		annotations:      NewAnnotationSet(),
 	}
 }
@@ -61,6 +63,11 @@ func (w *HardenWorkflow) SetOptions(generateSBOM, includeMOF bool) {
 // SetGenerateMOFConfig enables/disables MOF config file generation
 func (w *HardenWorkflow) SetGenerateMOFConfig(generate bool) {
 	w.generateMOFConfig = generate
+}
+
+// SetLicense sets the license for the MOF metadata (defaults to CC-BY-4.0)
+func (w *HardenWorkflow) SetLicense(license string) {
+	w.license = license
 }
 
 // SetSBOMTool sets the SBOM generation tool and format
@@ -159,6 +166,7 @@ func (w *HardenWorkflow) Run() error {
 			
 			generator.SetMOFClassification(classStr, components, result.Explanation)
 			generator.SetReleaseInfo(w.modelName, "1.0.0", "", "model")
+			generator.SetReleaseLicense(w.license)
 			
 			// Write to file
 			w.mofConfigPath = filepath.Join(w.modelPath, "mof.json")

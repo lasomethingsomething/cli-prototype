@@ -33,7 +33,8 @@ type ReleaseMetadata struct {
 	Name    string `json:"name" yaml:"name"`
 	Version string `json:"version" yaml:"version"`
 	Date    string `json:"date" yaml:"date"`
-	Type    string `json:"type" yaml:"type"` // e.g., "model", "skill", "dataset"
+	Type    string `json:"type" yaml:"type"`    // e.g., "model", "skill", "dataset"
+	License string `json:"license" yaml:"license"` // e.g., "CC-BY-4.0"
 }
 
 // ModelMetadata contains MOF classification for the model
@@ -79,6 +80,7 @@ type MOFMetadataGenerator struct {
 	releaseVersion string
 	releaseDate    string
 	releaseType    string
+	releaseLicense string
 }
 
 // NewMOFMetadataGenerator creates a new metadata generator
@@ -112,8 +114,19 @@ func (g *MOFMetadataGenerator) SetReleaseInfo(name, version, date, artifactType 
 	}
 }
 
+// SetReleaseLicense sets the license for the release (defaults to CC-BY-4.0)
+func (g *MOFMetadataGenerator) SetReleaseLicense(license string) {
+	g.releaseLicense = license
+}
+
 // Generate creates the MOF metadata structure
 func (g *MOFMetadataGenerator) Generate() *MOFMetadata {
+	// Default license to CC-BY-4.0 if not specified
+	license := g.releaseLicense
+	if license == "" {
+		license = "CC-BY-4.0"
+	}
+	
 	metadata := &MOFMetadata{
 		MOFVersion: "1.0",
 		GeneratedAt: time.Now().UTC(),
@@ -123,6 +136,7 @@ func (g *MOFMetadataGenerator) Generate() *MOFMetadata {
 			Version: g.releaseVersion,
 			Date:    g.releaseDate,
 			Type:    g.releaseType,
+			License: license,
 		},
 		Model: ModelMetadata{
 			Name:       g.modelName,
