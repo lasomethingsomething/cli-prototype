@@ -94,7 +94,7 @@ Examples:
 			var registryTool string
 			if err := huh.NewSelect[string]().
 				Title("How would you like to package your model?").
-				Description(infoStyle.Render("(OCI artifacts for interoperability)")).
+				Description(infoStyle.Render("ORAS: Standard OCI registry (recommended for most users) | ModelPack: ML-optimized packaging")).
 				Options(huh.NewOptions("oras", "modelpack")...).
 				Value(&registryTool).
 				Run(); err != nil {
@@ -108,7 +108,7 @@ Examples:
 			var gitOpsTool string
 			if err := huh.NewSelect[string]().
 				Title("How would you like to deploy?").
-				Description(infoStyle.Render("(Argo has UI, Flux has agents)")).
+				Description(infoStyle.Render("Argo: UI-based GitOps (good for visual workflows) | Flux: Agent-based GitOps (good for automation)")).
 				Options(huh.NewOptions("argo", "flux")...).
 				Value(&gitOpsTool).
 				Run(); err != nil {
@@ -122,7 +122,7 @@ Examples:
 			var signerTool string
 			if err := huh.NewSelect[string]().
 				Title("How would you like to sign artifacts?").
-				Description(infoStyle.Render("(Aligns with OSSF Model Signing Spec)")).
+				Description(infoStyle.Render("Sigstore: Free, widely adopted (recommended) | Notary v2: Enterprise-focused, production-grade")).
 				Options(huh.NewOptions("sigstore", "notary")...).
 				Value(&signerTool).
 				Run(); err != nil {
@@ -206,7 +206,7 @@ Examples:
 		var hasKubernetes bool
 		if err := huh.NewConfirm().
 			Title("Do you have a Kubernetes cluster?").
-			Description("We'll package the model regardless, but deployment requires K8s").
+			Description("If yes: Deploy directly. If no: Package only, deploy later or use locally").
 			Value(&hasKubernetes).
 			Run(); err != nil {
 			return err
