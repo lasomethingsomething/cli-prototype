@@ -55,6 +55,37 @@ func TestSetModelInfo(t *testing.T) {
 	}
 }
 
+// Test DeployWorkflow Run without SetModelInfo
+func TestDeployWorkflowRunWithoutSetModelInfo(t *testing.T) {
+	wf, err := NewDeployWorkflow("argo", "oras")
+	if err != nil {
+		t.Fatalf("NewDeployWorkflow error: %v", err)
+	}
+	err = wf.Run()
+	if err == nil {
+		t.Error("Run() without SetModelInfo should return an error, got nil")
+	}
+	if !strings.Contains(err.Error(), "model info not set") {
+		t.Errorf("Run() error = %q, expected to contain 'model info not set'", err.Error())
+	}
+}
+
+// Test DeployWorkflow Run with modelName set but repoURL empty
+func TestDeployWorkflowRunWithRepoURLMissing(t *testing.T) {
+	wf, err := NewDeployWorkflow("argo", "oras")
+	if err != nil {
+		t.Fatalf("NewDeployWorkflow error: %v", err)
+	}
+	wf.SetModelInfo("my-model", "", "") // repoURL empty
+	err = wf.Run()
+	if err == nil {
+		t.Error("Run() with empty repoURL should return an error, got nil")
+	}
+	if !strings.Contains(err.Error(), "model info not set") {
+		t.Errorf("Run() error = %q, expected to contain 'model info not set'", err.Error())
+	}
+}
+
 // Test DeployWorkflow Run with missing tools
 func TestDeployWorkflowMissingTools(t *testing.T) {
 	tests := []struct {
@@ -86,6 +117,7 @@ func TestDeployWorkflowMissingTools(t *testing.T) {
 			if err != nil {
 				t.Fatalf("NewDeployWorkflow error = %v", err)
 			}
+			wf.SetModelInfo("test-model", "https://github.com/test/repo", "./manifests")
 
 			err = wf.Run()
 			if (err != nil) != tt.expectError {
