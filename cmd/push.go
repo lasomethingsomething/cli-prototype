@@ -25,18 +25,29 @@ Examples:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := config.Load()
 
+		// Get flags
+		artifactFlag, _ := cmd.Flags().GetString("artifact")
+		registryFlag, _ := cmd.Flags().GetString("registry")
+		destinationFlag, _ := cmd.Flags().GetString("destination")
+
 		// Interactive prompts
 		var artifact string
-		if err := huh.NewInput().
-			Title("Artifact to push:").
-			Description("The OCI artifact reference to push (e.g., my-model:latest)").
-			Value(&artifact).
-			Run(); err != nil {
-			return err
+		if artifactFlag != "" {
+			artifact = artifactFlag
+		} else {
+			if err := huh.NewInput().
+				Title("Artifact to push:").
+				Description("The OCI artifact reference to push (e.g., my-model:latest)").
+				Value(&artifact).
+				Run(); err != nil {
+				return err
+			}
 		}
 
 		var registry string
-		if cfg.Registry == "" {
+		if registryFlag != "" {
+			registry = registryFlag
+		} else if cfg.Registry == "" {
 			if err := huh.NewSelect[string]().
 				Title("Select Registry tool:").
 				Description("Choose how to push your artifact").
@@ -52,12 +63,16 @@ Examples:
 		}
 
 		var destination string
-		if err := huh.NewInput().
-			Title("Destination registry:").
-			Description("Where to push (e.g., ghcr.io/my-org, docker.io/myuser)").
-			Value(&destination).
-			Run(); err != nil {
-			return err
+		if destinationFlag != "" {
+			destination = destinationFlag
+		} else {
+			if err := huh.NewInput().
+				Title("Destination registry:").
+				Description("Where to push (e.g., ghcr.io/my-org, docker.io/myuser)").
+				Value(&destination).
+				Run(); err != nil {
+				return err
+			}
 		}
 
 		// Get registry provider
@@ -93,4 +108,7 @@ Examples:
 
 func init() {
 	rootCmd.AddCommand(pushCmd)
+	pushCmd.Flags().String("artifact", "", "OCI artifact reference to push (e.g., my-model:latest)")
+	pushCmd.Flags().String("registry", "", "Registry tool: oras or modelpack")
+	pushCmd.Flags().String("destination", "", "Destination registry (e.g., ghcr.io/my-org)")
 }

@@ -30,9 +30,9 @@ Examples:
   model-cli admit --artifact my-registry/my-model:latest --strict
   model-cli admit --artifact my-registry/my-model:latest --env production`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// Check for strict mode
-		strict, _ := cmd.Flags().GetBool("strict")
-		environment, _ := cmd.Flags().GetString("env")
+		// Check for flags
+		strictFlag, _ := cmd.Flags().GetBool("strict")
+		environmentFlag, _ := cmd.Flags().GetString("env")
 
 		// Interactive prompts
 		var artifact string
@@ -44,7 +44,10 @@ Examples:
 			return err
 		}
 
-		if environment == "" {
+		var environment string
+		if environmentFlag != "" {
+			environment = environmentFlag
+		} else {
 			if err := huh.NewSelect[string]().
 				Title("Target environment:").
 				Description("Destination environment for deployment").
@@ -54,6 +57,8 @@ Examples:
 				return err
 			}
 		}
+
+		strict := strictFlag
 
 		fmt.Printf("\nEvaluating artifact '%s' for admission to '%s'...\n\n", artifact, environment)
 
@@ -149,4 +154,5 @@ func init() {
 	rootCmd.AddCommand(admitCmd)
 	admitCmd.Flags().Bool("strict", false, "Strict mode: block admission on warnings")
 	admitCmd.Flags().String("env", "", "Target environment (development, staging, production, air-gapped)")
+	admitCmd.Flags().String("artifact", "", "OCI artifact reference to evaluate")
 }

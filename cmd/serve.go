@@ -14,14 +14,25 @@ var serveCmd = &cobra.Command{
 
 Examples:
   model-cli serve
-  model-cli serve --runtime vllm --model phi-4-mini --port 8080
-  model-cli serve --runtime kserve --model my-model --host 0.0.0.0 --port 8080`,
+  model-cli serve --runtime vllm --model-path ./models/phi-4-mini --host 0.0.0.0 --port 8080
+  model-cli serve --runtime kserve --model-path my-model --host 0.0.0.0 --port 8080`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := config.Load()
 
+		// Get flags
+		runtimeFlag, _ := cmd.Flags().GetString("runtime")
+		modelPathFlag, _ := cmd.Flags().GetString("model-path")
+		hostFlag, _ := cmd.Flags().GetString("host")
+		portFlag, _ := cmd.Flags().GetString("port")
+		modelSizeFlag, _ := cmd.Flags().GetString("model-size")
+		loadSkillsFlag, _ := cmd.Flags().GetBool("load-skills")
+		skillRefFlag, _ := cmd.Flags().GetString("skill-ref")
+
 		// Interactive prompts
 		var runtime string
-		if cfg.Runtime == "" {
+		if runtimeFlag != "" {
+			runtime = runtimeFlag
+		} else if cfg.Runtime == "" {
 			if err := huh.NewSelect[string]().
 				Title("Select runtime:").
 				Options(huh.NewOptions("vllm", "kserve")...).
@@ -36,63 +47,84 @@ Examples:
 		}
 
 		var modelPath string
-		if err := huh.NewInput().
-			Title("Model path:").
-			Value(&modelPath).
-			Run(); err != nil {
-			return err
+		if modelPathFlag != "" {
+			modelPath = modelPathFlag
+		} else {
+			if err := huh.NewInput().
+				Title("Model path:").
+				Value(&modelPath).
+				Run(); err != nil {
+				return err
+			}
 		}
 
 		var host string
-		if err := huh.NewInput().
-			Title("Host:").
-			Value(&host).
-			Run(); err != nil {
-			return err
+		if hostFlag != "" {
+			host = hostFlag
+		} else {
+			if err := huh.NewInput().
+				Title("Host:").
+				Value(&host).
+				Run(); err != nil {
+				return err
+			}
 		}
 
 		var port string
-		if err := huh.NewInput().
-			Title("Port:").
-			Value(&port).
-			Run(); err != nil {
-			return err
+		if portFlag != "" {
+			port = portFlag
+		} else {
+			if err := huh.NewInput().
+				Title("Port:").
+				Value(&port).
+				Run(); err != nil {
+				return err
+			}
 		}
 
 		// Phase 5: Large Binary Asset Optimization
 		var modelSize string
-		if err := huh.NewInput().
-			Title("Model size (optional):").
-			Description("Approximate model size for optimization (e.g., 14GB, 70GB)").
-			Value(&modelSize).
-			Run(); err != nil {
-			return err
+		if modelSizeFlag != "" {
+			modelSize = modelSizeFlag
+		} else {
+			if err := huh.NewInput().
+				Title("Model size (optional):").
+				Description("Approximate model size for optimization (e.g., 14GB, 70GB)").
+				Value(&modelSize).
+				Run(); err != nil {
+				return err
+			}
 		}
 
 		// Phase 5: Reference Skill DLC
 		var loadSkills bool
-		if err := huh.NewConfirm().
-			Title("Load agentic skills?").
-			Description("Enable Reference Skill DLC for dynamic skill loading").
-			Value(&loadSkills).
-			Run(); err != nil {
-			return err
+		if loadSkillsFlag {
+			loadSkills = true
+		} else {
+			if err := huh.NewConfirm().
+				Title("Load agentic skills?").
+				Description("Enable Reference Skill DLC for dynamic skill loading").
+				Value(&loadSkills).
+				Run(); err != nil {
+				return err
+			}
 		}
 
 		var skillRefs []string
 		if loadSkills {
-			// For now, just add one skill reference
 			var skillRef string
-			if err := huh.NewInput().
-				Title("Skill reference:").
-				Description("Skill reference (e.g., my-skill:v1, agentskills.io/skill-name)").
-				Value(&skillRef).
-				Run(); err != nil {
-				return err
+			if skillRefFlag != "" {
+				skillRef = skillRefFlag
+			} else {
+				if err := huh.NewInput().
+					Title("Skill reference:").
+					Description("Skill reference (e.g., my-skill:v1, agentskills.io/skill-name)").
+					Value(&skillRef).
+					Run(); err != nil {
+					return err
+				}
 			}
 			skillRefs = append(skillRefs, skillRef)
-			
-			// Could add more skills here in the future
 		}
 
 		// Create serve workflow
@@ -109,4 +141,11 @@ Examples:
 
 func init() {
 	rootCmd.AddCommand(serveCmd)
+	serveCmd.Flags().String("runtime", "", "Runtime: vllm or kserve")
+	serveCmd.Flags().String("model-path", "", "Path to model files")
+	serveCmd.Flags().String("host", "", "Host to bind to")
+	serveCmd.Flags().String("port", "", "Port to listen on")
+	serveCmd.Flags().String("model-size", "", "Model size for optimization (e.g., 14GB)")
+	serveCmd.Flags().Bool("load-skills", false, "Load agentic skills")
+	serveCmd.Flags().String("skill-ref", "", "Skill reference (e.g., my-skill:v1)")
 }

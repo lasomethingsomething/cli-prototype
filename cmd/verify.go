@@ -24,18 +24,28 @@ Examples:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := config.Load()
 
+		// Get flags
+		artifactFlag, _ := cmd.Flags().GetString("artifact")
+		signerFlag, _ := cmd.Flags().GetString("signer")
+
 		// Interactive prompts
 		var artifact string
-		if err := huh.NewInput().
-			Title("Artifact to verify:").
-			Description("The OCI artifact reference to verify (e.g., my-registry/my-model:latest)").
-			Value(&artifact).
-			Run(); err != nil {
-			return err
+		if artifactFlag != "" {
+			artifact = artifactFlag
+		} else {
+			if err := huh.NewInput().
+				Title("Artifact to verify:").
+				Description("The OCI artifact reference to verify (e.g., my-registry/my-model:latest)").
+				Value(&artifact).
+				Run(); err != nil {
+				return err
+			}
 		}
 
 		var signer string
-		if cfg.Signer == "" {
+		if signerFlag != "" {
+			signer = signerFlag
+		} else if cfg.Signer == "" {
 			if err := huh.NewSelect[string]().
 				Title("Select signing tool:").
 				Description("Which signing tool was used?").
@@ -80,4 +90,6 @@ Examples:
 
 func init() {
 	rootCmd.AddCommand(verifyCmd)
+	verifyCmd.Flags().String("artifact", "", "OCI artifact reference to verify (e.g., my-registry/my-model:latest)")
+	verifyCmd.Flags().String("signer", "", "Signing tool used: sigstore or notary")
 }
