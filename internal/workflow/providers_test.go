@@ -271,30 +271,6 @@ func TestAllProvidersIsInstalledNoPanic(t *testing.T) {
 	}
 }
 
-func TestSigningProviderGetSignaturePath(t *testing.T) {
-	tests := []struct {
-		provider string
-		artifact string
-		want     string
-	}{
-		{"sigstore", "my-model:v1", "my-model:v1.sig"},
-		{"notary", "my-model:v1", "my-model:v1.notation"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.provider, func(t *testing.T) {
-			p, err := GetSigningProvider(tt.provider)
-			if err != nil {
-				t.Fatalf("GetSigningProvider(%q) error = %v", tt.provider, err)
-			}
-			got := p.GetSignaturePath(tt.artifact)
-			if got != tt.want {
-				t.Errorf("GetSignaturePath(%q) = %q, want %q", tt.artifact, got, tt.want)
-			}
-		})
-	}
-}
-
 // Test provider Name() method consistency for error messages
 func TestProviderNameConsistency(t *testing.T) {
 	// Test that each provider's Name() returns the expected value
@@ -353,4 +329,44 @@ func TestModelPackProviderIsInstalled(t *testing.T) {
 	if p.IsInstalled() {
 		t.Error("ModelPackProvider.IsInstalled() = true with empty PATH, want false")
 	}
+}
+
+// TestGetSignaturePath verifies signature path formats for signing providers.
+func TestGetSignaturePath(t *testing.T) {
+	tests := []struct {
+		name     string
+		provider string
+		artifact string
+		want     string
+	}{
+		{"sigstore", "sigstore", "my-model:v1", "my-model:v1.sig"},
+		{"notary", "notary", "my-model:v1", "my-model:v1.notation"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p, err := GetSigningProvider(tt.provider)
+			if err != nil {
+				t.Fatalf("GetSigningProvider(%q) error = %v", tt.provider, err)
+			}
+			got := p.GetSignaturePath(tt.artifact)
+			if got != tt.want {
+				t.Errorf("GetSignaturePath(%q) = %q, want %q", tt.artifact, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestIsInstalledDoesNotPanic verifies IsInstalled() on every provider returns
+// without panicking. Bool value is not asserted since tool availability varies.
+func TestIsInstalledDoesNotPanic(t *testing.T) {
+	t.Run("ArgoCD", func(t *testing.T) { p, _ := GetGitOpsProvider("argo"); _ = p.IsInstalled() })
+	t.Run("Flux", func(t *testing.T) { p, _ := GetGitOpsProvider("flux"); _ = p.IsInstalled() })
+	t.Run("ORAS", func(t *testing.T) { p, _ := GetRegistryProvider("oras"); _ = p.IsInstalled() })
+	t.Run("ModelPack", func(t *testing.T) { p, _ := GetRegistryProvider("modelpack"); _ = p.IsInstalled() })
+	t.Run("Sigstore", func(t *testing.T) { p, _ := GetSigningProvider("sigstore"); _ = p.IsInstalled() })
+	t.Run("NotaryV2", func(t *testing.T) { p, _ := GetSigningProvider("notary"); _ = p.IsInstalled() })
+	t.Run("Syft", func(t *testing.T) { p, _ := GetSBOMGenerator("syft"); _ = p.IsInstalled() })
+	t.Run("vLLM", func(t *testing.T) { p, _ := GetRuntimeProvider("vllm"); _ = p.IsInstalled() })
+	t.Run("KServe", func(t *testing.T) { p, _ := GetRuntimeProvider("kserve"); _ = p.IsInstalled() })
 }
