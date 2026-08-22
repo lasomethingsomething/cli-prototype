@@ -16,6 +16,7 @@ import (
 
 type wizardResult struct {
 	packageSucceeded bool
+	checkSucceeded   bool
 	signSucceeded    bool
 	verifySucceeded  bool
 	deploySucceeded  bool
@@ -24,6 +25,7 @@ type wizardResult struct {
 	gitOps           string
 	skipSigning      bool
 	skipDeploy       bool
+	skipCheck        bool
 }
 
 func buildSummaryLines(r wizardResult) []string {
@@ -32,6 +34,13 @@ func buildSummaryLines(r wizardResult) []string {
 		lines = append(lines, fmt.Sprintf("✓ Packaged '%s' as OCI artifact", r.modelName))
 	} else {
 		lines = append(lines, "⚠ Skipped packaging (registry tool not installed)")
+	}
+	if r.skipCheck {
+		lines = append(lines, "⚠ Skipped compliance check")
+	} else if r.checkSucceeded {
+		lines = append(lines, "✓ Compliance check passed")
+	} else {
+		lines = append(lines, "⚠ Compliance check failed")
 	}
 	if r.skipSigning {
 		lines = append(lines, "⚠ Skipped signing")
@@ -89,8 +98,7 @@ var wizardCmd = &cobra.Command{
 	Long: `The Model CLI Wizard guides you through the complete secure model deployment journey:
 
   Package your model as an OCI artifact
-  → Generate SBOM for transparency  
-  → Classify with MOF framework
+  → Run local compliance check (annotations, SBOM, MOF)
   → Sign with Sigstore or Notary v2
   → Verify the signature
   → Deploy to Kubernetes
@@ -106,6 +114,7 @@ Examples:
 		// Check for skip flags
 		skipSigning, _ := cmd.Flags().GetBool("skip-signing")
 		skipDeploy, _ := cmd.Flags().GetBool("skip-deploy")
+		skipCheck, _ := cmd.Flags().GetBool("skip-check")
 
 		cfg := config.Load()
 		
@@ -314,7 +323,58 @@ Examples:
 
 		fmt.Println()
 
-		// === Step 5: Sign (unless skipped) ===
+		// === Step 5: Compliance Check (local) ===
+		fmt.Println(stepStyle.Render("Step 5: Compliance Check"))
+		fmt.Println()
+
+		// Run compliance check on the local artifact before push
+		checkSucceeded := false
+		if packageSucceeded && !skipCheck {
+			fmt.Println("Running local compliance check before signing...")
+			fmt.Println()
+
+			// Create check workflow
+			checkWorkflow := workflow.NewCheckWorkflow()
+			// Use modelPath as both model and artifact path for local check
+			checkWorkflow.SetCheckInfo(modelPath, modelPath)
+
+			if err := checkWorkflow.Run(); err != nil {
+				fmt.Println(warningStyle.Render("⚠ Compliance check failed"))
+				fmt.Printf("   %v\n\n", err)
+			} else {
+				checkSucceeded = checkWorkflow.Passed()
+				if checkSucceeded {
+					fmt.Println(successStyle.Render("✓ Compliance check passed"))
+				} else {
+					fmt.Println(warningStyle.Render("⚠ Compliance check failed - missing required items"))
+					for _, item := range checkWorkflow.Missing() {
+						fmt.Printf("   ✗ %s\n", item)
+					}
+					fmt.Println()
+				}
+			}
+		} else if skipCheck {
+			fmt.Println(infoStyle.Render("⚠ Skipping compliance check (--skip-check flag set)"))
+			fmt.Println()
+			checkSucceeded = true // Consider passed if skipped
+		} else {
+			fmt.Println(infoStyle.Render("⚠ Skipping compliance check (package failed)"))
+			fmt.Println()
+		}
+
+		// Update context model
+		ctxModel.SetStep(5)
+		ctxModel.AddLog("Compliance check completed")
+		if checkSucceeded {
+			ctxModel.AddLog("All checks passed")
+		} else {
+			ctxModel.AddLog("Some checks failed")
+		}
+		displayInteractiveContext(ctxModel)
+
+		fmt.Println()
+
+		// === Step 6: Sign (unless skipped) ===
 		if !skipSigning {
 			fmt.Println(stepStyle.Render("Step 5: Sign Artifact"))
 			fmt.Println()
@@ -337,9 +397,9 @@ Examples:
 			fmt.Println()
 		}
 
-		// === Step 6: Verify (unless skipped) ===
+		// === Step 7: Verify (unless skipped) ===
 		if !skipSigning {
-			fmt.Println(stepStyle.Render("Step 6: Verify Signature"))
+			fmt.Println(stepStyle.Render("Step 7: Verify Signature"))
 			fmt.Println()
 
 			sp, err := workflow.GetSigningProvider(cfg.Signer)
@@ -360,9 +420,9 @@ Examples:
 			fmt.Println()
 		}
 
-		// === Step 7: Deploy (unless skipped) ===
+		// === Step 8: Deploy (unless skipped) ===
 		if hasKubernetes && !skipDeploy {
-			fmt.Println(stepStyle.Render("Step 7: Deploy to Kubernetes"))
+			fmt.Println(stepStyle.Render("Step 8: Deploy to Kubernetes"))
 			fmt.Println()
 
 			// Check if GitOps and registry providers are installed before deploying
@@ -408,11 +468,12 @@ Examples:
 		}
 
 		// === Summary ===
-		fmt.Println(titleStyle.Render("🎉 Journey Complete!"))
+		fmt.Println(titleStyle.Render("Journey Complete!"))
 		fmt.Println()
 		fmt.Println("You've successfully:")
 		result := wizardResult{
 			packageSucceeded: packageSucceeded,
+			checkSucceeded:    checkSucceeded,
 			signSucceeded:    signSucceeded,
 			verifySucceeded:  verifySucceeded,
 			deploySucceeded:  deploySucceeded,
@@ -421,6 +482,7 @@ Examples:
 			gitOps:           cfg.GitOps,
 			skipSigning:      skipSigning,
 			skipDeploy:       skipDeploy,
+			skipCheck:        skipCheck,
 		}
 		for _, line := range buildSummaryLines(result) {
 			fmt.Printf("  %s\n", line)
@@ -462,4 +524,5 @@ func init() {
 	rootCmd.AddCommand(wizardCmd)
 	wizardCmd.Flags().Bool("skip-signing", false, "Skip the signing and verification steps")
 	wizardCmd.Flags().Bool("skip-deploy", false, "Skip the deployment step")
+	wizardCmd.Flags().Bool("skip-check", false, "Skip the local compliance check")
 }
