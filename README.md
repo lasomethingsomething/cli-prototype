@@ -22,6 +22,10 @@ model-cli sign       # Sign with Sigstore or Notary v2
 model-cli verify     # Verify artifact signature
 model-cli deploy     # Deploy to Kubernetes
 model-cli serve      # Serve with vLLM or KServe
+model-cli push       # Push artifact to registry
+model-cli admit      # Evaluate artifact for GitOps admission
+model-cli validate   # Validate artifact manifest
+model-cli schedule   # Schedule workload to appropriate node
 ```
 
 ## Features
@@ -50,6 +54,8 @@ Built with huh and lipgloss:
 - Step-by-step guided workflows
 - Clear success and warning indicators
 - Minimal clutter, maximum clarity
+
+All interactive commands also support non-interactive mode via flags for CI/CD and automation.
 
 ### Configuration
 
@@ -87,6 +93,36 @@ model-cli verify --artifact my-model:v1
 model-cli deploy --gitops argo --repo $REPO_URL --path ./manifests
 ```
 
+## Non-Interactive Mode (Parity)
+
+Every command that supports interactive prompts also supports non-interactive mode via flags:
+
+```bash
+# Package without prompts
+model-cli package \
+  --model phi-4-mini \
+  --model-path ./models \
+  --artifact my-model:v1 \
+  --registry oras \
+  --runtime vllm \
+  --accelerator nvidia-gpu
+
+# Deploy without prompts
+model-cli deploy \
+  --gitops argo \
+  --registry oras \
+  --model my-model \
+  --has-k8s \
+  --repo https://github.com/org/manifests \
+  --path ./k8s
+
+# Sign without prompts
+model-cli sign \
+  --artifact my-model:v1 \
+  --signer sigstore \
+  --key cosign-key.pub
+```
+
 ## Standards
 
 - OCI Specification
@@ -113,8 +149,14 @@ Providers:
 See [docs](docs/) for details:
 
 - [Installation](docs/installation.md)
+- [Quick Start](docs/quick-start.md)
 - [Architecture](docs/architecture.md)
+- [TUI (Terminal User Interface)](docs/tui.md)
 - [Resources](docs/resources.md)
+
+## Skills
+
+AI agent guidance is available in [skills/model-cli/SKILL.md](skills/model-cli/SKILL.md)
 
 ## Contributing
 
@@ -124,6 +166,11 @@ Follow the provider pattern:
 2. Implement concrete provider
 3. Register in factory function (Get*Provider)
 4. Update CLI commands to use it
+
+When adding new commands:
+- Support both interactive (huh prompts) and non-interactive (flags) modes
+- Add clear examples in command help text
+- Use consistent naming conventions
 
 ## License
 

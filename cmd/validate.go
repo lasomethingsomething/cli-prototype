@@ -26,23 +26,35 @@ Examples:
   model-cli validate --artifact my-registry/my-model:latest
   model-cli validate --artifact my-registry/my-model:latest --check-relationships`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// Get flags
+		artifactFlag, _ := cmd.Flags().GetString("artifact")
+		checkRelationshipsFlag, _ := cmd.Flags().GetBool("check-relationships")
+
 		// Interactive prompts
 		var artifact string
-		if err := huh.NewInput().
-			Title("Artifact to validate:").
-			Description("The OCI artifact reference (e.g., ghcr.io/my-org/my-model:latest)").
-			Value(&artifact).
-			Run(); err != nil {
-			return err
+		if artifactFlag != "" {
+			artifact = artifactFlag
+		} else {
+			if err := huh.NewInput().
+				Title("Artifact to validate:").
+				Description("The OCI artifact reference (e.g., ghcr.io/my-org/my-model:latest)").
+				Value(&artifact).
+				Run(); err != nil {
+				return err
+			}
 		}
 
 		var checkRelationships bool
-		if err := huh.NewConfirm().
-			Title("Check relationships?").
-			Description("Map model->skill and other artifact relationships").
-			Value(&checkRelationships).
-			Run(); err != nil {
-			return err
+		if checkRelationshipsFlag {
+			checkRelationships = true
+		} else {
+			if err := huh.NewConfirm().
+				Title("Check relationships?").
+				Description("Map model->skill and other artifact relationships").
+				Value(&checkRelationships).
+				Run(); err != nil {
+				return err
+			}
 		}
 
 		fmt.Printf("\nValidating manifest for: %s\n\n", artifact)
@@ -91,4 +103,6 @@ Examples:
 
 func init() {
 	rootCmd.AddCommand(validateCmd)
+	validateCmd.Flags().String("artifact", "", "OCI artifact reference to validate")
+	validateCmd.Flags().Bool("check-relationships", false, "Map and validate artifact relationships")
 }

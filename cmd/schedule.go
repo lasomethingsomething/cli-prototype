@@ -29,18 +29,26 @@ Examples:
   model-cli schedule --artifact my-registry/my-model:latest --dry-run`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Check for flags
-		listNodes, _ := cmd.Flags().GetBool("list-nodes")
-		dryRun, _ := cmd.Flags().GetBool("dry-run")
+		listNodesFlag, _ := cmd.Flags().GetBool("list-nodes")
+		dryRunFlag, _ := cmd.Flags().GetBool("dry-run")
+		artifactFlag, _ := cmd.Flags().GetString("artifact")
 
 		// Interactive prompts
 		var artifact string
-		if err := huh.NewInput().
-			Title("Artifact to schedule:").
-			Description("The OCI artifact reference (e.g., ghcr.io/my-org/my-model:latest)").
-			Value(&artifact).
-			Run(); err != nil {
-			return err
+		if artifactFlag != "" {
+			artifact = artifactFlag
+		} else {
+			if err := huh.NewInput().
+				Title("Artifact to schedule:").
+				Description("The OCI artifact reference (e.g., ghcr.io/my-org/my-model:latest)").
+				Value(&artifact).
+				Run(); err != nil {
+				return err
+			}
 		}
+
+		listNodes := listNodesFlag
+		dryRun := dryRunFlag
 
 		fmt.Printf("\nScheduling workload for artifact: %s\n\n", artifact)
 
@@ -205,4 +213,5 @@ func init() {
 	rootCmd.AddCommand(scheduleCmd)
 	scheduleCmd.Flags().Bool("list-nodes", false, "List all available nodes and exit")
 	scheduleCmd.Flags().Bool("dry-run", false, "Show scheduling decision without actually scheduling")
+	scheduleCmd.Flags().String("artifact", "", "OCI artifact reference to schedule")
 }
