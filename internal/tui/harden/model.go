@@ -63,8 +63,9 @@ type Model struct {
 	includeMOF   bool
 
 	// Results
-	sbomPath string
-	mofClass string
+	sbomPath      string
+	mofClass      string
+	mofConfigPath string
 
 	// State
 	loading   bool
@@ -255,14 +256,20 @@ func (m *Model) startHardening() tea.Cmd {
 			m.steps[1].State = StepDone
 			m.steps[1].Detail = "MOF classification applied"
 			m.steps[2].State = StepDone
-			m.steps[2].Detail = "Security annotations applied"
+			m.steps[2].Detail = "MOF metadata config generated"
+			m.steps[3].State = StepDone
+			m.steps[3].Detail = "Security annotations applied"
 
 			// Get results
 			m.sbomPath = m.workflow.SBOMPath()
 			m.mofClass = m.workflow.MOFClass()
+			m.mofConfigPath = m.workflow.MOFConfigPath()
 
 			m.logs = append(m.logs, "SBOM generated successfully")
 			m.logs = append(m.logs, fmt.Sprintf("MOF Class: %s", m.mofClass))
+			if m.mofConfigPath != "" {
+				m.logs = append(m.logs, fmt.Sprintf("MOF config file: %s", m.mofConfigPath))
+			}
 			m.logs = append(m.logs, "Security annotations applied")
 		}
 
@@ -546,6 +553,12 @@ func (m *Model) renderComplete() string {
 		sb.WriteString("  ✗ MOF classification skipped\n")
 	}
 
+	if m.mofConfigPath != "" {
+		sb.WriteString(fmt.Sprintf("  ✓ MOF metadata config: %s\n", m.mofConfigPath))
+	} else {
+		sb.WriteString("  ✗ MOF metadata config skipped\n")
+	}
+
 	sb.WriteString("  ✓ Security annotations applied\n")
 
 	if len(m.logs) > 0 {
@@ -607,6 +620,11 @@ func (m *Model) SBOMPath() string {
 // MOFClass returns the MOF classification
 func (m *Model) MOFClass() string {
 	return m.mofClass
+}
+
+// MOFConfigPath returns the generated MOF config path
+func (m *Model) MOFConfigPath() string {
+	return m.mofConfigPath
 }
 
 // Completed returns whether the workflow is complete
