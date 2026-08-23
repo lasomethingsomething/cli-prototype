@@ -90,8 +90,10 @@ Follow the prompts. The wizard will:
 ./model-cli enforce --manifest my-manifest.json
 ./model-cli enforce --webhook --port 8443
 
-# Validate for GitOps deployment (Story #65)
+# Validate for GitOps deployment (Story #65, #66)
 ./model-cli validate-gitops --artifact my-model:v1
+./model-cli validate-gitops --artifact my-model:v1 --env air-gapped
+./model-cli validate-gitops --artifact my-model:v1 --env hybrid-cloud --region us-east-1
 
 # Cross-reference assets in registry
 ./model-cli search --destination ghcr.io/my-org --type model
