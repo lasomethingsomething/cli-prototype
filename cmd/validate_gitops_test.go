@@ -27,7 +27,7 @@ func TestValidateGitOpsFlags(t *testing.T) {
 	}
 
 	// Check that flags are registered
-	flagNames := []string{"artifact", "registry", "quiet", "json-output"}
+	flagNames := []string{"artifact", "registry", "quiet", "json-output", "env", "region"}
 	for _, flagName := range flagNames {
 		if validateGitOpsCmd.Flags().Lookup(flagName) == nil {
 			t.Errorf("flag %q not found in validate-gitops command", flagName)

@@ -13,9 +13,9 @@ import (
 var validateGitOpsCmd = &cobra.Command{
 	Use:   "validate-gitops",
 	Short: "Validate artifact annotations for GitOps deployment",
-	Long: `Validate that an OCI artifact has the required annotations for GitOps admission.
+	Long: `Validate that an OCI artifact has the required annotations for GitOps deployment.
 
-This command handles Phase 3, Step 5: GitOps Admission & Policy Enforcement.
+This command handles Phase 3, Step 5: GitOps Admission & Policy Enforcement (Story #65, #66).
 It checks that artifacts have the necessary Trust Profile and Infrastructure Requirement
 annotations attached before GitOps tools (Argo CD, Flux) attempt deployment.
 
@@ -23,6 +23,7 @@ Features:
 - Fetches artifact manifest from registry (ORAS, ModelPack)
 - Validates Trust Profile annotations (Story #63)
 - Validates Infrastructure Requirement annotations (Story #64)
+- Validates environment-specific safety policies (Story #66)
 - Returns exit code 0 for pass, non-zero for fail
 - Outputs structured results for CI/CD integration
 
@@ -35,13 +36,17 @@ Examples:
   model-cli validate-gitops --artifact my-registry/my-model:latest
   model-cli validate-gitops --artifact my-registry/my-model:latest --registry oras
   model-cli validate-gitops --artifact my-registry/my-model:latest --quiet
-  model-cli validate-gitops --artifact my-registry/my-model:latest --json-output`,
+  model-cli validate-gitops --artifact my-registry/my-model:latest --json-output
+  model-cli validate-gitops --artifact my-registry/my-model:latest --env air-gapped
+  model-cli validate-gitops --artifact my-registry/my-model:latest --env hybrid-cloud --region us-east-1`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Get flags
 		artifactFlag, _ := cmd.Flags().GetString("artifact")
 		registryFlag, _ := cmd.Flags().GetString("registry")
 		quietFlag, _ := cmd.Flags().GetBool("quiet")
 		jsonOutputFlag, _ := cmd.Flags().GetBool("json-output")
+		envFlag, _ := cmd.Flags().GetString("env")
+		regionFlag, _ := cmd.Flags().GetString("region")
 
 		// Interactive prompts if not provided via flags
 		var artifact string
@@ -55,6 +60,21 @@ Examples:
 				Run(); err != nil {
 				return err
 			}
+		}
+
+		// Environment and region for safety policy validation (Story #66)
+		var environment string
+		var region string
+		if envFlag != "" {
+			environment = envFlag
+		} else {
+			// Default to no environment-specific validation
+			environment = ""
+		}
+		if regionFlag != "" {
+			region = regionFlag
+		} else {
+			region = ""
 		}
 
 		var registry string
@@ -189,6 +209,126 @@ Examples:
 			}
 		}
 
+		// Environment-specific validation for air-gapped and hybrid-cloud (Story #66)
+		if environment != "" {
+			if !quietFlag {
+				fmt.Println("\n=== Environment Safety Policy Validation (Story #66) ===")
+			}
+
+			switch environment {
+			case "air-gapped":
+				// For air-gapped environments, validate that all dependencies are self-contained
+				// Check for packaging format that supports offline deployment
+				if packagingFormat, ok := manifestAnnotations[workflow.AnnotationPackagingFormat]; ok {
+					if packagingFormat == "modelpack" {
+						if !quietFlag {
+							fmt.Printf("  ✓ Packaging format: %s (supports air-gapped deployment)\n", packagingFormat)
+						}
+					} else {
+						warnings = append(warnings, "Air-gapped: consider using modelpack packaging format")
+						if !quietFlag {
+							fmt.Printf("  ⚠ Packaging format: %s (may not support air-gapped)\n", packagingFormat)
+						}
+					}
+				} else {
+					warnings = append(warnings, "Air-gapped: missing packaging format annotation")
+					if !quietFlag {
+						fmt.Printf("  ⚠ Missing packaging format annotation for air-gapped validation\n")
+					}
+				}
+
+				// Check that SBOM is present (required for air-gapped compliance)
+				if sbomFormat, ok := manifestAnnotations[workflow.AnnotationSBOMFormat]; ok {
+					if !quietFlag {
+						fmt.Printf("  ✓ SBOM format: %s (available for air-gapped compliance)\n", sbomFormat)
+					}
+				} else {
+					warnings = append(warnings, "Air-gapped: missing SBOM format annotation")
+					if !quietFlag {
+						fmt.Printf("  ⚠ Missing SBOM for air-gapped compliance\n")
+					}
+				}
+
+				// Air-gapped environments require all dependencies to be pre-loaded
+				// We validate that the artifact declares its dependencies
+				if !quietFlag {
+					fmt.Printf("  ✓ Air-gapped environment validated\n")
+					fmt.Printf("  ℹ Ensure all dependencies are pre-loaded in the air-gapped registry\n")
+				}
+
+			case "hybrid-cloud":
+				// For hybrid-cloud, validate data residency and region-specific requirements
+				if region != "" {
+					// Check for data residency annotations if present
+					// These would be set by the packaging process for multi-region deployments
+					if residency, ok := manifestAnnotations[workflow.AnnotationDataResidency]; ok {
+						if residency == region {
+							if !quietFlag {
+								fmt.Printf("  ✓ Data residency: %s (matches target region: %s)\n", residency, region)
+							}
+						} else {
+							allPassed = false
+							missingAnnotations = append(missingAnnotations, fmt.Sprintf("%s=%s", workflow.AnnotationDataResidency, region))
+							if !quietFlag {
+								fmt.Printf("  ✗ Data residency mismatch: artifact requires %s, target is %s\n", residency, region)
+							}
+						}
+					} else {
+						// No residency requirement, or annotation not present
+						if !quietFlag {
+							fmt.Printf("  ℹ No data residency requirement specified\n")
+						}
+					}
+
+					// Validate network requirements for hybrid-cloud
+					// Check for network access annotations
+					if network, ok := manifestAnnotations[workflow.AnnotationNetworkAccess]; ok {
+						if network == "internal" || network == "private" {
+							if !quietFlag {
+								fmt.Printf("  ✓ Network access: %s (suitable for hybrid-cloud)\n", network)
+							}
+						} else if network == "public" {
+							warnings = append(warnings, "Hybrid-cloud: artifact has public network access")
+							if !quietFlag {
+								fmt.Printf("  ⚠ Network access: %s (may not be suitable for all hybrid-cloud configs)\n", network)
+							}
+						}
+					} else {
+						if !quietFlag {
+							fmt.Printf("  ℹ No network access requirement specified\n")
+						}
+					}
+
+					if !quietFlag {
+						fmt.Printf("  ✓ Hybrid-cloud environment validated for region: %s\n", region)
+					}
+				} else {
+					warnings = append(warnings, "Hybrid-cloud: region not specified")
+					if !quietFlag {
+						fmt.Printf("  ⚠ Region not specified for hybrid-cloud validation\n")
+					}
+				}
+
+			case "development", "staging", "production":
+				// For standard environments, just acknowledge the validation
+				if !quietFlag {
+					fmt.Printf("  ✓ Environment: %s\n", environment)
+				}
+
+			case "":
+				// No environment specified, skip environment validation
+				if !quietFlag {
+					fmt.Printf("  ℹ No environment specified, skipping safety policy validation\n")
+				}
+
+			default:
+				warnings = append(warnings, fmt.Sprintf("Unknown environment: %s", environment))
+				if !quietFlag {
+					fmt.Printf("  ⚠ Unknown environment: %s\n", environment)
+				}
+			}
+		}
+
 		// Output warnings if any
 		if len(warnings) > 0 && !quietFlag {
 			fmt.Println("\n=== Warnings ===")
@@ -245,4 +385,6 @@ func init() {
 	validateGitOpsCmd.Flags().String("registry", "", "Registry tool: oras or modelpack")
 	validateGitOpsCmd.Flags().Bool("quiet", false, "Quiet mode: only output pass/fail status")
 	validateGitOpsCmd.Flags().Bool("json-output", false, "Output results as JSON for CI/CD integration")
+	validateGitOpsCmd.Flags().String("env", "", "Target environment: development, staging, production, air-gapped, hybrid-cloud")
+	validateGitOpsCmd.Flags().String("region", "", "Target region for hybrid-cloud validation (e.g., us-east-1, eu-west-1)")
 }

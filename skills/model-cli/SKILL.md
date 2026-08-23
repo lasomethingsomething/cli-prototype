@@ -332,6 +332,13 @@ Model CLI implements a complete Enterprise OCI Registry Integration workflow:
 - Returns pass/fail exit code for CI/CD integration
 - Supports quiet mode and JSON output for automation
 
+**Story #66: Support Air-Gapped and Hybrid-Cloud Safety Policies**
+- Extend `validate-gitops` with environment-specific validation
+- Air-gapped: validate packaging format and SBOM presence
+- Hybrid-cloud: validate data residency and network access requirements
+- Support `--env` and `--region` flags for environment targeting
+- Provide clear guidance for air-gapped dependency pre-loading
+
 
 #### Metadata Contract Validation
 ```bash

@@ -51,6 +51,39 @@ model-cli validate-gitops --artifact ghcr.io/my-org/my-model:v1.0.0 --json-outpu
 | 0 | All required annotations present | Deployment can proceed |
 | 1 | Missing required annotations | Block deployment, check output |
 
+### Environment-Specific Validation (Story #66)
+
+The `validate-gitops` command supports environment-specific safety policy validation:
+
+#### Air-Gapped Environments
+
+Validates that artifacts are suitable for air-gapped deployment:
+- Checks packaging format (recommends `modelpack` for air-gapped)
+- Verifies SBOM is present for compliance
+- Reminds to pre-load dependencies
+
+```bash
+model-cli validate-gitops --artifact my-registry/my-model:v1 --env air-gapped
+```
+
+#### Hybrid-Cloud Environments
+
+Validates data residency and network requirements for hybrid-cloud:
+- Checks data residency annotation matches target region
+- Validates network access requirements (internal/private/public)
+
+```bash
+model-cli validate-gitops --artifact my-registry/my-model:v1 --env hybrid-cloud --region us-east-1
+```
+
+#### Standard Environments
+
+For development, staging, and production environments, the command simply acknowledges the validation:
+
+```bash
+model-cli validate-gitops --artifact my-registry/my-model:v1 --env production
+```
+
 ### Example Output
 
 ```
@@ -903,6 +936,7 @@ spec:
 - ✅ Attach Trust Profile annotations to OCI manifests (Story #63)
 - ✅ Attach Infrastructure Requirement annotations to OCI manifests (Story #64)
 - ✅ Provide pre-flight validation for GitOps deployment (Story #65)
+- ✅ Validate air-gapped and hybrid-cloud safety policies (Story #66)
 - ✅ Pass artifact references to GitOps tools
 - ✅ Document how to configure policy enforcement
 - ❌ Does NOT implement admission webhooks

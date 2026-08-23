@@ -68,6 +68,14 @@ const (
 	// MemoryMin identifies minimum memory required
 	// Value: string with unit (e.g., "24GiB")
 	AnnotationMemoryMin = "org.cncf.ai.resource.memory.min"
+
+	// DataResidency identifies data residency requirement for hybrid-cloud
+	// Value: region identifier (e.g., "us-east-1", "eu-west-1")
+	AnnotationDataResidency = "org.cncf.ai.data.residency"
+
+	// NetworkAccess identifies network access requirement
+	// Value: "internal", "private", "public"
+	AnnotationNetworkAccess = "org.cncf.ai.network.access"
 )
 
 // AnnotationSet represents a collection of annotations for an OCI artifact
