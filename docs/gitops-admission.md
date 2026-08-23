@@ -1,14 +1,165 @@
 # GitOps Admission & Policy Enforcement
 
-This document describes how to configure GitOps tools (Argo CD, Flux) to use the **Trust Profile** and **Infrastructure Requirement** annotations attached by Model CLI for admission control and policy enforcement (Stories #63 and #64).
+This document describes how to configure GitOps tools (Argo CD, Flux) to use the **Trust Profile** and **Infrastructure Requirement** annotations attached by Model CLI for admission control and policy enforcement (Stories #63, #64, and #65).
 
 ## Overview
 
 Model CLI ensures that AI artifacts pushed to registries include annotations in their OCI manifests that enable GitOps controllers and policy engines to enforce admission policies before deploying artifacts to your cluster.
 
-**Key Principle:** Model CLI **orchestrates and hands off** to external tools. The CLI attaches metadata, but **does not implement admission logic itself**. Policy enforcement is the responsibility of:
+**Key Principle:** Model CLI **orchestrates and hands off** to external tools. The CLI attaches metadata and provides pre-flight validation, but **does not implement admission logic itself**. Policy enforcement is the responsibility of:
 - GitOps controllers (Argo CD, Flux)
 - Policy engines (Sigstore Policy Controller, OPA/Gatekeeper, Kyverno)
+
+### How It Works
+
+1. **Package & Push (Phase 2):** Model CLI attaches Trust Profile and Infrastructure Requirement annotations to OCI manifests (Stories #63, #64)
+2. **Pre-Flight Validation (Phase 3):** Model CLI provides `validate-gitops` command to check annotations before deployment (Story #65)
+3. **GitOps Deployment:** Argo CD or Flux deploys artifacts, triggering admission webhooks
+4. **Policy Enforcement:** External policy engines validate annotations and enforce admission policies
+
+## Pre-Sync Validation (Story #65)
+
+The `model-cli validate-gitops` command provides pre-flight validation of artifact annotations before GitOps tools attempt deployment. This allows you to catch missing metadata or compliance issues early in your CI/CD pipeline.
+
+### When to Use
+
+- **CI/CD Pipelines:** Validate artifacts before promoting to production
+- **GitOps PreSync Hooks:** Use as a custom hook in Argo CD or Flux
+- **Local Testing:** Verify artifacts before deploying
+- **Air-Gapped Environments:** Pre-validate artifacts before they enter the air-gapped cluster
+
+### Usage
+
+```bash
+# Basic validation
+model-cli validate-gitops --artifact ghcr.io/my-org/my-model:v1.0.0
+
+# With specific registry tool
+model-cli validate-gitops --artifact ghcr.io/my-org/my-model:v1.0.0 --registry oras
+
+# Quiet mode (just pass/fail exit code)
+model-cli validate-gitops --artifact ghcr.io/my-org/my-model:v1.0.0 --quiet
+
+# JSON output for CI/CD integration
+model-cli validate-gitops --artifact ghcr.io/my-org/my-model:v1.0.0 --json-output
+```
+
+### Exit Codes
+
+| Exit Code | Meaning | Use Case |
+|-----------|---------|----------|
+| 0 | All required annotations present | Deployment can proceed |
+| 1 | Missing required annotations | Block deployment, check output |
+
+### Example Output
+
+```
+Validating GitOps annotations for: ghcr.io/my-org/my-model:v1.0.0
+
+✓ Fetched artifact manifest from registry
+
+=== Trust Profile Validation ===
+  ✓ org.cncf.ai.security.signing.framework: sigstore-cosign
+  ✓ org.cncf.ai.security.sbom.format: spdx-json
+  ✓ org.cncf.ai.security.provenance.type: slsa-v1.0
+  ✓ org.cncf.ai.interop.profile.version: 1.0.0
+  ✓ org.cncf.ai.artifact.type: model
+
+=== Infrastructure Requirements Validation ===
+  ✓ org.cncf.ai.runtime: vllm
+  ✓ org.cncf.ai.accelerator: nvidia-gpu
+  ✓ org.cncf.ai.accelerator.cuda.min: 12.1
+  ✓ org.cncf.ai.resource.memory.min: 24GiB
+
+=== Result ===
+✓ PASS: Artifact has all required annotations for GitOps admission
+
+GitOps tools (Argo CD, Flux) can proceed with deployment.
+External policy engines (Sigstore Policy Controller, OPA/Gatekeeper, Kyverno)
+will perform the actual admission control based on these annotations.
+```
+
+### Using with Argo CD PreSync Hooks
+
+Create a ConfigMap with a validation script that uses `model-cli validate-gitops`:
+
+```yaml
+# gitops-validation-hook.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: validate-model-annotations
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+data:
+  validate.sh: |
+    #!/bin/bash
+    set -euo pipefail
+    
+    ARTIFACT=$1
+    
+    echo "Validating GitOps annotations for $ARTIFACT..."
+    model-cli validate-gitops --artifact $ARTIFACT --registry oras --quiet
+    
+    if [ $? -ne 0 ]; then
+      echo "FAIL: Artifact $ARTIFACT is missing required annotations"
+      exit 1
+    fi
+    
+    echo "PASS: Artifact $ARTIFACT validated"
+```
+
+Reference this hook in your Argo CD Application:
+
+```yaml
+# argocd-application.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: my-model
+  namespace: argocd
+  annotations:
+    avp.kubevirtual.com/pre-sync-hooks: |
+      - name: validate-annotations
+        kind: ConfigMap
+        name: validate-model-annotations
+        namespace: argocd
+spec:
+  # ... your application spec
+```
+
+### Using with Flux Image Automation
+
+Use `model-cli validate-gitops` in your Flux image policy:
+
+```yaml
+# image-policy.yaml
+apiVersion: image.toolkit.fluxcd.io/v1beta1
+kind: ImagePolicy
+metadata:
+  name: model-validation
+  namespace: flux-system
+spec:
+  imageRepositoryRef:
+    name: my-model
+    namespace: flux-system
+  policy:
+    numerical:
+      order: asc
+  # Add validation step in your Flux automation
+```
+
+For full validation with Flux, combine with a Kustomization that runs the validation:
+
+```bash
+# In your CI/CD pipeline
+model-cli validate-gitops --artifact $ARTIFACT --json-output
+# Parse JSON output and only proceed if status is "pass"
+
+# Or use a Flux ImageRepository with custom health checks
+```
 
 ## Annotations Reference
 
@@ -749,7 +900,9 @@ spec:
 | Custom Webhook | Infrastructure matching | Custom admission controller | Best for cluster-specific logic |
 
 **Model CLI's Role:**
-- ✅ Attach Trust Profile annotations to OCI manifests
+- ✅ Attach Trust Profile annotations to OCI manifests (Story #63)
+- ✅ Attach Infrastructure Requirement annotations to OCI manifests (Story #64)
+- ✅ Provide pre-flight validation for GitOps deployment (Story #65)
 - ✅ Pass artifact references to GitOps tools
 - ✅ Document how to configure policy enforcement
 - ❌ Does NOT implement admission webhooks

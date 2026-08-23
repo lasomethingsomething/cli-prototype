@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -28,6 +29,9 @@ type RegistryProvider interface {
 	// Search queries the registry for artifacts matching the given filters
 	// Returns manifest bytes for matching artifacts, which can be parsed for metadata
 	Search(registry, filters string) ([][]byte, error)
+	// FetchManifestAnnotations fetches the OCI manifest for an artifact and returns its annotations
+	// This is used for GitOps pre-sync validation (Story #65)
+	FetchManifestAnnotations(artifactRef string) (map[string]string, error)
 }
 
 // annotationArgs converts an annotation map into repeated "--annotation
@@ -187,6 +191,46 @@ func (o *ORASProvider) Search(registry, filters string) ([][]byte, error) {
 	return [][]byte{output}, nil
 }
 
+func (o *ORASProvider) FetchManifestAnnotations(artifactRef string) (map[string]string, error) {
+	// Use oras manifest fetch to get the manifest JSON, then extract annotations
+	cmd := exec.Command("oras", "manifest", "fetch", artifactRef)
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch manifest with ORAS: %v", err)
+	}
+
+	// Parse the manifest JSON to extract annotations
+	var manifestData map[string]interface{}
+	if err := json.Unmarshal(output, &manifestData); err != nil {
+		return nil, fmt.Errorf("failed to parse manifest JSON: %v", err)
+	}
+
+	// Extract annotations if present
+	annotations := make(map[string]string)
+	if annotationsMap, ok := manifestData["annotations"].(map[string]interface{}); ok {
+		for k, v := range annotationsMap {
+			if vStr, ok := v.(string); ok {
+				annotations[k] = vStr
+			}
+		}
+	}
+
+	// If no annotations found in top-level, try config.annotations
+	if len(annotations) == 0 {
+		if config, ok := manifestData["config"].(map[string]interface{}); ok {
+			if annotationsMap, ok := config["annotations"].(map[string]interface{}); ok {
+				for k, v := range annotationsMap {
+					if vStr, ok := v.(string); ok {
+						annotations[k] = vStr
+					}
+				}
+			}
+		}
+	}
+
+	return annotations, nil
+}
+
 // --- ModelPack Provider ---
 
 type ModelPackProvider struct{}
@@ -247,6 +291,14 @@ func (m *ModelPackProvider) Search(registry, filters string) ([][]byte, error) {
 	// or delegate to the underlying registry's search API
 	// For now, we return a helpful message about using the registry's native search
 	return nil, fmt.Errorf("ModelPack search: delegate to registry's native search API or use client-side filtering with 'modelpack' CLI")
+}
+
+func (m *ModelPackProvider) FetchManifestAnnotations(artifactRef string) (map[string]string, error) {
+	// ModelPack stub implementation for fetching manifest annotations
+	// In a real implementation, this would use modelpack CLI to inspect the artifact
+	// and extract its annotations
+	// For now, return an error indicating this is not fully implemented
+	return nil, fmt.Errorf("ModelPack FetchManifestAnnotations: delegate to ORAS or use modelpack inspect CLI")
 }
 
 // GetRegistryProvider returns the appropriate Registry provider by name
