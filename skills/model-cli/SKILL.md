@@ -46,6 +46,7 @@ This single command guides users through the **complete workflow**:
 | `verify` | Verify signature | Before deploying to production |
 | `deploy` | Deploy to Kubernetes | After signing/verification |
 | `validate` | Validate metadata contract | Before pushing to registry |
+| `validate-gitops` | Pre-flight validation for GitOps | Before GitOps deployment |
 | `enforce` | Enforce metadata contract | At registry/admission proxy level |
 | `search` | Cross-reference assets | Discover assets in registry |
 | `map` | Map relationships | Define model→skill→pipeline relationships |
@@ -322,6 +323,14 @@ Model CLI implements a complete Enterprise OCI Registry Integration workflow:
 - Policy engines verify artifact requirements match destination environment
 - Supports GPU/CPU requirements, CUDA version matching, memory requirements
 - Allows deployment to air-gapped or hybrid-cloud environments with safety policies
+
+**Story #65: GitOps Pre-Sync Validation Hook**
+- Provide `validate-gitops` command for pre-flight validation
+- Fetches artifact manifest from registry and validates annotations
+- Validates Trust Profile annotations (Story #63)
+- Validates Infrastructure Requirement annotations (Story #64)
+- Returns pass/fail exit code for CI/CD integration
+- Supports quiet mode and JSON output for automation
 
 
 #### Metadata Contract Validation
