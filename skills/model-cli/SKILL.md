@@ -339,6 +339,14 @@ Model CLI implements a complete Enterprise OCI Registry Integration workflow:
 - Support `--env` and `--region` flags for environment targeting
 - Provide clear guidance for air-gapped dependency pre-loading
 
+**Story #67: Implement Real Admission Evaluation**
+- Enhance `admit` command to fetch real manifests from registries
+- Validate Trust Profile annotations (Story #63)
+- Validate Infrastructure Requirement annotations (Story #64)
+- Validate Environment Safety Policies (Story #66)
+- Support `--registry`, `--json-output` flags for CI/CD integration
+- Provide comprehensive admission decision with pass/fail status
+
 
 #### Metadata Contract Validation
 ```bash

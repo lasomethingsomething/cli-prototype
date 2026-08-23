@@ -95,6 +95,11 @@ Follow the prompts. The wizard will:
 ./model-cli validate-gitops --artifact my-model:v1 --env air-gapped
 ./model-cli validate-gitops --artifact my-model:v1 --env hybrid-cloud --region us-east-1
 
+# Admission evaluation (Story #67)
+./model-cli admit --artifact my-model:v1
+./model-cli admit --artifact my-model:v1 --env production
+./model-cli admit --artifact my-model:v1 --json-output
+
 # Cross-reference assets in registry
 ./model-cli search --destination ghcr.io/my-org --type model
 ./model-cli search --uses-model model:sha256:abc123

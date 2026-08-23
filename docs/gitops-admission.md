@@ -1,6 +1,6 @@
 # GitOps Admission & Policy Enforcement
 
-This document describes how to configure GitOps tools (Argo CD, Flux) to use the **Trust Profile** and **Infrastructure Requirement** annotations attached by Model CLI for admission control and policy enforcement (Stories #63-66).
+This document describes how to configure GitOps tools (Argo CD, Flux) to use the **Trust Profile** and **Infrastructure Requirement** annotations attached by Model CLI for admission control and policy enforcement (Stories #63-67).
 
 ## Overview
 
@@ -14,8 +14,9 @@ Model CLI ensures that AI artifacts pushed to registries include annotations in 
 
 1. **Package & Push (Phase 2):** Model CLI attaches Trust Profile and Infrastructure Requirement annotations to OCI manifests (Stories #63, #64)
 2. **Pre-Flight Validation (Phase 3):** Model CLI provides `validate-gitops` command to check annotations and environment policies before deployment (Stories #65, #66)
-3. **GitOps Deployment:** Argo CD or Flux deploys artifacts, triggering admission webhooks
-4. **Policy Enforcement:** External policy engines validate annotations and enforce admission policies
+3. **Admission Evaluation (Phase 3):** Model CLI provides `admit` command for comprehensive admission evaluation (Story #67)
+4. **GitOps Deployment:** Argo CD or Flux deploys artifacts, triggering admission webhooks
+5. **Policy Enforcement:** External policy engines validate annotations and enforce admission policies
 
 ## Pre-Sync Validation (Story #65)
 
@@ -50,6 +51,76 @@ model-cli validate-gitops --artifact ghcr.io/my-org/my-model:v1.0.0 --json-outpu
 |-----------|---------|----------|
 | 0 | All required annotations present | Deployment can proceed |
 | 1 | Missing required annotations | Block deployment, check output |
+
+## Admission Evaluation (Story #67)
+
+The `model-cli admit` command provides comprehensive admission evaluation by fetching real artifact manifests from registries and validating all required annotations and environment policies.
+
+### When to Use
+
+- **Final Deployment Gate:** Use as the final check before GitOps deployment
+- **Comprehensive Validation:** Validate all aspects (Trust Profile + Infrastructure + Environment)
+- **Interactive Evaluation:** Get a detailed report of artifact compliance
+- **CI/CD Integration:** Use with `--json-output` for automated pipelines
+
+### Usage
+
+```bash
+# Basic admission evaluation
+model-cli admit --artifact ghcr.io/my-org/my-model:v1.0.0
+
+# With specific registry tool
+model-cli admit --artifact ghcr.io/my-org/my-model:v1.0.0 --registry oras
+
+# With environment specification
+model-cli admit --artifact ghcr.io/my-org/my-model:v1.0.0 --env production
+
+# With hybrid-cloud region
+model-cli admit --artifact ghcr.io/my-org/my-model:v1.0.0 --env hybrid-cloud --region us-east-1
+
+# Strict mode (block on warnings)
+model-cli admit --artifact ghcr.io/my-org/my-model:v1.0.0 --strict
+
+# JSON output for CI/CD
+model-cli admit --artifact ghcr.io/my-org/my-model:v1.0.0 --json-output
+```
+
+### What It Validates
+
+The `admit` command validates:
+
+1. **Trust Profile (Story #63):**
+   - Signing framework presence
+   - SBOM format presence
+   - Provenance type presence
+   - Profile version presence
+   - Artifact type presence
+
+2. **Infrastructure Requirements (Story #64):**
+   - Runtime requirement
+   - Accelerator requirement
+   - CUDA version (conditional)
+   - Memory minimum (conditional)
+
+3. **Environment Safety Policies (Story #66):**
+   - Air-gapped: packaging format, SBOM presence
+   - Hybrid-cloud: data residency, network access
+   - Standard environments: acknowledgment
+
+### Key Differences from validate-gitops
+
+| Feature | `validate-gitops` | `admit` |
+|---------|-------------------|---------|
+| Manifest fetching | ✅ | ✅ |
+| Annotation validation | ✅ | ✅ |
+| Environment validation | ✅ | ✅ |
+| Detailed section output | ✅ | ✅ |
+| JSON output | ✅ | ✅ |
+| Exit codes | ✅ (0/1) | ✅ (0/1) |
+| Final decision | ❌ | ✅ |
+| Simulated evaluation | ❌ | ❌ (now real) |
+
+Both commands now fetch real manifests and validate annotations. Use `validate-gitops` for quick pre-flight checks and `admit` for comprehensive admission evaluation.
 
 ### Environment-Specific Validation (Story #66)
 
@@ -937,6 +1008,7 @@ spec:
 - ✅ Attach Infrastructure Requirement annotations to OCI manifests (Story #64)
 - ✅ Provide pre-flight validation for GitOps deployment (Story #65)
 - ✅ Validate air-gapped and hybrid-cloud safety policies (Story #66)
+- ✅ Evaluate artifacts for admission with real manifest fetching (Story #67)
 - ✅ Pass artifact references to GitOps tools
 - ✅ Document how to configure policy enforcement
 - ❌ Does NOT implement admission webhooks

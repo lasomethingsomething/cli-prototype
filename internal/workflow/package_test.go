@@ -57,6 +57,20 @@ func (f *fakeRegistryProvider) Search(registry, filters string) ([][]byte, error
 	return nil, nil
 }
 
+func (f *fakeRegistryProvider) FetchManifestAnnotations(artifactRef string) (map[string]string, error) {
+	// Fake implementation for testing - returns the annotations that were pushed
+	// This allows tests to verify that annotations are properly fetched
+	if f.pushedAnnotations != nil {
+		// Return a copy to avoid race conditions
+		annotations := make(map[string]string)
+		for k, v := range f.pushedAnnotations {
+			annotations[k] = v
+		}
+		return annotations, nil
+	}
+	return nil, nil
+}
+
 // Test NewPackageWorkflow
 func TestNewPackageWorkflow(t *testing.T) {
 	// Test with valid registry
