@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -61,4 +62,16 @@ func ReadManifest(path string) (*Manifest, error) {
 		return nil, fmt.Errorf("failed to parse OCI manifest at %s: %v", path, err)
 	}
 	return &m, nil
+}
+
+// ComputeManifestDigest computes a SHA256 digest of the manifest file at the given path
+// This is used for local parity verification to ensure the local artifact matches
+// what was pushed to the registry
+func ComputeManifestDigest(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	hash := sha256.Sum256(data)
+	return fmt.Sprintf("sha256:%x", hash)
 }
