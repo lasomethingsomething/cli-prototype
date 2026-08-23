@@ -31,6 +31,10 @@ type PackageWorkflow struct {
 	// Provenance options
 	generateProvenance bool
 	provenancePath    string
+	
+	// Local parity verification
+	localDigest      string
+	verifyParity    bool
 }
 
 // NewPackageWorkflow creates a new packaging workflow
@@ -108,6 +112,21 @@ func (w *PackageWorkflow) ProvenancePath() string {
 // empty string if Run() has not been called yet.
 func (w *PackageWorkflow) ManifestPath() string {
 	return w.manifestPath
+}
+
+// LocalDigest returns the computed digest of the local artifact
+func (w *PackageWorkflow) LocalDigest() string {
+	return w.localDigest
+}
+
+// SetLocalDigest sets the digest of the local artifact for parity verification
+func (w *PackageWorkflow) SetLocalDigest(digest string) {
+	w.localDigest = digest
+}
+
+// SetVerifyParity enables or disables local parity verification
+func (w *PackageWorkflow) SetVerifyParity(verify bool) {
+	w.verifyParity = verify
 }
 
 // Run executes the packaging workflow
@@ -197,6 +216,11 @@ func (w *PackageWorkflow) Run() error {
 		return fmt.Errorf("failed to write OCI manifest: %v", err)
 	}
 	fmt.Printf("  Manifest written to: %s\n", w.manifestPath)
+	
+	// Compute local digest for parity verification
+	// In a real implementation, this would compute the actual OCI artifact digest
+	// For now, we compute a digest of the manifest file as a stand-in
+	w.localDigest = ComputeManifestDigest(w.manifestPath)
 
 	if w.includeRAG && w.ragPath != "" {
 		fmt.Printf("→ Adding RAG context from '%s'...\n", w.ragPath)
@@ -213,6 +237,21 @@ func (w *PackageWorkflow) Run() error {
 			return fmt.Errorf("failed to push artifact: %v", err)
 		}
 		fmt.Printf("✓ Successfully pushed %s to %s\n", fullArtifact, w.registryURL)
+		
+		// Verify local parity: ensure what was pushed matches the local artifact
+		if w.verifyParity {
+			fmt.Println("\n=== Local Parity Verification ===")
+			fmt.Println("→ Verifying that pushed artifact matches local build...")
+			verifier := NewLocalParityVerifier(w.registryProvider, w.localDigest)
+			result, err := verifier.Verify(w.artifactName, w.registryURL)
+			if err != nil {
+				return fmt.Errorf("failed to verify local parity: %v", err)
+			}
+			fmt.Println(result.String())
+			if !result.Match {
+				return fmt.Errorf("local parity check failed: %s", result.String())
+			}
+		}
 	} else {
 		fmt.Println("✓ Saved locally (not pushed to registry)")
 		fmt.Printf("  Artifact ready at: %s\n", fullArtifact)

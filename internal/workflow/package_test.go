@@ -1,8 +1,10 @@
 package workflow
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -12,6 +14,8 @@ type fakeRegistryProvider struct {
 	installed         bool
 	pushedAnnotations map[string]string
 	pushCalled        bool
+	// For local parity testing: store the artifact digest
+	artifactDigest map[string]string // maps artifact name to its digest
 }
 
 func (f *fakeRegistryProvider) Name() string                         { return "fake" }
@@ -21,6 +25,12 @@ func (f *fakeRegistryProvider) Pull(artifact, registry string) error { return ni
 func (f *fakeRegistryProvider) Push(artifact, registry string, annotations map[string]string) error {
 	f.pushCalled = true
 	f.pushedAnnotations = annotations
+	// For local parity testing: store the artifact with a deterministic digest
+	if f.artifactDigest == nil {
+		f.artifactDigest = make(map[string]string)
+	}
+	// Use a deterministic digest based on artifact name (matches what GetArtifactDigest returns)
+	f.artifactDigest[artifact] = fmt.Sprintf("sha256:%x", []byte(artifact)[:8])
 	return nil
 }
 func (f *fakeRegistryProvider) PushReferrer(artifact, registry, referrerType string, data []byte, annotations map[string]string) error {
@@ -30,6 +40,16 @@ func (f *fakeRegistryProvider) PushReferrer(artifact, registry, referrerType str
 func (f *fakeRegistryProvider) GetReferrers(artifact, registry, referrerType string) ([][]byte, error) {
 	// For testing, return empty referrers
 	return nil, nil
+}
+func (f *fakeRegistryProvider) GetArtifactDigest(artifact, registry string) (string, error) {
+	// Return the stored digest for this artifact
+	if f.artifactDigest != nil {
+		if digest, ok := f.artifactDigest[artifact]; ok {
+			return digest, nil
+		}
+	}
+	// Fallback: return a deterministic digest based on artifact name
+	return fmt.Sprintf("sha256:%x", []byte(artifact)[:8]), nil
 }
 
 // Test NewPackageWorkflow
@@ -136,6 +156,7 @@ func TestPackageWorkflowRunWritesManifestWithAnnotations(t *testing.T) {
 		registry:         "fake",
 		registryProvider: fake,
 		annotations:      NewAnnotationSet(),
+		verifyParity:     false, // Disable for tests that don't set up matching digests
 	}
 	pf.annotations.Runtime = "vllm"
 	pf.annotations.Accelerator = "nvidia-gpu"
@@ -171,6 +192,53 @@ func TestPackageWorkflowRunWritesManifestWithAnnotations(t *testing.T) {
 	}
 	if fake.pushedAnnotations[AnnotationRuntime] != "vllm" {
 		t.Errorf("Push() annotations[%s] = %q, want %q", AnnotationRuntime, fake.pushedAnnotations[AnnotationRuntime], "vllm")
+	}
+	
+	// Verify local digest was computed
+	if pf.LocalDigest() == "" {
+		t.Error("expected local digest to be computed")
+	}
+}
+
+// TestPackageWorkflowRunVerifiesLocalParity verifies that Run() performs
+// local parity verification when pushing to a registry.
+func TestPackageWorkflowRunVerifiesLocalParity(t *testing.T) {
+	modelPath := t.TempDir()
+
+	// Create a fake provider
+	fake := &fakeRegistryProvider{
+		installed: true,
+		artifactDigest: make(map[string]string),
+	}
+	
+	artifactName := "my-model:v1"
+	registryURL := "ghcr.io/my-org"
+	
+	pf := &PackageWorkflow{
+		registry:          "fake",
+		registryProvider: fake,
+		registryURL:      registryURL,
+		annotations:      NewAnnotationSet(),
+		verifyParity:     true, // Enable local parity verification for this test
+	}
+	pf.SetPackageInfo("phi-4-mini", modelPath, artifactName, registryURL, false, "")
+
+	// Run the workflow - it will fail due to digest mismatch with the fake provider
+	// (the fake provider returns a digest based on artifact name, not manifest content)
+	err := pf.Run()
+	if err == nil {
+		t.Error("expected Run() to fail due to local parity mismatch with fake provider")
+	}
+	
+	// Verify the error message mentions local parity
+	errStr := err.Error()
+	if !strings.Contains(errStr, "local parity") {
+		t.Errorf("expected error to mention 'local parity', got: %s", errStr)
+	}
+	
+	// Verify local digest was computed
+	if pf.LocalDigest() == "" {
+		t.Error("expected local digest to be computed")
 	}
 }
 

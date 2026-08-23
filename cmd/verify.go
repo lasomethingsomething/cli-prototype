@@ -35,9 +35,11 @@ Examples:
 		signerFlag, _ := cmd.Flags().GetString("signer")
 		attestationFlag, _ := cmd.Flags().GetString("attestation")
 		registryFlag, _ := cmd.Flags().GetString("registry")
+		localManifestFlag, _ := cmd.Flags().GetString("local-manifest")
+		localParityFlag, _ := cmd.Flags().GetBool("local-parity")
 		
 		// Pre-extract destination and artifact name for provenance operations
-		var destination, artifactName string
+		var destination, artifactName, registry string
 
 		// Interactive prompts
 		var artifact string
@@ -88,23 +90,75 @@ Examples:
 			return err
 		}
 		
+		fmt.Println("\n✓ Signature is VALID")
+		
 		// Extract destination and artifact name for provenance operations
 		destination = extractDestinationFromArtifact(artifact)
 		artifactName = extractArtifactNameFromArtifact(artifact)
-
-		fmt.Println("\n✓ Signature is VALID")
+		
+		// Perform local parity verification if requested
+		if localParityFlag {
+			fmt.Println("\n=== Local Parity Verification ===")
+			fmt.Println("→ Verifying that local artifact matches registry copy...")
+			
+			// Determine registry if not specified
+			if registryFlag != "" {
+				registry = registryFlag
+			} else if cfg.Registry != "" {
+				registry = cfg.Registry
+			} else if destination != "" {
+				registry = "oras" // default
+			} else {
+				return fmt.Errorf("registry must be specified for local parity verification (use --registry)")
+			}
+			
+			// Get the registry provider
+			provider, err := workflow.GetRegistryProvider(registry)
+			if err != nil {
+				return fmt.Errorf("failed to get registry provider: %v", err)
+			}
+			if !provider.IsInstalled() {
+				return fmt.Errorf("%s not installed. Install with: %s", provider.Name(), provider.InstallInstructions())
+			}
+			
+			// Compute local digest from manifest file
+			localDigest := ""
+			if localManifestFlag != "" {
+				localDigest = workflow.ComputeManifestDigest(localManifestFlag)
+			} else {
+				// Try default manifest location
+				defaultManifest := artifactName + ".manifest.json"
+				if _, err := os.Stat(defaultManifest); err == nil {
+					localDigest = workflow.ComputeManifestDigest(defaultManifest)
+				} else {
+					return fmt.Errorf("local manifest not found. Specify with --local-manifest or ensure it's at default location")
+				}
+			}
+			
+			// Verify parity
+			verifier := workflow.NewLocalParityVerifier(provider, localDigest)
+			result, err := verifier.Verify(artifactName, destination)
+			if err != nil {
+				return fmt.Errorf("failed to verify local parity: %v", err)
+			}
+			fmt.Println(result.String())
+			if !result.Match {
+				return fmt.Errorf("local parity check FAILED: %s", result.String())
+			}
+		}
 
 		// Try to verify provenance attestation if available
 		attestationPath := attestationFlag
 		
 		// Determine registry if not specified
-		var registry string
-		if registryFlag != "" {
-			registry = registryFlag
-		} else if cfg.Registry != "" {
-			registry = cfg.Registry
-		} else {
-			registry = "oras" // default
+		if registry == "" {
+			if registryFlag != "" {
+				registry = registryFlag
+			} else if cfg.Registry != "" {
+				registry = cfg.Registry
+			} else {
+				registry = "oras" // default
+			}
 		}
 		
 		// Try to fetch attestation from registry first (if we have a registry and artifact with registry prefix)
@@ -288,4 +342,6 @@ func init() {
 	verifyCmd.Flags().String("signer", "", "Signing tool used: sigstore or notary")
 	verifyCmd.Flags().String("attestation", "", "Path to provenance attestation file (default: <artifact>.provenance.json)")
 	verifyCmd.Flags().String("registry", "", "Registry tool: oras or modelpack (for fetching attestations)")
+	verifyCmd.Flags().String("local-manifest", "", "Path to local manifest file for parity verification")
+	verifyCmd.Flags().Bool("local-parity", false, "Verify that local artifact matches the pushed copy in registry")
 }
