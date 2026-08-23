@@ -18,6 +18,10 @@ This command helps you package models, prompts, RAG context, or agentic skills
 (conforming to agentskills.io standard format) into a single OCI artifact that can be
 stored in registries and deployed anywhere.
 
+The command also supports automatic signing at the point of creation using
+Sigstore (cosign) or Notary v2 (notation) for supply chain security, and
+generates SLSA provenance attestations by default for immutable provenance tracking.
+
 Examples:
   # Package a model
   model-cli package
@@ -25,7 +29,13 @@ Examples:
 
   # Package an agentic skill
   model-cli package --model my-skill --model-path ./skills/my-skill --skill
-  model-cli package --skill --model-path ./my-skill --artifact my-org/my-skill:v1`,
+  model-cli package --skill --model-path ./my-skill --artifact my-org/my-skill:v1
+
+  # Package and sign automatically
+  model-cli package --model phi-4-mini --artifact my-model:latest --sign --signer sigstore
+
+  # Package without provenance (disable with flag)
+  model-cli package --model phi-4-mini --artifact my-model:latest --generate-provenance=false`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := config.Load()
 
@@ -44,6 +54,9 @@ Examples:
 		mofClassFlag, _ := cmd.Flags().GetString("mof-class")
 		mofComponentsFlag, _ := cmd.Flags().GetString("mof-components")
 		isSkillFlag, _ := cmd.Flags().GetBool("skill")
+		signFlag, _ := cmd.Flags().GetBool("sign")
+		signerFlag, _ := cmd.Flags().GetString("signer")
+		provenanceFlag, _ := cmd.Flags().GetBool("generate-provenance")
 
 		// Interactive prompts if not set in config or via flags
 		if cfg.Registry == "" && registryFlag == "" {
@@ -236,6 +249,17 @@ Examples:
 		pf.SetPackageInfo(modelName, modelPath, artifactName, registryURL, includeRAG, ragPath)
 		pf.SetAnnotations(annotations)
 		pf.SetIsSkill(isSkillFlag)
+		
+		// Set signing options
+		// Determine signer: use flag, then config, then default to empty (will default to sigstore in workflow)
+		signerToUse := signerFlag
+		if signerToUse == "" {
+			signerToUse = cfg.Signer
+		}
+		pf.SetSigningOptions(signFlag, signerToUse)
+		
+		// Set provenance options (enabled by default, can be disabled with --generate-provenance=false)
+		pf.SetProvenanceOptions(provenanceFlag)
 
 		artifactType := "model"
 		if isSkillFlag {
@@ -263,4 +287,7 @@ func init() {
 	packageCmd.Flags().String("mof-class", "", "MOF Class: I, II, or III")
 	packageCmd.Flags().String("mof-components", "", "MOF components (comma-separated)")
 	packageCmd.Flags().Bool("skill", false, "Package as an agentic skill (agentskills.io format)")
+	packageCmd.Flags().Bool("sign", false, "Sign the artifact automatically after packaging")
+	packageCmd.Flags().String("signer", "", "Signing tool: sigstore or notary (default: sigstore)")
+	packageCmd.Flags().Bool("generate-provenance", true, "Generate SLSA provenance attestation (default: true)")
 }

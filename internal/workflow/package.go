@@ -3,6 +3,7 @@ package workflow
 import (
 	"fmt"
 	"path/filepath"
+	"time"
 )
 
 // PackageWorkflow orchestrates the packaging of models as OCI artifacts
@@ -22,6 +23,14 @@ type PackageWorkflow struct {
 	annotations      *AnnotationSet
 	manifestPath      string
 	isSkill          bool
+
+	// Signing options
+	sign             bool
+	signer           string
+	
+	// Provenance options
+	generateProvenance bool
+	provenancePath    string
 }
 
 // NewPackageWorkflow creates a new packaging workflow
@@ -39,6 +48,7 @@ func NewPackageWorkflow(registry string) (*PackageWorkflow, error) {
 		sbomTool:          "syft", // Default SBOM tool
 		sbomFormat:        SPDXJSON, // Default SBOM format
 		annotations:      NewAnnotationSet(), // Default annotations
+		generateProvenance: true, // Default to generating provenance attestation
 	}, nil
 }
 
@@ -76,6 +86,22 @@ func (w *PackageWorkflow) SetSBOMTool(tool string, format SBOMFormat) {
 // SetIsSkill sets whether this is a skill package
 func (w *PackageWorkflow) SetIsSkill(isSkill bool) {
 	w.isSkill = isSkill
+}
+
+// SetSigningOptions configures signing options for the workflow
+func (w *PackageWorkflow) SetSigningOptions(sign bool, signer string) {
+	w.sign = sign
+	w.signer = signer
+}
+
+// SetProvenanceOptions configures provenance generation options
+func (w *PackageWorkflow) SetProvenanceOptions(generate bool) {
+	w.generateProvenance = generate
+}
+
+// ProvenancePath returns the path to the generated provenance attestation
+func (w *PackageWorkflow) ProvenancePath() string {
+	return w.provenancePath
 }
 
 // ManifestPath returns the path to the OCI manifest written by Run(), or an
@@ -192,12 +218,87 @@ func (w *PackageWorkflow) Run() error {
 		fmt.Printf("  Artifact ready at: %s\n", fullArtifact)
 	}
 
+	// Generate provenance attestation (SLSA/in-toto) - frozen at point of creation
+	if w.generateProvenance {
+		fmt.Println("\n=== Provenance ===")
+		fmt.Println("→ Generating SLSA provenance attestation...")
+		
+		// Create provenance generator
+		pg := NewProvenanceGenerator()
+		pg.SetSourceInfo(w.modelPath, "")
+		pg.SetArtifactInfo(fullArtifact, nil)
+		pg.SetRecipeInfo(
+			"https://model-cli.dev/recipe/package/v1",
+			fmt.Sprintf("registry:%s", w.registry),
+			"package",
+		)
+		
+		// Generate and write the attestation
+		w.provenancePath = filepath.Join(w.modelPath, "attestation.json")
+		attestation, err := pg.WriteToFile(w.provenancePath)
+		if err != nil {
+			return fmt.Errorf("failed to generate provenance attestation: %v", err)
+		}
+		
+		// Validate the attestation
+		if err := ValidateAttestation(attestation); err != nil {
+			return fmt.Errorf("failed to validate provenance attestation: %v", err)
+		}
+		
+		fmt.Printf("✓ Provenance attestation generated: %s\n", w.provenancePath)
+		fmt.Println("  Attestation contains:")
+		fmt.Printf("    - Build ID: %s\n", attestation.Statement.Predicate.BuildID)
+		fmt.Printf("    - Build Type: %s\n", attestation.Statement.Predicate.BuildType)
+		fmt.Printf("    - Builder: %s\n", attestation.Statement.Predicate.Builder.ID)
+		fmt.Printf("    - Source: %s\n", attestation.Statement.Predicate.Source.ID)
+		fmt.Printf("    - Timestamp: %s\n", attestation.Statement.Predicate.Metadata.BuildFinishedOn.Format(time.RFC3339))
+	}
+	
+	// Sign the artifact if requested (at point of creation)
+	if w.sign {
+		fmt.Println("\n=== Signing ===")
+		fmt.Printf("→ Signing artifact '%s'...\n", fullArtifact)
+		
+		// Determine signer to use
+		signerToUse := w.signer
+		if signerToUse == "" {
+			signerToUse = "sigstore" // Default to sigstore
+		}
+		
+		// Get signing provider
+		sp, err := GetSigningProvider(signerToUse)
+		if err != nil {
+			return fmt.Errorf("failed to get signing provider: %v", err)
+		}
+		
+		// Check if tool is installed
+		if !sp.IsInstalled() {
+			return fmt.Errorf("%s not installed. Install with: %s", sp.Name(), sp.InstallInstructions())
+		}
+		
+		// Sign the artifact
+		if err := sp.Sign(fullArtifact, ""); err != nil {
+			return fmt.Errorf("failed to sign artifact: %v", err)
+		}
+		
+		sigPath := sp.GetSignaturePath(fullArtifact)
+		fmt.Printf("✓ Signed artifact: %s\n", fullArtifact)
+		fmt.Printf("  Signature: %s\n", sigPath)
+	}
+
 	fmt.Println("\n=== Summary ===")
 	fmt.Println("Packaging complete!")
-	fmt.Println("\nNext steps:")
-	fmt.Println("  - Sign with: model-cli sign --artifact " + fullArtifact)
-	fmt.Println("  - Verify with: model-cli verify --artifact " + fullArtifact)
-	fmt.Println("  - Deploy with: model-cli deploy")
+	
+	if !w.sign {
+		fmt.Println("\nNext steps:")
+		fmt.Println("  - Sign with: model-cli sign --artifact " + fullArtifact)
+		fmt.Println("  - Verify with: model-cli verify --artifact " + fullArtifact)
+		fmt.Println("  - Deploy with: model-cli deploy")
+	} else {
+		fmt.Println("\nNext steps:")
+		fmt.Println("  - Verify with: model-cli verify --artifact " + fullArtifact)
+		fmt.Println("  - Deploy with: model-cli deploy")
+	}
 
 	return nil
 }
