@@ -447,6 +447,18 @@ func createUnifiedOCIManifest(artifactType workflow.ArtifactType, artifactName, 
 	manifest.Annotations["org.opencontainers.image.description"] = fmt.Sprintf("%s artifact pushed by model-cli", artifactType)
 	manifest.Annotations["org.opencontainers.image.version"] = "1.0.0"
 
+	// Add Trust Profile annotations for GitOps admission (Story #63)
+	// These annotations allow GitOps tools (Argo CD, Flux) + policy engines
+	// (Sigstore Policy Controller, OPA/Gatekeeper) to evaluate artifact trust
+	manifest.Annotations[workflow.AnnotationSigningFramework] = "sigstore-cosign"
+	manifest.Annotations[workflow.AnnotationSBOMFormat] = "spdx-json"
+	manifest.Annotations[workflow.AnnotationProvenanceType] = "slsa-v1.0"
+	
+	// Add MOF classification for compliance checking
+	manifest.Annotations[workflow.AnnotationMOFClass] = "I" // Default to most open
+	manifest.Annotations[workflow.AnnotationMOFVersion] = "1.0"
+	manifest.Annotations[workflow.AnnotationMOFComponents] = "weights,training-data,code"
+
 	return manifest, nil
 }
 
