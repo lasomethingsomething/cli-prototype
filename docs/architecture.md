@@ -7,7 +7,7 @@ User
 TUI (huh + lipgloss + bubbletea)
   - Clean, color-coded interface
   - Step-by-step guidance
-  - Context side panels (Shopware CLI style)
+  - Context side panels
   - Tab-based navigation (Progress, Config, Model, SBOM, MOF, Logs, Help, Env)
   - Minimal clutter
   |
@@ -41,7 +41,7 @@ Providers (pluggable tools)
 
 #### TUI Architecture
 
-The Model CLI uses a layered TUI architecture inspired by Shopware CLI:
+The Model CLI uses a layered TUI architecture:
 
 1. **Main Workflow Panels**: Each major step (Package, Harden, Sign, etc.) has its own TUI model
 2. **Context Panel**: Right-side panel with tabs showing:
