@@ -117,6 +117,18 @@ For automation or when you want to run specific steps:
 # Package only
 ./model-cli package
 
+# Validate metadata contract
+./model-cli validate --manifest my-manifest.json
+
+# Enforce metadata contract
+./model-cli enforce --manifest my-manifest.json
+
+# Search registry
+./model-cli search --destination ghcr.io/my-org --type model
+
+# Map relationships
+./model-cli map --model my-model --skill my-skill
+
 # Sign only
 ./model-cli sign
 
