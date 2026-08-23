@@ -97,9 +97,12 @@ AI agent guidance: [skills/model-cli/SKILL.md](skills/model-cli/SKILL.md)
 
 ## Documentation
 
+### Workflow Phases
 - [Quick Start](docs/quick-start.md) - Phase 1: Developer Laptop
-- [Architecture](docs/architecture.md) - Understand how it works
 - [Enterprise OCI Registry](docs/enterprise-oci-registry.md) - Phase 2: Registry integration
 - [GitOps Admission & Policy Enforcement](docs/gitops-admission.md) - Phase 3: Kubernetes production cluster
+
+### Reference
+- [Architecture](docs/architecture.md) - Understand how it works
 - [TUI Guide](docs/tui.md) - Learn about the terminal interface
 - [Resources](docs/resources.md) - Standards and tools
