@@ -120,9 +120,9 @@ Packaging your model...
 Packaging model 'test-model' from '/Users/lauriapple/test-model' as 'test:v1'
 
 === Supply Chain Security ===
-✓ Generating SBOM (Software Bill of Materials)...
+ Generating SBOM (Software Bill of Materials)...
   Warning: SBOM generation failed: syft not installed. Install with: brew install anchore/syft/syft
-✓ Applying MOF (Model Openness Framework) classification...
+ Applying MOF (Model Openness Framework) classification...
 Classifying model at /Users/lauriapple/test-model with MOF...
 MOF Classification: II
   Components found: weights, training-data
@@ -163,12 +163,12 @@ OCI Annotations (CNCF AI Interoperability Profile):
   Manifest written to: /Users/lauriapple/test-model/manifest.json
 → Packaging model files from '/Users/lauriapple/test-model'...
 → Packaged as OCI artifact: test:v1
-✓ Saved locally (not pushed to registry)
+ Saved locally (not pushed to registry)
   Artifact ready at: test:v1
 
 === Provenance ===
 → Generating SLSA provenance attestation...
-✓ Provenance attestation generated: /Users/lauriapple/test-model/attestation.json
+ Provenance attestation generated: /Users/lauriapple/test-model/attestation.json
   Attestation contains:
     - Build ID: model-cli-1787479108160164000
     - Build Type: https://model-cli.dev/build/v1
@@ -218,15 +218,15 @@ You'll see:
 
 ## What This Proves
 
-✅ **The CLI works** - It packaged your test model into an OCI artifact with proper annotations
+ **The CLI works** - It packaged your test model into an OCI artifact with proper annotations
 
-✅ **Orchestration works** - It delegated to ORAS for packaging and syft for SBOM
+ **Orchestration works** - It delegated to ORAS for packaging and syft for SBOM
 
-✅ **Graceful degradation** - When syft wasn't installed, it didn't crash - it warned you and continued
+ **Graceful degradation** - When syft wasn't installed, it didn't crash - it warned you and continued
 
-✅ **Metadata injection** - All 10+ CNCF AI Interoperability Profile annotations are properly attached
+ **Metadata injection** - All 10+ CNCF AI Interoperability Profile annotations are properly attached
 
-✅ **Clear feedback** - Every step is explained, warnings are actionable
+ **Clear feedback** - Every step is explained, warnings are actionable
 
 ## Understanding the Errors
 
@@ -275,11 +275,11 @@ brew install sigstore/tap/cosign
 
 In 5 minutes, with just a text file as a "model", you:
 
-1. ✅ Built the CLI from source
-2. ✅ Packaged a model as an OCI artifact
-3. ✅ Injected 10+ standardized annotations
-4. ✅ Generated provenance attestation
-5. ✅ Saw clear, actionable error messages
-6. ✅ Produced a valid manifest any tool can read
+1.  Built the CLI from source
+2.  Packaged a model as an OCI artifact
+3.  Injected 10+ standardized annotations
+4.  Generated provenance attestation
+5.  Saw clear, actionable error messages
+6.  Produced a valid manifest any tool can read
 
 **This proves the CLI does its job: orchestrate the secure model deployment workflow, attach metadata, and hand off to external tools with clear guidance.**
