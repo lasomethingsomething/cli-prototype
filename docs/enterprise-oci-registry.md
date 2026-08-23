@@ -273,7 +273,7 @@ The metadata contract is validated against the following JSON Schema:
 When validation fails, the CLI provides clear, actionable error messages:
 
 ```
-✗ Metadata contract validation FAILED
+ Metadata contract validation FAILED
 
 Invalid: Metadata contract validation failed:
   - Error: model.type is required

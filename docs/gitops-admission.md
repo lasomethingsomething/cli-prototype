@@ -111,14 +111,14 @@ The `admit` command validates:
 
 | Feature | `validate-gitops` | `admit` |
 |---------|-------------------|---------|
-| Manifest fetching | ✅ | ✅ |
-| Annotation validation | ✅ | ✅ |
-| Environment validation | ✅ | ✅ |
-| Detailed section output | ✅ | ✅ |
-| JSON output | ✅ | ✅ |
-| Exit codes | ✅ (0/1) | ✅ (0/1) |
-| Final decision | ❌ | ✅ |
-| Simulated evaluation | ❌ | ❌ (now real) |
+| Manifest fetching |  |  |
+| Annotation validation |  |  |
+| Environment validation |  |  |
+| Detailed section output |  |  |
+| JSON output |  |  |
+| Exit codes |  (0/1) |  (0/1) |
+| Final decision |  |  |
+| Simulated evaluation |  |  (now real) |
 
 Both commands now fetch real manifests and validate annotations. Use `validate-gitops` for quick pre-flight checks and `admit` for comprehensive admission evaluation.
 
@@ -160,23 +160,23 @@ model-cli validate-gitops --artifact my-registry/my-model:v1 --env production
 ```
 Validating GitOps annotations for: ghcr.io/my-org/my-model:v1.0.0
 
-✓ Fetched artifact manifest from registry
+ Fetched artifact manifest from registry
 
 === Trust Profile Validation ===
-  ✓ org.cncf.ai.security.signing.framework: sigstore-cosign
-  ✓ org.cncf.ai.security.sbom.format: spdx-json
-  ✓ org.cncf.ai.security.provenance.type: slsa-v1.0
-  ✓ org.cncf.ai.interop.profile.version: 1.0.0
-  ✓ org.cncf.ai.artifact.type: model
+   org.cncf.ai.security.signing.framework: sigstore-cosign
+   org.cncf.ai.security.sbom.format: spdx-json
+   org.cncf.ai.security.provenance.type: slsa-v1.0
+   org.cncf.ai.interop.profile.version: 1.0.0
+   org.cncf.ai.artifact.type: model
 
 === Infrastructure Requirements Validation ===
-  ✓ org.cncf.ai.runtime: vllm
-  ✓ org.cncf.ai.accelerator: nvidia-gpu
-  ✓ org.cncf.ai.accelerator.cuda.min: 12.1
-  ✓ org.cncf.ai.resource.memory.min: 24GiB
+   org.cncf.ai.runtime: vllm
+   org.cncf.ai.accelerator: nvidia-gpu
+   org.cncf.ai.accelerator.cuda.min: 12.1
+   org.cncf.ai.resource.memory.min: 24GiB
 
 === Result ===
-✓ PASS: Artifact has all required annotations for GitOps admission
+ PASS: Artifact has all required annotations for GitOps admission
 
 GitOps tools (Argo CD, Flux) can proceed with deployment.
 External policy engines (Sigstore Policy Controller, OPA/Gatekeeper, Kyverno)
@@ -279,9 +279,9 @@ Model CLI attaches the following annotations to every OCI artifact manifest:
 
 | Annotation | Description | Example Value | Required for Admission |
 |------------|-------------|---------------|------------------------|
-| `org.cncf.ai.security.signing.framework` | Signing framework used | `sigstore-cosign`, `notation` | ✅ Yes |
-| `org.cncf.ai.security.sbom.format` | SBOM format | `spdx-json`, `cyclonedx` | ✅ Yes |
-| `org.cncf.ai.security.provenance.type` | Provenance type | `slsa-v1.0`, `in-toto` | ✅ Yes |
+| `org.cncf.ai.security.signing.framework` | Signing framework used | `sigstore-cosign`, `notation` |  Yes |
+| `org.cncf.ai.security.sbom.format` | SBOM format | `spdx-json`, `cyclonedx` |  Yes |
+| `org.cncf.ai.security.provenance.type` | Provenance type | `slsa-v1.0`, `in-toto` |  Yes |
 
 ### MOF (Model Openness Framework) Annotations
 
@@ -295,8 +295,8 @@ Model CLI attaches the following annotations to every OCI artifact manifest:
 
 | Annotation | Description | Example Value | Required |
 |------------|-------------|---------------|----------|
-| `org.cncf.ai.interop.profile.version` | Interoperability profile version | `1.0.0` | ✅ Yes |
-| `org.cncf.ai.artifact.type` | Artifact type | `model`, `skill`, `pipeline` | ✅ Yes |
+| `org.cncf.ai.interop.profile.version` | Interoperability profile version | `1.0.0` |  Yes |
+| `org.cncf.ai.artifact.type` | Artifact type | `model`, `skill`, `pipeline` |  Yes |
 
 ### 2. Infrastructure Requirement Annotations (Story #64)
 
@@ -304,8 +304,8 @@ These annotations allow policy engines to verify that the artifact's infrastruct
 
 | Annotation | Description | Example Value | Required |
 |------------|-------------|---------------|----------|
-| `org.cncf.ai.runtime` | Runtime for serving | `vllm`, `kserve`, `tensorrt-llm` | ✅ Yes |
-| `org.cncf.ai.accelerator` | Hardware accelerator requirement | `nvidia-gpu`, `amd-gpu`, `cpu` | ✅ Yes |
+| `org.cncf.ai.runtime` | Runtime for serving | `vllm`, `kserve`, `tensorrt-llm` |  Yes |
+| `org.cncf.ai.accelerator` | Hardware accelerator requirement | `nvidia-gpu`, `amd-gpu`, `cpu` |  Yes |
 | `org.cncf.ai.accelerator.cuda.min` | Minimum CUDA version | `12.1`, `11.8` | ⚠️ Conditional |
 | `org.cncf.ai.resource.memory.min` | Minimum memory requirement | `24GiB`, `16Gi` | ⚠️ Conditional |
 
@@ -1004,22 +1004,22 @@ spec:
 | Custom Webhook | Infrastructure matching | Custom admission controller | Best for cluster-specific logic |
 
 **Model CLI's Role:**
-- ✅ Attach Trust Profile annotations to OCI manifests (Story #63)
-- ✅ Attach Infrastructure Requirement annotations to OCI manifests (Story #64)
-- ✅ Provide pre-flight validation for GitOps deployment (Story #65)
-- ✅ Validate air-gapped and hybrid-cloud safety policies (Story #66)
-- ✅ Evaluate artifacts for admission with real manifest fetching (Story #67)
-- ✅ Pass artifact references to GitOps tools
-- ✅ Document how to configure policy enforcement
-- ❌ Does NOT implement admission webhooks
-- ❌ Does NOT verify signatures at deployment time
-- ❌ Does NOT enforce policies
+-  Attach Trust Profile annotations to OCI manifests (Story #63)
+-  Attach Infrastructure Requirement annotations to OCI manifests (Story #64)
+-  Provide pre-flight validation for GitOps deployment (Story #65)
+-  Validate air-gapped and hybrid-cloud safety policies (Story #66)
+-  Evaluate artifacts for admission with real manifest fetching (Story #67)
+-  Pass artifact references to GitOps tools
+-  Document how to configure policy enforcement
+-  Does NOT implement admission webhooks
+-  Does NOT verify signatures at deployment time
+-  Does NOT enforce policies
 
 **External Tools' Role:**
-- ✅ Verify signatures (Sigstore Policy Controller, Cosign)
-- ✅ Enforce admission policies (OPA/Gatekeeper, Kyverno)
-- ✅ Deploy artifacts (Argo CD, Flux)
-- ✅ Access OCI manifest annotations from registries
+-  Verify signatures (Sigstore Policy Controller, Cosign)
+-  Enforce admission policies (OPA/Gatekeeper, Kyverno)
+-  Deploy artifacts (Argo CD, Flux)
+-  Access OCI manifest annotations from registries
 
 ## See Also
 
