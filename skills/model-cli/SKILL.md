@@ -357,6 +357,15 @@ Model CLI implements a complete Enterprise OCI Registry Integration workflow:
 - Hand off to Kubernetes scheduler (does NOT implement scheduling)
 - Annotations: `ai.node.gpu.type`, `ai.node.vram.min`, `ai.node.gpu.topology`
 
+**Story #69: Runtime Execution & Optimization**
+- Attach runtime-specific annotations (runtime type, layer deduplication) to OCI manifests during packaging
+- Support Reference Skill DLC with endpoint and skill reference annotations
+- Provide `validate-runtime` command to check runtime operator availability in cluster
+- Support `--runtime-type`, `--layer-dedup`, `--dlc-endpoint`, `--skill-refs` flags in package command
+- Support `--namespace`, `--json-output` flags in validate-runtime command
+- Hand off to serving runtimes (KServe, vLLM) - does NOT implement model serving
+- Annotations: `ai.runtime.type`, `ai.runtime.optimization.layer-dedup`, `ai.skill.dlc-endpoint`, `ai.skill.references`
+
 #### Metadata Contract Validation
 ```bash
 # Dry-run validation before push

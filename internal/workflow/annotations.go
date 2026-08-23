@@ -89,6 +89,23 @@ const (
 	// GPUTopology identifies the GPU topology requirement
 	// Value: e.g., "8xH100", "4xA100", "2xL40S"
 	AnnotationGPUTopology = "ai.node.gpu.topology"
+
+	// Runtime execution annotations (Story #69)
+	// RuntimeType identifies the specific runtime for serving
+	// Value: e.g., "vllm", "kserve", "tensorrt-llm"
+	AnnotationRuntimeType = "ai.runtime.type"
+
+	// LayerDeduplication identifies if layer deduplication optimization is enabled
+	// Value: "true" or "false"
+	AnnotationLayerDeduplication = "ai.runtime.optimization.layer-dedup"
+
+	// ReferenceSkillDLC identifies the endpoint for dynamic skill loading
+	// Value: URL or connection string for Reference Skill DLC
+	AnnotationReferenceSkillDLC = "ai.skill.dlc-endpoint"
+
+	// SkillReferences lists skill dependencies for agentic workflows
+	// Value: comma-separated list of skill references (e.g., "skill:sha256:abc,skill:sha256:def")
+	AnnotationSkillReferences = "ai.skill.references"
 )
 
 // AnnotationSet represents a collection of annotations for an OCI artifact
@@ -118,6 +135,12 @@ type AnnotationSet struct {
 	GPUType     string
 	VRAMMin     string
 	GPUTopology string
+
+	// Runtime execution for Story #69
+	RuntimeType       string
+	LayerDeduplication string
+	ReferenceSkillDLC string
+	SkillReferences    string
 }
 
 // NewAnnotationSet creates a new annotation set with sensible defaults
@@ -199,6 +222,20 @@ func (a *AnnotationSet) ToMap() map[string]string {
 		annotations[AnnotationGPUTopology] = a.GPUTopology
 	}
 
+	// Runtime execution annotations (Story #69)
+	if a.RuntimeType != "" {
+		annotations[AnnotationRuntimeType] = a.RuntimeType
+	}
+	if a.LayerDeduplication != "" {
+		annotations[AnnotationLayerDeduplication] = a.LayerDeduplication
+	}
+	if a.ReferenceSkillDLC != "" {
+		annotations[AnnotationReferenceSkillDLC] = a.ReferenceSkillDLC
+	}
+	if a.SkillReferences != "" {
+		annotations[AnnotationSkillReferences] = a.SkillReferences
+	}
+
 	return annotations
 }
 
@@ -230,4 +267,10 @@ func (a *AnnotationSet) Print() {
 	fmt.Printf("    %s: %s\n", AnnotationGPUType, a.GPUType)
 	fmt.Printf("    %s: %s\n", AnnotationVRAMMin, a.VRAMMin)
 	fmt.Printf("    %s: %s\n", AnnotationGPUTopology, a.GPUTopology)
+
+	fmt.Println("  Runtime Execution:")
+	fmt.Printf("    %s: %s\n", AnnotationRuntimeType, a.RuntimeType)
+	fmt.Printf("    %s: %s\n", AnnotationLayerDeduplication, a.LayerDeduplication)
+	fmt.Printf("    %s: %s\n", AnnotationReferenceSkillDLC, a.ReferenceSkillDLC)
+	fmt.Printf("    %s: %s\n", AnnotationSkillReferences, a.SkillReferences)
 }

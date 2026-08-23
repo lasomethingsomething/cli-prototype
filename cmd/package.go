@@ -61,6 +61,11 @@ Examples:
 		gpuTypeFlag, _ := cmd.Flags().GetString("gpu-type")
 		vramMinFlag, _ := cmd.Flags().GetString("vram-min")
 		gpuTopologyFlag, _ := cmd.Flags().GetString("gpu-topology")
+		// Runtime execution flags for Story #69
+		runtimeTypeFlag, _ := cmd.Flags().GetString("runtime-type")
+		layerDedupFlag, _ := cmd.Flags().GetString("layer-dedup")
+		dlcEndpointFlag, _ := cmd.Flags().GetString("dlc-endpoint")
+		skillRefsFlag, _ := cmd.Flags().GetString("skill-refs")
 
 		// Interactive prompts if not set in config or via flags
 		if cfg.Registry == "" && registryFlag == "" {
@@ -254,6 +259,58 @@ Examples:
 			}
 		}
 
+		// Runtime execution annotations for Story #69
+		if runtimeTypeFlag != "" {
+			annotations.RuntimeType = runtimeTypeFlag
+		} else {
+			if err := huh.NewInput().
+				Title("Runtime type:").
+				Description("Specific runtime for serving (e.g., vllm, kserve, leave empty to use default)").
+				Value(&annotations.RuntimeType).
+				Run(); err != nil {
+				return err
+			}
+		}
+
+		if layerDedupFlag != "" {
+			annotations.LayerDeduplication = layerDedupFlag
+		} else {
+			if err := huh.NewSelect[string]().
+				Title("Layer deduplication:").
+				Description("Enable layer deduplication optimization for large models").
+				Options(huh.NewOptions("true", "false", "")...).
+				Value(&annotations.LayerDeduplication).
+				Run(); err != nil {
+				return err
+			}
+		}
+
+		if dlcEndpointFlag != "" {
+			annotations.ReferenceSkillDLC = dlcEndpointFlag
+		} else if isSkillFlag {
+			// Only prompt for DLC endpoint if this is a skill
+			if err := huh.NewInput().
+				Title("Reference Skill DLC endpoint:").
+				Description("Endpoint for dynamic skill loading (e.g., https://dlc.example.com, leave empty if not applicable)").
+				Value(&annotations.ReferenceSkillDLC).
+				Run(); err != nil {
+				return err
+			}
+		}
+
+		if skillRefsFlag != "" {
+			annotations.SkillReferences = skillRefsFlag
+		} else if isSkillFlag {
+			// Only prompt for skill references if this is a skill
+			if err := huh.NewInput().
+				Title("Skill references:").
+				Description("Comma-separated list of skill references (e.g., skill:sha256:abc,skill:sha256:def)").
+				Value(&annotations.SkillReferences).
+				Run(); err != nil {
+				return err
+			}
+		}
+
 		// MOF classification
 		if mofClassFlag != "" {
 			annotations.MOFClass = mofClassFlag
@@ -331,6 +388,11 @@ func init() {
 	packageCmd.Flags().String("gpu-type", "", "Specific GPU type (e.g., nvidia-a100, nvidia-h100)")
 	packageCmd.Flags().String("vram-min", "", "Minimum vRAM per GPU (e.g., 40GiB, 80GiB)")
 	packageCmd.Flags().String("gpu-topology", "", "GPU topology requirement (e.g., 8xH100, 4xA100)")
+	// Runtime execution flags for Story #69
+	packageCmd.Flags().String("runtime-type", "", "Specific runtime for serving (e.g., vllm, kserve)")
+	packageCmd.Flags().String("layer-dedup", "", "Enable layer deduplication optimization (true/false)")
+	packageCmd.Flags().String("dlc-endpoint", "", "Reference Skill DLC endpoint URL")
+	packageCmd.Flags().String("skill-refs", "", "Comma-separated list of skill references")
 	packageCmd.Flags().Bool("skill", false, "Package as an agentic skill (agentskills.io format)")
 	packageCmd.Flags().Bool("sign", false, "Sign the artifact automatically after packaging")
 	packageCmd.Flags().String("signer", "", "Signing tool: sigstore or notary (default: sigstore)")
