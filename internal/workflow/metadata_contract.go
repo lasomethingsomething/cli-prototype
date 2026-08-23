@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/santhosh-tekuri/jsonschema/v5"
 )
 
 // ContractModelMetadata defines required and optional metadata for AI models in the metadata contract
@@ -481,4 +483,330 @@ func GenerateMetadataContractAnnotation(contract *MetadataContract) (string, err
 		return "", fmt.Errorf("failed to marshal metadata contract: %v", err)
 	}
 	return string(data), nil
+}
+
+// jsonSchema is the embedded JSON Schema for metadata contract validation
+// This is defined as a constant to avoid loading from file at runtime
+const jsonSchema = `{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://model-cli.dev/schemas/metadata-contract/v1.json",
+  "title": "Standardized Metadata Contract Schema",
+  "description": "Schema for validating AI asset metadata contracts in OCI manifests",
+  "type": "object",
+  "required": ["ai.assets"],
+  "properties": {
+    "ai.assets": {
+      "type": "object",
+      "description": "AI asset metadata",
+      "oneOf": [
+        {"required": ["model"], "properties": {"model": {"type": "object"}}},
+        {"required": ["skill"], "properties": {"skill": {"type": "object"}}},
+        {"required": ["pipeline"], "properties": {"pipeline": {"type": "object"}}}
+      ]
+    }
+  }
+}`
+
+// compiledSchema holds the compiled JSON Schema validator
+var compiledSchema *jsonschema.Schema
+
+// getCompiledSchema returns the compiled JSON Schema, compiling it once on first use
+func getCompiledSchema() (*jsonschema.Schema, error) {
+	if compiledSchema != nil {
+		return compiledSchema, nil
+	}
+	
+	schema, err := jsonschema.CompileString("metadata-contract.json", jsonSchema)
+	if err != nil {
+		return nil, fmt.Errorf("failed to compile JSON schema: %v", err)
+	}
+	
+	compiledSchema = schema
+	return compiledSchema, nil
+}
+
+// ValidateContractWithJSONSchema validates a metadata contract using JSON Schema
+// This provides an alternative validation method that can catch schema-level issues
+func ValidateContractWithJSONSchema(contract *MetadataContract) (*ContractValidationResult, error) {
+	result := &ContractValidationResult{
+		Valid:         true,
+		Errors:       []string{},
+		Warnings:     []string{},
+		ArtifactType: "unknown",
+	}
+
+	if contract == nil {
+		result.Valid = false
+		result.Errors = append(result.Errors, "metadata contract is nil")
+		return result, nil
+	}
+
+	// Determine artifact type from contract
+	if contract.Assets.Model != nil {
+		result.ArtifactType = "model"
+	} else if contract.Assets.Skill != nil {
+		result.ArtifactType = "skill"
+	} else if contract.Assets.Pipeline != nil {
+		result.ArtifactType = "pipeline"
+	}
+
+	// Compile and get the schema
+	schema, err := getCompiledSchema()
+	if err != nil {
+		// Schema compilation failed - fall back to programmatic validation
+		return ValidateContract(contract, ArtifactType(result.ArtifactType)), nil
+	}
+
+	// Convert contract to map for validation
+	contractData, err := contract.ToMap()
+	if err != nil {
+		result.Valid = false
+		result.Errors = append(result.Errors, fmt.Sprintf("failed to convert contract to map: %v", err))
+		return result, nil
+	}
+
+	// Validate against schema
+	validationErr := schema.Validate(contractData)
+	if validationErr != nil {
+		result.Valid = false
+		// Extract error details
+		var errs []string
+		for _, desc := range strings.Split(validationErr.Error(), "\n") {
+			if desc != "" {
+				errs = append(errs, strings.TrimSpace(desc))
+			}
+		}
+		result.Errors = append(result.Errors, errs...)
+	}
+
+	return result, nil
+}
+
+// ToMap converts the MetadataContract to a map for JSON Schema validation
+func (c *MetadataContract) ToMap() (map[string]interface{}, error) {
+	result := make(map[string]interface{})
+	
+	assetsMap := make(map[string]interface{})
+	
+	if c.Assets.Model != nil {
+		modelMap := make(map[string]interface{})
+		// Add required fields
+		if c.Assets.Model.Type != "" {
+			modelMap["type"] = c.Assets.Model.Type
+		}
+		if c.Assets.Model.Framework != "" {
+			modelMap["framework"] = c.Assets.Model.Framework
+		}
+		// Add optional fields
+		if c.Assets.Model.Input != "" {
+			modelMap["input"] = c.Assets.Model.Input
+		}
+		if c.Assets.Model.Output != "" {
+			modelMap["output"] = c.Assets.Model.Output
+		}
+		if len(c.Assets.Model.Capabilities) > 0 {
+			modelMap["capabilities"] = c.Assets.Model.Capabilities
+		}
+		if c.Assets.Model.Description != "" {
+			modelMap["description"] = c.Assets.Model.Description
+		}
+		if c.Assets.Model.Version != "" {
+			modelMap["version"] = c.Assets.Model.Version
+		}
+		if c.Assets.Model.Author != "" {
+			modelMap["author"] = c.Assets.Model.Author
+		}
+		if c.Assets.Model.License != "" {
+			modelMap["license"] = c.Assets.Model.License
+		}
+		if c.Assets.Model.Runtime != "" {
+			modelMap["runtime"] = c.Assets.Model.Runtime
+		}
+		if c.Assets.Model.Accelerator != "" {
+			modelMap["accelerator"] = c.Assets.Model.Accelerator
+		}
+		if len(c.Assets.Model.Relationships) > 0 {
+			modelMap["relationships"] = c.Assets.Model.Relationships
+		}
+		assetsMap["model"] = modelMap
+	}
+	
+	if c.Assets.Skill != nil {
+		skillMap := make(map[string]interface{})
+		// Add required fields
+		if c.Assets.Skill.Type != "" {
+			skillMap["type"] = c.Assets.Skill.Type
+		}
+		if len(c.Assets.Skill.Dependencies) > 0 {
+			skillMap["dependencies"] = c.Assets.Skill.Dependencies
+		}
+		// Add optional fields
+		if c.Assets.Skill.PipelineRef != "" {
+			skillMap["pipeline_ref"] = c.Assets.Skill.PipelineRef
+		}
+		if c.Assets.Skill.Description != "" {
+			skillMap["description"] = c.Assets.Skill.Description
+		}
+		if c.Assets.Skill.Version != "" {
+			skillMap["version"] = c.Assets.Skill.Version
+		}
+		if c.Assets.Skill.Author != "" {
+			skillMap["author"] = c.Assets.Skill.Author
+		}
+		if c.Assets.Skill.Runtime != "" {
+			skillMap["runtime"] = c.Assets.Skill.Runtime
+		}
+		if c.Assets.Skill.Accelerator != "" {
+			skillMap["accelerator"] = c.Assets.Skill.Accelerator
+		}
+		assetsMap["skill"] = skillMap
+	}
+	
+	if c.Assets.Pipeline != nil {
+		pipelineMap := make(map[string]interface{})
+		// Add required fields
+		if c.Assets.Pipeline.Type != "" {
+			pipelineMap["type"] = c.Assets.Pipeline.Type
+		}
+		if len(c.Assets.Pipeline.Stages) > 0 {
+			pipelineMap["stages"] = c.Assets.Pipeline.Stages
+		}
+		// Add optional fields
+		if c.Assets.Pipeline.Description != "" {
+			pipelineMap["description"] = c.Assets.Pipeline.Description
+		}
+		if c.Assets.Pipeline.Version != "" {
+			pipelineMap["version"] = c.Assets.Pipeline.Version
+		}
+		if c.Assets.Pipeline.Author != "" {
+			pipelineMap["author"] = c.Assets.Pipeline.Author
+		}
+		if len(c.Assets.Pipeline.Dependencies) > 0 {
+			pipelineMap["dependencies"] = c.Assets.Pipeline.Dependencies
+		}
+		if len(c.Assets.Pipeline.Components) > 0 {
+			var comps []map[string]interface{}
+			for _, comp := range c.Assets.Pipeline.Components {
+				compMap := map[string]interface{}{
+					"name":      comp.Name,
+					"type":      comp.Type,
+					"reference": comp.Reference,
+				}
+				comps = append(comps, compMap)
+			}
+			pipelineMap["components"] = comps
+		}
+		assetsMap["pipeline"] = pipelineMap
+	}
+	
+	if len(assetsMap) > 0 {
+		result["ai.assets"] = assetsMap
+	}
+	
+	return result, nil
+}
+
+// ValidateContractWithStrictJSONSchema validates a metadata contract strictly using JSON Schema
+// This is the primary validation method for Story #62
+func ValidateContractWithStrictJSONSchema(contractJSON string) (*ContractValidationResult, error) {
+	result := &ContractValidationResult{
+		Valid:         true,
+		Errors:       []string{},
+		Warnings:     []string{},
+		ArtifactType: "unknown",
+	}
+
+	if contractJSON == "" {
+		result.Valid = false
+		result.Errors = append(result.Errors, "metadata contract JSON is empty")
+		result.MissingFields = append(result.MissingFields, AnnotationMetadataContract)
+		return result, nil
+	}
+
+	// Parse the JSON
+	var data map[string]interface{}
+	if err := json.Unmarshal([]byte(contractJSON), &data); err != nil {
+		result.Valid = false
+		result.Errors = append(result.Errors, fmt.Sprintf("failed to parse metadata contract JSON: %v", err))
+		return result, nil
+	}
+
+	// Compile and get the schema
+	schema, err := getCompiledSchema()
+	if err != nil {
+		// Fall back to programmatic validation
+		contract, parseErr := ParseMetadataContractFromAnnotations(map[string]string{
+			AnnotationMetadataContract: contractJSON,
+		})
+		if parseErr != nil {
+			result.Valid = false
+			result.Errors = append(result.Errors, parseErr.Error())
+			return result, nil
+		}
+		return ValidateContract(contract, ArtifactType(result.ArtifactType)), nil
+	}
+
+	// Validate against schema
+	validationErr := schema.Validate(data)
+	if validationErr != nil {
+		result.Valid = false
+		// Extract error details
+		for _, desc := range strings.Split(validationErr.Error(), "\n") {
+			if desc != "" {
+				errMsg := strings.TrimSpace(desc)
+				// Clean up the error message
+				errMsg = strings.TrimPrefix(errMsg, "(root): ")
+				errMsg = strings.TrimPrefix(errMsg, "(root):")
+				errMsg = strings.TrimSpace(errMsg)
+				if errMsg != "" {
+					result.Errors = append(result.Errors, errMsg)
+				}
+			}
+		}
+		
+		// Determine which fields are missing based on schema requirements
+		// The schema requires ai.assets, and within that, one of model/skill/pipeline
+		if _, hasAssets := data["ai.assets"]; !hasAssets {
+			result.MissingFields = append(result.MissingFields, "ai.assets")
+		} else {
+			assets := data["ai.assets"].(map[string]interface{})
+			if len(assets) == 0 {
+				result.MissingFields = append(result.MissingFields, "ai.assets.<type>")
+				result.Errors = append(result.Errors, "ai.assets must contain at least one of: model, skill, pipeline")
+			} else {
+				// Check for required fields in each type
+				for assetType, assetData := range assets {
+					assetMap := assetData.(map[string]interface{})
+					switch assetType {
+					case "model":
+						result.ArtifactType = "model"
+						if _, hasType := assetMap["type"]; !hasType {
+							result.MissingFields = append(result.MissingFields, "ai.assets.model.type")
+						}
+						if _, hasFramework := assetMap["framework"]; !hasFramework {
+							result.MissingFields = append(result.MissingFields, "ai.assets.model.framework")
+						}
+					case "skill":
+						result.ArtifactType = "skill"
+						if _, hasType := assetMap["type"]; !hasType {
+							result.MissingFields = append(result.MissingFields, "ai.assets.skill.type")
+						}
+						if _, hasDeps := assetMap["dependencies"]; !hasDeps {
+							result.MissingFields = append(result.MissingFields, "ai.assets.skill.dependencies")
+						}
+					case "pipeline":
+						result.ArtifactType = "pipeline"
+						if _, hasType := assetMap["type"]; !hasType {
+							result.MissingFields = append(result.MissingFields, "ai.assets.pipeline.type")
+						}
+						if _, hasStages := assetMap["stages"]; !hasStages {
+							result.MissingFields = append(result.MissingFields, "ai.assets.pipeline.stages")
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return result, nil
 }
