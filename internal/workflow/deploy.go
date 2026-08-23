@@ -10,6 +10,7 @@ type DeployWorkflow struct {
 	gitOpsProvider   GitOpsProvider
 	registryProvider RegistryProvider
 	modelName        string
+	artifactRef     string // Full artifact reference with annotations (Story #63)
 	repoURL          string
 	manifestPath     string
 }
@@ -41,6 +42,12 @@ func (w *DeployWorkflow) SetModelInfo(modelName, repoURL, manifestPath string) {
 	w.manifestPath = manifestPath
 }
 
+// SetArtifactRef sets the full artifact reference (with Trust Profile annotations)
+// This allows GitOps tools to pull the manifest and access the annotations for admission
+func (w *DeployWorkflow) SetArtifactRef(ref string) {
+	w.artifactRef = ref
+}
+
 // Run executes the deployment workflow
 func (w *DeployWorkflow) Run() error {
 	if w.modelName == "" || w.repoURL == "" {
@@ -59,10 +66,16 @@ func (w *DeployWorkflow) Run() error {
 	}
 
 	// Deploy using GitOps provider
+	// For Story #63: Pass artifact reference so GitOps tools can access Trust Profile annotations
 	if w.repoURL != "" {
-		fmt.Printf("Deploying model '%s' from repository '%s' with %s...\n",
-			w.modelName, w.repoURL, w.gitOps)
-		if err := w.gitOpsProvider.Deploy(w.modelName, w.repoURL, w.manifestPath); err != nil {
+		artifactToDeploy := w.modelName
+		if w.artifactRef != "" {
+			artifactToDeploy = w.artifactRef
+		}
+		fmt.Printf("Deploying artifact '%s' from repository '%s' with %s...\n",
+			artifactToDeploy, w.repoURL, w.gitOps)
+		fmt.Printf("  Trust Profile annotations will be available to GitOps admission policies\n")
+		if err := w.gitOpsProvider.Deploy(artifactToDeploy, w.repoURL, w.manifestPath); err != nil {
 			return err
 		}
 	} else {

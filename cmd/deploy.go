@@ -27,6 +27,7 @@ Examples:
 		gitOpsFlag, _ := cmd.Flags().GetString("gitops")
 		registryFlag, _ := cmd.Flags().GetString("registry")
 		modelNameFlag, _ := cmd.Flags().GetString("model")
+		artifactFlag, _ := cmd.Flags().GetString("artifact")
 		repoURLFlag, _ := cmd.Flags().GetString("repo")
 		manifestPathFlag, _ := cmd.Flags().GetString("path")
 		hasKubernetesFlag, _ := cmd.Flags().GetBool("has-k8s")
@@ -132,6 +133,15 @@ Examples:
 		
 		if hasKubernetes && repoURL != "" {
 			wf.SetModelInfo(modelName, repoURL, manifestPath)
+			
+			// Set artifact reference if provided (contains Trust Profile annotations)
+			// This allows GitOps tools to access the annotations for admission (Story #63)
+			if artifactFlag != "" {
+				wf.SetArtifactRef(artifactFlag)
+			} else if modelName != "" {
+				// Use model name as artifact reference
+				wf.SetArtifactRef(modelName)
+			}
 		}
 		
 		return wf.Run()
@@ -143,6 +153,7 @@ func init() {
 	deployCmd.Flags().String("gitops", "", "GitOps tool: argo or flux")
 	deployCmd.Flags().String("registry", "", "Registry tool: oras or modelpack")
 	deployCmd.Flags().String("model", "", "Model name for deployment")
+	deployCmd.Flags().String("artifact", "", "Full artifact reference (e.g., ghcr.io/my-org/my-model:v1) with Trust Profile annotations")
 	deployCmd.Flags().String("repo", "", "Git repository URL for Kubernetes manifests")
 	deployCmd.Flags().String("path", "", "Path to Kubernetes manifests in repo")
 	deployCmd.Flags().Bool("has-k8s", false, "Set to true if you have a Kubernetes cluster available")
