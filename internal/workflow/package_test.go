@@ -51,6 +51,11 @@ func (f *fakeRegistryProvider) GetArtifactDigest(artifact, registry string) (str
 	// Fallback: return a deterministic digest based on artifact name
 	return fmt.Sprintf("sha256:%x", []byte(artifact)[:8]), nil
 }
+func (f *fakeRegistryProvider) Search(registry, filters string) ([][]byte, error) {
+	// Fake implementation for testing - returns empty results
+	// In real tests, this can be extended to return mock data
+	return nil, nil
+}
 
 // Test NewPackageWorkflow
 func TestNewPackageWorkflow(t *testing.T) {
