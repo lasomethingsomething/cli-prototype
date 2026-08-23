@@ -34,6 +34,8 @@ After answering, you'll see:
 - MOF classification applied
 - Provenance attestation generated
 
+See [trial-run-report.md](https://github.com/lasomethingsomething/cli-prototype/blob/main/docs/trial-run-report.md) for a detailed account of a test run.
+
 ---
 
 ## Key Concepts
