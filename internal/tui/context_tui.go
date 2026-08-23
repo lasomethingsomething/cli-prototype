@@ -50,6 +50,10 @@ type ContextModel struct {
 	// Active tab
 	ActiveTab Tab
 
+	// Control flags
+	Done      bool // User pressed Enter to continue
+	Cancelled bool // User pressed Esc to cancel
+
 	// Dimensions
 	width  int
 	height int
@@ -76,6 +80,10 @@ func (m *ContextModel) Init() tea.Cmd {
 func (m *ContextModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if msg, ok := msg.(tea.KeyMsg); ok {
 		m.HandleKey(msg.String())
+		// Check if user wants to exit
+		if m.Done {
+			return m, tea.Quit
+		}
 	}
 	return m, nil
 }
@@ -373,6 +381,22 @@ func (m *ContextModel) AddLog(message string) {
 	}
 }
 
+// IsDone returns true if the user has pressed Enter to continue
+func (m *ContextModel) IsDone() bool {
+	return m.Done
+}
+
+// IsCancelled returns true if the user has pressed Esc to cancel
+func (m *ContextModel) IsCancelled() bool {
+	return m.Cancelled
+}
+
+// ResetControlFlags resets the control flags for reuse
+func (m *ContextModel) ResetControlFlags() {
+	m.Done = false
+	m.Cancelled = false
+}
+
 // HandleKey handles keyboard input for the context model
 func (m *ContextModel) HandleKey(key string) {
 	switch key {
@@ -399,5 +423,23 @@ func (m *ContextModel) HandleKey(key string) {
 
 	case "6":
 		m.ActiveTab = TabEnv
+
+	case "enter":
+		// Exit the context panel and continue
+		// We signal this by advancing to the next step
+		// The caller (displayInteractiveContext) will see the program exit
+		// and continue execution
+		// For now, we just quit the tea program by returning Quit
+		// This is handled by the tea.Program in displayInteractiveContext
+		// Actually, we can't quit from here directly. Instead, we need to signal
+		// the program to quit. We do this by returning tea.Quit from Update.
+		// But HandleKey doesn't return anything. We need to change the approach.
+		// Let's add a Done flag to ContextModel
+		m.Done = true
+
+	case "esc", "ctrl+c", "q":
+		// Cancel and go back
+		m.Cancelled = true
+		m.Done = true
 	}
 }
