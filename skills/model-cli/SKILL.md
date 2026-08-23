@@ -9,11 +9,15 @@ Model CLI is your **tour guide** through the secure ML model deployment journey.
 
 Use this skill when:
 - Packaging ML models as OCI artifacts
+- Packaging agentic skills using the agentskills.io standard format
 - Generating SBOMs for supply chain transparency
 - Signing and verifying model artifacts (Sigstore, Notary v2)
 - Deploying models to Kubernetes with GitOps (Argo, Flux)
 - Classifying models with MOF (Model Openness Framework)
 - Following OpenSSF Model Signing Specification best practices
+- Mapping complex relationships between assets (model → skill → pipeline)
+- Validating metadata contracts at manifest level
+- Cross-referencing AI assets in registries
 
 ## Core Philosophy
 
@@ -22,7 +26,8 @@ Use this skill when:
 - **Uncluttered** - Clean TUI shows key info immediately
 - **Secure by default** - SBOM, signing, verification built-in
 - **Interoperable** - OCI artifacts, OSSF standards
-- **Flexible** - Supports Argo/Flux, ORAS/ModelPack, Sigstore/Notary
+- **Flexible** - Supports Argo/Flux, ORAS/ModelPack, Sigstore/Notary, vLLM/KServe
+- **Orchestrates, doesn't duplicate** - Hands off to external tools, doesn't reimplement them
 
 ## Recommended Starting Point
 
@@ -30,11 +35,12 @@ Use this skill when:
 model-cli wizard
 ```
 
-This single command guides users through the **complete workflow**:
+This single command guides users through the **complete workflow** for Phase 1 (Developer Laptop) and Phase 2 (Enterprise OCI Registry):
 1. Package model as OCI artifact (with SBOM + MOF)
-2. Sign with Sigstore or Notary v2
-3. Verify the signature
-4. Deploy to Kubernetes with Argo or Flux
+2. Attach standardized annotations (CNCF AI Interoperability Profile)
+3. Sign with Sigstore or Notary v2
+4. Verify the signature
+5. Optionally deploy to Kubernetes with Argo or Flux
 
 ## Command Overview
 
@@ -45,27 +51,46 @@ This single command guides users through the **complete workflow**:
 | `sign` | Sign artifact | After packaging, before deployment |
 | `verify` | Verify signature | Before deploying to production |
 | `deploy` | Deploy to Kubernetes | After signing/verification |
+| `check` | Local compliance check | Before pushing to registry |
 | `validate` | Validate metadata contract | Before pushing to registry |
-| `validate-gitops` | Pre-flight validation for GitOps | Before GitOps deployment |
 | `enforce` | Enforce metadata contract | At registry/admission proxy level |
+| `validate-gitops` | Pre-flight validation for GitOps | Before GitOps deployment |
+| `validate-nodes` | Validate node hardware requirements | Before scheduling to cluster |
+| `validate-runtime` | Validate runtime operator availability | Before deployment |
+| `admit` | Evaluate artifact for admission | For GitOps admission control |
 | `search` | Cross-reference assets | Discover assets in registry |
 | `map` | Map relationships | Define model→skill→pipeline relationships |
 
 ## The Secure Supply Chain Workflow
 
-### 1. Package
+### Phase 1: Developer Laptop (The Inner Loop)
+
+#### 1. Package
 ```bash
 model-cli package
 ```
 - Creates OCI artifact from model files
-- Generates SBOM (Software Bill of Materials) with Syft
-- Applies MOF (Model Openness Framework) classification
+- Generates SBOM (Software Bill of Materials) with Syft, Trivy, or cdxgen
+- Applies MOF (Model Openness Framework) classification (Class I, II, or III)
+- Attaches CNCF AI Interoperability Profile annotations
 - Optionally includes RAG context
+- Optionally packages as agentic skill (agentskills.io format)
+- Optionally embeds relationship maps (model→skill→pipeline)
 - Pushes to registry (ORAS or ModelPack)
 
-**Standards:** OCI Image Spec, MOF
+**Standards:** OCI Image Spec, MOF, CNCF AI Interoperability Profile
 
-### 2. Sign
+#### 2. Local Compliance Check
+```bash
+model-cli check
+```
+- Validates local artifact against metadata contract
+- Checks required annotations present
+- Verifies SBOM presence
+- Confirms MOF classification applied
+- Blocks with clear message when required pieces are missing
+
+#### 3. Sign
 ```bash
 model-cli sign
 ```
@@ -75,7 +100,7 @@ model-cli sign
 
 **Standards:** OSSF Model Signing Spec
 
-### 3. Verify
+#### 4. Verify
 ```bash
 model-cli verify
 ```
@@ -85,15 +110,130 @@ model-cli verify
 
 **Standards:** OSSF Model Signing Spec
 
-### 4. Deploy
-```bash
-model-cli deploy
-```
-- Deploys to Kubernetes with Argo or Flux
-- Validates GitOps configuration
-- Supports both UI-based (Argo) and agent-based (Flux) approaches
+### Phase 2: Enterprise OCI Registry
 
-**Standards:** GitOps principles
+#### 5. Push with Metadata Contract
+```bash
+# Push with standardized metadata
+model-cli package --push --registry oras
+```
+- Pushes unified OCI manifests with standardized metadata to registries
+- Attaches CNCF AI annotations to manifests
+- Generates and freezes immutable provenance/attestation metadata
+- Validates against metadata contract before push
+
+#### 6. Enforce Metadata Contract at Manifest Level
+```bash
+model-cli enforce --manifest my-manifest.json
+# Or as admission webhook
+model-cli enforce --webhook --port 8443
+```
+- Validates required fields (model.framework, skill.pipeline_ref)
+- Rejects pushes with invalid or missing metadata
+- Can run as admission webhook (Kubernetes-style) or registry middleware
+
+#### 7. Map Complex Relationships in Manifest
+```bash
+model-cli map --model my-model --skill my-skill --pipeline my-pipeline
+```
+- Embeds relationship maps (model → skill → pipeline) in OCI manifest
+- Supports ai.relationships field in manifest annotations
+- Enables registry to parse dependencies without unpacking artifacts
+
+#### 8. Cross-Reference Assets in Registry
+```bash
+model-cli search --destination ghcr.io/my-org --type model
+model-cli search --uses-model model:sha256:abc123
+model-cli search --metadata ai.model.type=llm
+```
+- Queries registry to discover and cross-reference AI assets
+- Supports filtering by metadata
+- Returns structured results (list of pipelines + their skills/models)
+
+#### 9. Validate Pushes Against Metadata Contract
+```bash
+model-cli validate --manifest my-manifest.json
+model-cli validate --manifest my-manifest.json --json-schema --strict
+```
+- Validates required fields (model.type, skill.dependencies)
+- Returns clear error messages for missing/invalid metadata
+- Supports dry-run validation
+- Uses JSON Schema for contract validation
+
+### Phase 3: Kubernetes Production Cluster (The Outer Loop)
+
+#### 10. Pass Trust Profile to GitOps
+```bash
+model-cli validate-gitops --artifact my-model:v1
+```
+- Attaches Trust Profile annotations to OCI manifests for GitOps admission
+- Passes artifact reference with annotations to GitOps tools (Argo CD, Flux)
+- Policy enforcement delegated to external tools (Sigstore Policy Controller, OPA/Gatekeeper, Kyverno)
+- Validates Trust Profile annotations before deployment
+
+#### 11. Pass Infrastructure Requirements to GitOps
+```bash
+model-cli validate-gitops --artifact my-model:v1
+```
+- Validates infrastructure requirement annotations
+- Annotations: runtime, accelerator, accelerator.cuda.min, resource.memory.min
+- Policy engines verify artifact requirements match destination environment
+- Supports GPU/CPU requirements, CUDA version matching, memory requirements
+- Allows deployment to air-gapped or hybrid-cloud environments with safety policies
+
+#### 12. GitOps Pre-Sync Validation Hook
+```bash
+model-cli validate-gitops --artifact my-model:v1 --quiet --json-output
+```
+- Pre-flight validation for GitOps deployment
+- Fetches artifact manifest from registry and validates annotations
+- Validates Trust Profile annotations
+- Validates Infrastructure Requirement annotations
+- Returns pass/fail exit code for CI/CD integration
+- Supports quiet mode and JSON output for automation
+
+#### 13. Implement Real Admission Evaluation
+```bash
+model-cli admit --artifact my-model:v1 --registry ghcr.io
+model-cli admit --artifact my-model:v1 --json-output
+```
+- Enhances admit command to fetch real manifests from registries
+- Validates Trust Profile annotations
+- Validates Infrastructure Requirement annotations
+- Validates Environment Safety Policies
+- Supports --registry, --json-output flags for CI/CD integration
+- Provides comprehensive admission decision with pass/fail status
+
+#### 14. Support Air-Gapped and Hybrid-Cloud Safety Policies
+```bash
+model-cli validate-gitops --artifact my-model:v1 --env air-gapped --region us-east-1
+```
+- Extends validate-gitops with environment-specific validation
+- Air-gapped: validates packaging format and SBOM presence
+- Hybrid-cloud: validates data residency and network access requirements
+- Supports --env and --region flags for environment targeting
+- Provides clear guidance for air-gapped dependency pre-loading
+
+#### 15. Infrastructure & Resource Orchestration
+```bash
+./model-cli package --gpu-type nvidia-h100 --vram-min 80GiB --gpu-topology 8xH100
+./model-cli validate-nodes --artifact my-model:v1 --namespace production
+```
+- Attaches node requirement annotations (GPU type, vRAM minimum, GPU topology) to OCI manifests during packaging
+- Validates cluster nodes against artifact requirements
+- Hands off to Kubernetes scheduler (does NOT implement scheduling)
+- Annotations: `ai.node.gpu.type`, `ai.node.vram.min`, `ai.node.gpu.topology`
+
+#### 16. Runtime Execution & Optimization
+```bash
+./model-cli package --runtime-type vllm --layer-dedup true --dlc-endpoint https://skills.example.com
+./model-cli validate-runtime --artifact my-model:v1 --namespace production
+```
+- Attaches runtime-specific annotations (runtime type, layer deduplication) to OCI manifests during packaging
+- Supports Reference Skill DLC with endpoint and skill reference annotations
+- Validates runtime operator availability in cluster
+- Hands off to serving runtimes (KServe, vLLM) - does NOT implement model serving
+- Annotations: `ai.runtime.type`, `ai.runtime.optimization.layer-dedup`, `ai.skill.dlc-endpoint`, `ai.skill.references`
 
 ## Key Features
 
@@ -102,14 +242,15 @@ All tools are pluggable via interfaces:
 - **GitOps:** Argo, Flux
 - **Registry:** ORAS, ModelPack
 - **Signing:** Sigstore (cosign), Notary v2 (notation)
-- **SBOM:** Syft
+- **SBOM:** Syft, Trivy, cdxgen
+- **Runtime:** vLLM, KServe
 
 ### Interactive TUI (huh + lipgloss + bubbletea)
 - Clean, color-coded interface
 - Step-by-step guidance with **context side panels** (Shopware CLI style)
 - Clear success/warning indicators
 - Minimal clutter - key info only
-- Progress bars with visual indicators
+- Progress indicators
 - Organized information in panel sections
 
 ### Configuration Management
@@ -122,6 +263,9 @@ All tools are pluggable via interfaces:
 - **OSSF Model Signing Spec** - For signing/verification
 - **MOF (Model Openness Framework)** - For classification
 - **SBOM** - For supply chain transparency
+- **CNCF AI Interoperability Profile** - For standardized annotations
+- **JSON Schema** - For metadata contract validation
+- **GitOps principles** - For deployment patterns
 
 ## Usage Patterns
 
@@ -135,6 +279,9 @@ model-cli wizard --skip-signing
 
 # Skip deployment if you don't have K8s yet
 model-cli wizard --skip-deploy
+
+# Skip both
+model-cli wizard --skip-signing --skip-deploy
 ```
 
 ### For Automation: Individual Commands
@@ -154,10 +301,10 @@ model-cli deploy --gitops argo --registry oras
 
 ### For CI/CD: Non-Interactive Mode
 ```bash
-# All commands support --help for flags
+# All commands support flags for automation
 export MODEL_CLI_NO_INTERACTIVE=true
-model-cli package --model phi-4-mini --registry oras --output my-model:v1
-model-cli sign --artifact my-model:v1 --signer sigstore --key $SIGNING_KEY
+model-cli package --model phi-4-mini --registry oras --artifact my-model:v1
+model-cli sign --artifact my-model:v1 --signer sigstore
 model-cli verify --artifact my-model:v1
 model-cli deploy --gitops argo --repo $REPO_URL --path ./manifests
 ```
@@ -167,7 +314,7 @@ model-cli deploy --gitops argo --repo $REPO_URL --path ./manifests
 This CLI enables the vision from your user journey matrix:
 
 ```
-Phase 1: Author & Package
+Phase 1: Author & Package (Inner Loop - Developer Laptop)
   ↓
 Phase 2: Enterprise OCI Registry Integration (SBOM + MOF + Signing)
   ↓
@@ -208,19 +355,50 @@ model-cli package --model $MODEL --registry oras
 model-cli sign --artifact $ARTIFACT --signer sigstore
 ```
 
-## Troubleshooting
+## Understanding the "Warnings"
 
-### Tool Not Installed
-The CLI checks if required tools are installed and provides installation instructions:
+Model CLI checks if required tools are installed and provides clear installation instructions:
+
 ```
 Flux not installed or not in PATH. Install with: brew install fluxcd/tap/flux
 ```
 
-### Configuration Issues
-Reset config by deleting `~/.model-cli.yaml` or use flags to override.
+This is **not a failure** - it's the "orchestrate and hand off" design:
+1. CLI checks for required tools
+2. Tells you exactly what's missing
+3. Gives you the exact command to install it
+4. Continues with the workflow anyway (when possible)
 
-### Signature Verification Failed
-This means the artifact was tampered with or signed with an untrusted key. Do not deploy.
+## When NOT to Use Model CLI
+
+- **Direct tool access needed** - Use `argocd`, `flux`, `oras`, `cosign` directly
+- **Custom workflows** - If your workflow doesn't fit the standard pattern
+- **Non-OCI formats** - If you're not using OCI artifacts
+- **Non-Kubernetes targets** - Currently focused on K8s deployment
+
+## Integration with Other Standards
+
+### OpenSSF Model Signing Spec
+- Full support for Sigstore (cosign) signing
+- Full support for Notary v2 (notation) signing
+- SBOM generation for transparency
+- Provenance tracking
+
+### OCI Spec
+- OCI artifacts for model packaging
+- Standard manifest format
+- Registry interoperability
+
+### Model Openness Framework (MOF)
+- Class I: Open weights, open training data, open code
+- Class II: Open weights, closed training data or code
+- Class III: Closed weights
+- Classification stored in artifact metadata
+
+### CNCF AI Interoperability Profile
+- Standardized annotations for AI/ML workloads
+- Enables policy engines to validate without downloading models
+- Facilitates GitOps routing and registry indexing
 
 ## Architecture
 
@@ -255,181 +433,6 @@ All external tool integrations follow the same pattern:
 
 This makes it easy to add new tool integrations without changing existing code.
 
-## When NOT to Use Model CLI
-
-- **Direct tool access needed** - Use `argocd`, `flux`, `oras`, `cosign` directly
-- **Custom workflows** - If your workflow doesn't fit the standard pattern
-- **Non-OCI formats** - If you're not using OCI artifacts
-- **Non-Kubernetes targets** - Currently focused on K8s deployment
-
-## Integration with Other Standards
-
-### OpenSSF Model Signing Spec
-- Full support for Sigstore (cosign) signing
-- Full support for Notary v2 (notation) signing
-- SBOM generation for transparency
-- Provenance tracking
-
-### OCI Spec
-- OCI artifacts for model packaging
-- Standard manifest format
-- Registry interoperability
-
-### Model Openness Framework (MOF)
-
-### Enterprise OCI Registry Integration
-Model CLI implements a complete Enterprise OCI Registry Integration workflow:
-
-#### Phase 2: Enterprise OCI Registry (Stories #58-62)
-
-**Story #58: Push Unified OCI Manifest to Registry**
-- Push unified OCI manifests with standardized metadata to registries
-- Attach CNCF AI annotations to manifests
-- Generate and freeze immutable provenance/attestation metadata
-
-**Story #59: Enforce Standardized Metadata Contract at Manifest Level**
-- Validate required fields (model.framework, skill.pipeline_ref)
-- Reject pushes with invalid or missing metadata
-- Use admission webhooks (Kubernetes-style) or registry middleware
-
-**Story #60: Map Complex Relationships in Manifest**
-- Embed relationship maps (model → skill → pipeline) in OCI manifest
-- Support ai.relationships field in manifest annotations
-- Enable registry to parse dependencies without unpacking artifacts
-
-**Story #61: Cross-Reference Assets in Registry**
-- Query registry to discover and cross-reference AI assets
-- Support filtering by metadata (e.g., ?filter=ai.model.type=llm)
-- CLI search commands (e.g., model-cli search --model my-llm --type pipeline)
-- Return structured results (list of pipelines + their skills/models)
-
-**Story #62: Validate Pushes Against Metadata Contract**
-- Validate required fields (model.type, skill.dependencies)
-- Return clear error messages for missing/invalid metadata
-- Support dry-run validation (model-cli validate --manifest my-manifest.json)
-- Use JSON Schema for contract validation
-
-#### Phase 3: Kubernetes Production Cluster (The Outer Loop)
-
-**Story #63: Pass Trust Profile to GitOps**
-- Attach Trust Profile annotations to OCI manifests for GitOps admission
-- Pass artifact reference with annotations to GitOps tools (Argo CD, Flux)
-- Policy enforcement delegated to external tools (Sigstore Policy Controller, OPA/Gatekeeper, Kyverno)
-- Annotations: security.signing.framework, security.sbom.format, security.provenance.type, interop.profile.version, artifact.type
-
-**Story #64: Pass Infrastructure Requirements to GitOps**
-- Add infrastructure requirement annotations to OCI manifests during push
-- Annotations: runtime, accelerator, accelerator.cuda.min, resource.memory.min
-- Policy engines verify artifact requirements match destination environment
-- Supports GPU/CPU requirements, CUDA version matching, memory requirements
-- Allows deployment to air-gapped or hybrid-cloud environments with safety policies
-
-**Story #65: GitOps Pre-Sync Validation Hook**
-- Provide `validate-gitops` command for pre-flight validation
-- Fetches artifact manifest from registry and validates annotations
-- Validates Trust Profile annotations (Story #63)
-- Validates Infrastructure Requirement annotations (Story #64)
-- Returns pass/fail exit code for CI/CD integration
-- Supports quiet mode and JSON output for automation
-
-**Story #66: Support Air-Gapped and Hybrid-Cloud Safety Policies**
-- Extend `validate-gitops` with environment-specific validation
-- Air-gapped: validate packaging format and SBOM presence
-- Hybrid-cloud: validate data residency and network access requirements
-- Support `--env` and `--region` flags for environment targeting
-- Provide clear guidance for air-gapped dependency pre-loading
-
-**Story #67: Implement Real Admission Evaluation**
-- Enhance `admit` command to fetch real manifests from registries
-- Validate Trust Profile annotations (Story #63)
-- Validate Infrastructure Requirement annotations (Story #64)
-- Validate Environment Safety Policies (Story #66)
-- Support `--registry`, `--json-output` flags for CI/CD integration
-- Provide comprehensive admission decision with pass/fail status
-
-#### Phase 3: Production Deployment
-
-**Story #68: Infrastructure & Resource Orchestration**
-- Attach node requirement annotations (GPU type, vRAM minimum, GPU topology) to OCI manifests during packaging
-- Provide `validate-nodes` command to check cluster nodes against artifact requirements
-- Support `--gpu-type`, `--vram-min`, `--gpu-topology` flags in package command
-- Support `--namespace`, `--json-output` flags in validate-nodes command
-- Hand off to Kubernetes scheduler (does NOT implement scheduling)
-- Annotations: `ai.node.gpu.type`, `ai.node.vram.min`, `ai.node.gpu.topology`
-
-**Story #69: Runtime Execution & Optimization**
-- Attach runtime-specific annotations (runtime type, layer deduplication) to OCI manifests during packaging
-- Support Reference Skill DLC with endpoint and skill reference annotations
-- Provide `validate-runtime` command to check runtime operator availability in cluster
-- Support `--runtime-type`, `--layer-dedup`, `--dlc-endpoint`, `--skill-refs` flags in package command
-- Support `--namespace`, `--json-output` flags in validate-runtime command
-- Hand off to serving runtimes (KServe, vLLM) - does NOT implement model serving
-- Annotations: `ai.runtime.type`, `ai.runtime.optimization.layer-dedup`, `ai.skill.dlc-endpoint`, `ai.skill.references`
-
-#### Metadata Contract Validation
-```bash
-# Dry-run validation before push
-model-cli validate --manifest my-manifest.json
-
-# Strict JSON Schema validation
-model-cli validate --manifest my-manifest.json --json-schema --strict
-
-# Enforce at registry level (admission webhook)
-model-cli enforce --manifest my-manifest.json
-model-cli enforce --webhook --port 8443
-```
-
-#### Registry Search and Discovery
-```bash
-# Search for all models in a registry
-model-cli search --destination ghcr.io/my-org --type model
-
-# Find all pipelines using a specific model
-model-cli search --uses-model model:sha256:abc123
-
-# Filter by metadata
-model-cli search --metadata ai.model.type=llm
-```
-
-#### Relationship Mapping
-```bash
-# Create relationship graph in manifest
-model-cli map --model my-model --skill my-skill --pipeline my-pipeline
-
-# Validate relationships
-model-cli validate --manifest my-manifest.json --check-relationships
-```
-- Class I: Open weights, open training data, open code
-- Class II: Open weights, closed training data or code
-- Class III: Closed weights
-- Classification stored in artifact metadata
-
-## Example: Full Production Workflow
-
-```bash
-# Developer laptop - Phase 1 & 2
-model-cli wizard
-# → Packages model with SBOM + MOF
-# → Signs with Sigstore
-# → Verifies signature
-# → User selects "No K8s" (local packaging only)
-
-# Push to registry manually
-oras push my-registry/my-model:v1 .
-
-# CI/CD pipeline - Phase 3
-# (ORAS push happens automatically in production)
-
-# Production cluster - Phase 4 & 5
-model-cli deploy --gitops argo \
-  --repo https://github.com/org/model-manifests \
-  --path ./production
-
-# Verification in deployment pipeline
-model-cli verify --artifact my-registry/my-model:v1
-model-cli deploy --gitops argo ...
-```
-
 ## Success Metrics
 
 Users should be able to:
@@ -447,16 +450,20 @@ When working on this repository:
 - Keep TUI clean and uncluttered
 - Add clear error messages with installation instructions
 - Document new features in this SKILL.md
-- Ensure all workflows align with relevant standards (OCI, OSSF, MOF)
+- Ensure all workflows align with relevant standards (OCI, OSSF, MOF, CNCF AI Interoperability Profile)
 
 ## Related Resources
 
 - [OCI Spec](https://specs.opencontainers.org/image-spec/)
+- [OCI Distribution Spec](https://github.com/opencontainers/distribution-spec)
 - [OSSF Model Signing Spec](https://github.com/ossf/model-signing-spec)
 - [Model Openness Framework](https://github.com/Adopt-MOF/MOF)
+- [CNCF AI Interoperability Profile](https://github.com/ai-interop/ai-interop)
 - [Sigstore](https://www.sigstore.dev/)
 - [Notary v2](https://github.com/notaryproject/notaryproject)
 - [ORAS](https://oras.land/)
 - [ModelPack](https://modelpack.ai/)
 - [Argo CD](https://argo-cd.readthedocs.io/)
 - [Flux CD](https://fluxcd.io/)
+- [vLLM](https://github.com/vllm-project/vllm)
+- [KServe](https://kserve.github.io/website/)
