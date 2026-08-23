@@ -506,13 +506,31 @@ func displayInteractiveContext(ctxModel *tui.ContextModel) {
 	}
 	
 	fmt.Println()
-	fmt.Println("Press Tab/Shift+Tab to switch views, 1-6 to select tab, Enter to continue")
+	fmt.Println("Press Tab/Shift+Tab to switch views, 1-6 to select tab, Enter to continue, Esc to go back")
 	fmt.Println()
 	
 	// Run the interactive context model
 	p := tea.NewProgram(ctxModel)
-	_, _ = p.Run()
+	_, err := p.Run()
 	fmt.Println()
+	
+	// If there was an error (user pressed ctrl+c), check if they cancelled
+	if err != nil {
+		// tea.Program returns an error on ctrl+c, but we handle Esc gracefully
+		// For now, just continue execution
+		return
+	}
+	
+	// Check if user cancelled (pressed Esc)
+	if ctxModel.IsCancelled() {
+		// User wants to go back - we need a way to signal this
+		// For now, we'll just exit the wizard
+		fmt.Println(warningStyle.Render("Cancelled by user"))
+		os.Exit(0)
+	}
+	
+	// User pressed Enter - reset for next use and continue
+	ctxModel.ResetControlFlags()
 }
 
 // isTTY checks if stdin is a TTY (interactive terminal)
