@@ -195,6 +195,7 @@ Example:
 - [Quick Start](docs/quick-start.md) - Try the wizard
 - [Architecture](docs/architecture.md) - Understand how it works
 - [Enterprise OCI Registry](docs/enterprise-oci-registry.md) - Phase 2: Registry integration
+- [GitOps Admission & Policy Enforcement](docs/gitops-admission.md) - Phase 3: Kubernetes production cluster
 - [TUI](docs/tui.md) - Learn about the terminal interface
 - [Resources](docs/resources.md) - Standards and tools
 

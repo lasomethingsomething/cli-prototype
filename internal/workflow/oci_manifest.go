@@ -54,6 +54,8 @@ type AIModelConfig struct {
 	// Runtime requirements
 	Runtime      string `json:"ai.runtime,omitempty"`      // e.g., "vllm", "tensorrt-llm"
 	Accelerator  string `json:"ai.accelerator,omitempty"`  // e.g., "nvidia-gpu", "cpu"
+	CUDAMin      string `json:"ai.accelerator.cuda.min,omitempty"` // e.g., "12.1", "11.8"
+	MemoryMin    string `json:"ai.resource.memory.min,omitempty"` // e.g., "24GiB", "16Gi"
 	
 	// Relationships to other assets
 	Relationships map[string][]string `json:"ai.model.relationships,omitempty"` // e.g., {"skills": ["skill:v1"], "pipelines": ["pipeline:v1"]}
@@ -80,6 +82,8 @@ type AISkillConfig struct {
 	// Execution requirements
 	Runtime     string `json:"ai.runtime,omitempty"`
 	Accelerator string `json:"ai.accelerator,omitempty"`
+	CUDAMin     string `json:"ai.accelerator.cuda.min,omitempty"`
+	MemoryMin   string `json:"ai.resource.memory.min,omitempty"`
 	
 	// Metadata
 	Description string `json:"ai.skill.description,omitempty"`
@@ -101,6 +105,12 @@ type AIPipelineConfig struct {
 	
 	// Dependencies
 	Dependencies map[string][]string `json:"ai.pipeline.dependencies,omitempty"` // e.g., {"models": ["model:v1"], "skills": ["skill:v1"]}
+	
+	// Runtime requirements
+	Runtime     string `json:"ai.runtime,omitempty"`
+	Accelerator string `json:"ai.accelerator,omitempty"`
+	CUDAMin     string `json:"ai.accelerator.cuda.min,omitempty"`
+	MemoryMin   string `json:"ai.resource.memory.min,omitempty"`
 	
 	// Metadata
 	Description string `json:"ai.pipeline.description,omitempty"`

@@ -1,14 +1,20 @@
 # GitOps Admission & Policy Enforcement
 
-This document describes how to configure GitOps tools (Argo CD, Flux) to use the Trust Profile annotations attached by Model CLI for admission control and policy enforcement (Story #63).
+This document describes how to configure GitOps tools (Argo CD, Flux) to use the **Trust Profile** and **Infrastructure Requirement** annotations attached by Model CLI for admission control and policy enforcement (Stories #63 and #64).
 
 ## Overview
 
-Model CLI ensures that AI artifacts pushed to registries include **Trust Profile annotations** in their OCI manifests. These annotations can be used by GitOps controllers and policy engines to enforce admission policies before deploying artifacts to your cluster.
+Model CLI ensures that AI artifacts pushed to registries include annotations in their OCI manifests that enable GitOps controllers and policy engines to enforce admission policies before deploying artifacts to your cluster.
 
 **Key Principle:** Model CLI **orchestrates and hands off** to external tools. The CLI attaches metadata, but **does not implement admission logic itself**. Policy enforcement is the responsibility of:
 - GitOps controllers (Argo CD, Flux)
 - Policy engines (Sigstore Policy Controller, OPA/Gatekeeper, Kyverno)
+
+## Annotations Reference
+
+Model CLI attaches two categories of annotations to every OCI artifact manifest:
+
+### 1. Trust Profile Annotations (Story #63)
 
 ## Trust Profile Annotations
 
@@ -37,9 +43,94 @@ Model CLI attaches the following annotations to every OCI artifact manifest:
 | `org.cncf.ai.interop.profile.version` | Interoperability profile version | `1.0.0` | ✅ Yes |
 | `org.cncf.ai.artifact.type` | Artifact type | `model`, `skill`, `pipeline` | ✅ Yes |
 
+### 2. Infrastructure Requirement Annotations (Story #64)
+
+These annotations allow policy engines to verify that the artifact's infrastructure requirements match the destination environment.
+
+| Annotation | Description | Example Value | Required |
+|------------|-------------|---------------|----------|
+| `org.cncf.ai.runtime` | Runtime for serving | `vllm`, `kserve`, `tensorrt-llm` | ✅ Yes |
+| `org.cncf.ai.accelerator` | Hardware accelerator requirement | `nvidia-gpu`, `amd-gpu`, `cpu` | ✅ Yes |
+| `org.cncf.ai.accelerator.cuda.min` | Minimum CUDA version | `12.1`, `11.8` | ⚠️ Conditional |
+| `org.cncf.ai.resource.memory.min` | Minimum memory requirement | `24GiB`, `16Gi` | ⚠️ Conditional |
+
 ## Configuration Options
 
-There are several ways to configure GitOps admission using these annotations:
+There are several ways to configure GitOps admission using Trust Profile and Infrastructure Requirement annotations:
+
+### Infrastructure Requirement Matching (Story #64)
+
+The infrastructure requirement annotations allow policy engines to verify that an artifact can run in the destination cluster. For example:
+- A model requiring `nvidia-gpu` should not be deployed to a CPU-only cluster
+- A model requiring `vllm` runtime should only be deployed to clusters with vLLM installed
+- A model requiring CUDA 12.1+ should only be deployed to nodes with compatible GPUs
+
+#### Example: Kyverno Policy for GPU Requirement
+
+```yaml
+# kyverno-gpu-requirement.yaml
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-gpu-capability
+  annotations:
+    policies.kyverno.io/title: Require GPU Capability
+    policies.kyverno.io/category: Workload Management
+    policies.kyverno.io/severity: medium
+spec:
+  validationFailureAction: enforce
+  background: true
+  rules:
+  - name: check-gpu-requirement
+    match:
+      any:
+      - resources:
+          kinds:
+          - Pod
+    context:
+    - name: nodeSelector
+      apiCall:
+        url: "https://kubernetes.default.svc/api/v1"
+        method: GET
+        path: "/nodes"
+    validate:
+      message: "Pod requires GPU but cluster has no GPU nodes"
+      pattern:
+        spec:
+          containers:
+          - image: "*"
+        metadata:
+          annotations:
+            org.cncf.ai.accelerator: "nvidia-gpu"
+    # Note: Full node capability checking requires custom Rego logic
+```
+
+For production use, consider using a mutating webhook that:
+1. Reads the artifact's infrastructure requirement annotations from the manifest
+2. Compares them against cluster capabilities (node labels, custom resources)
+3. Blocks admission if requirements don't match
+
+#### Example: OPA/Gatekeeper Policy for Runtime Matching
+
+```yaml
+# runtime-matching-constraint.yaml
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: RuntimeMatching
+metadata:
+  name: require-runtime-availability
+spec:
+  match:
+    kinds:
+    - apiGroups: [""]
+      kinds: ["Pod"]
+  parameters:
+    requiredRuntime: "vllm"
+  # Rego logic would check if the cluster has the required runtime available
+```
+
+## Configuration Options
+
+There are several ways to configure GitOps admission using Trust Profile and Infrastructure Requirement annotations:
 
 ### Option 1: Sigstore Policy Controller (Recommended for Signature Verification)
 
@@ -466,9 +557,34 @@ flux create kustomization my-model \
 # 1. Monitor git repo for changes
 # 2. Attempt to apply manifests
 # 3. Kubernetes API calls Sigstore Policy Controller webhook
-# 4. Policy Controller verifies Trust Profile
+# 4. Policy Controller verifies Trust Profile + Infrastructure Requirements
 # 5. If valid: manifests applied
 # 6. If invalid: reconciliation fails with error
+```
+
+### 5. Deploy with Infrastructure Matching
+
+For clusters with specific capabilities:
+
+```bash
+# Package with specific infrastructure requirements
+model-cli package --model my-model \
+  --runtime vllm \
+  --accelerator nvidia-gpu \
+  --cuda-min 12.1
+
+model-cli push --artifact my-model:v1.0.0 \
+  --registry oras \
+  --destination ghcr.io/my-org
+
+# The manifest now includes:
+# - org.cncf.ai.runtime: vllm
+# - org.cncf.ai.accelerator: nvidia-gpu
+# - org.cncf.ai.accelerator.cuda.min: 12.1
+
+# Configure policy to check infrastructure matching
+kubectl apply -f kyverno-gpu-requirement.yaml
+kubectl apply -f runtime-matching-constraint.yaml
 ```
 
 ## Troubleshooting
@@ -522,6 +638,49 @@ kubectl logs -n cosign-system -l app=policy-controller
 
 # Ensure your GitOps tool is deploying to the correct namespace
 # and the webhook is configured to intercept requests for that namespace
+```
+
+### Admission Blocked: Incompatible Infrastructure
+
+**Error:**
+```
+Error from server: admission webhook "kyverno.svc" denied the request: \
+resource Pod/default/my-model-pod was blocked due to the following policies
+require-gpu-capability: validation error: Pod requires GPU but cluster has no GPU nodes
+```
+
+**Solution:**
+```bash
+# Option 1: Deploy to a cluster with compatible infrastructure
+# Use a cluster with NVIDIA GPU nodes
+
+# Option 2: Package for CPU-only deployment
+model-cli package --model my-model --accelerator cpu
+model-cli push --artifact my-model:v1.0.0-cpu
+
+# Option 3: Update your policy to allow CPU fallbacks
+# Modify your Kyverno policy to allow CPU when GPU is not available
+```
+
+### Admission Blocked: Missing Runtime
+
+**Error:**
+```
+Error from server: admission webhook "gatekeeper-validating-webhook-configuration" denied the request: \
+constraint RuntimeMatching violated: Pod requires vllm runtime but cluster doesn't have it
+```
+
+**Solution:**
+```bash
+# Option 1: Install the required runtime in your cluster
+# Install vLLM, KServe, etc.
+
+# Option 2: Package for a different runtime
+model-cli package --model my-model --runtime kserve
+model-cli push --artifact my-model:v1.0.0-kserve
+
+# Option 3: Update your GitOps manifests to include runtime installation
+# Use Kustomize or Helm to install runtime dependencies
 ```
 
 ## Best Practices
@@ -582,11 +741,12 @@ spec:
 
 | Tool | Purpose | Configuration | Notes |
 |------|---------|---------------|-------|
-| Sigstore Policy Controller | Signature + annotation verification | `ClusterImagePolicy` | Best for signature-based trust |
-| OPA/Gatekeeper | Custom admission policies | `ConstraintTemplate` + `Constraint` | Most flexible |
+| Sigstore Policy Controller | Signature + Trust Profile verification | `ClusterImagePolicy` | Best for signature-based trust |
+| OPA/Gatekeeper | Custom admission policies | `ConstraintTemplate` + `Constraint` | Most flexible, supports Rego |
 | Kyverno | Simple policy enforcement | `ClusterPolicy` | Easier YAML-based policies |
 | Argo CD | GitOps deployment | Custom hooks | Use with PreSync hooks |
 | Flux | GitOps deployment | `ImagePolicy` + Cosign | Use with ImageRepository |
+| Custom Webhook | Infrastructure matching | Custom admission controller | Best for cluster-specific logic |
 
 **Model CLI's Role:**
 - ✅ Attach Trust Profile annotations to OCI manifests

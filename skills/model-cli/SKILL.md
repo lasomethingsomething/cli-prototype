@@ -308,6 +308,22 @@ Model CLI implements a complete Enterprise OCI Registry Integration workflow:
 - Support dry-run validation (model-cli validate --manifest my-manifest.json)
 - Use JSON Schema for contract validation
 
+#### Phase 3: Kubernetes Production Cluster (The Outer Loop)
+
+**Story #63: Pass Trust Profile to GitOps**
+- Attach Trust Profile annotations to OCI manifests for GitOps admission
+- Pass artifact reference with annotations to GitOps tools (Argo CD, Flux)
+- Policy enforcement delegated to external tools (Sigstore Policy Controller, OPA/Gatekeeper, Kyverno)
+- Annotations: security.signing.framework, security.sbom.format, security.provenance.type, interop.profile.version, artifact.type
+
+**Story #64: Pass Infrastructure Requirements to GitOps**
+- Add infrastructure requirement annotations to OCI manifests during push
+- Annotations: runtime, accelerator, accelerator.cuda.min, resource.memory.min
+- Policy engines verify artifact requirements match destination environment
+- Supports GPU/CPU requirements, CUDA version matching, memory requirements
+- Allows deployment to air-gapped or hybrid-cloud environments with safety policies
+
+
 #### Metadata Contract Validation
 ```bash
 # Dry-run validation before push
