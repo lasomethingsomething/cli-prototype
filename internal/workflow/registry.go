@@ -25,6 +25,9 @@ type RegistryProvider interface {
 	PushReferrer(artifact, registry, referrerType string, data []byte, annotations map[string]string) error
 	// GetReferrers fetches all referrers of a given type for an artifact from the registry
 	GetReferrers(artifact, registry, referrerType string) ([][]byte, error)
+	// Search queries the registry for artifacts matching the given filters
+	// Returns manifest bytes for matching artifacts, which can be parsed for metadata
+	Search(registry, filters string) ([][]byte, error)
 }
 
 // annotationArgs converts an annotation map into repeated "--annotation
@@ -151,6 +154,39 @@ func (o *ORASProvider) GetReferrers(artifact, registry, referrerType string) ([]
 	return [][]byte{output}, nil
 }
 
+func (o *ORASProvider) Search(registry, filters string) ([][]byte, error) {
+	// ORAS doesn't have a built-in search command for OCI registries
+	// We delegate to external registry tools like the OCI Distribution Spec
+	// or use oras discover/manifest commands as available
+	// For now, we use oras manifest fetch as a baseline, but in production
+	// this would integrate with registry APIs that support filtering
+	
+	// Build the search command using oras discover if available
+	// oras discover can list artifacts in a repository
+	args := []string{"discover", "--artifact-type", "application/vnd.cncf.ai.model"}
+	if filters != "" {
+		// ORAS doesn't directly support filter strings in discover
+		// but we can fetch all and filter client-side
+		// For registries that support it, we'd use their native search API
+		args = append(args, "--output", "json")
+	}
+	
+	cmd := exec.Command("oras", args...)
+	cmd.Args = append(cmd.Args, registry)
+	
+	output, err := cmd.Output()
+	if err != nil {
+		// Try a simpler approach - fetch manifests from known references
+		// This is a fallback for registries without discover support
+		// In production, this would be replaced with proper registry API calls
+		return nil, fmt.Errorf("registry search not fully supported by ORAS CLI. Use a registry with search API (e.g., ghcr.io, docker.io) or use client-side filtering")
+	}
+	
+	// Parse and return the results
+	// For now, return the raw output - parsing happens in the workflow layer
+	return [][]byte{output}, nil
+}
+
 // --- ModelPack Provider ---
 
 type ModelPackProvider struct{}
@@ -203,6 +239,14 @@ func (m *ModelPackProvider) GetReferrers(artifact, registry, referrerType string
 	// In a real implementation, this would fetch referrers from the registry
 	fmt.Printf("Fetched referrers for %s from %s using ModelPack (stub)\n", artifact, registry)
 	return nil, nil
+}
+
+func (m *ModelPackProvider) Search(registry, filters string) ([][]byte, error) {
+	// ModelPack stub implementation for search
+	// In a real implementation, this would integrate with ModelPack's registry query capabilities
+	// or delegate to the underlying registry's search API
+	// For now, we return a helpful message about using the registry's native search
+	return nil, fmt.Errorf("ModelPack search: delegate to registry's native search API or use client-side filtering with 'modelpack' CLI")
 }
 
 // GetRegistryProvider returns the appropriate Registry provider by name

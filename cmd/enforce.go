@@ -291,7 +291,7 @@ func runWebhookServer(port int) error {
 	fmt.Printf("Starting Registry Admission Proxy on port %d...\n", port)
 	fmt.Println("This server validates OCI manifests for the Standardized Metadata Contract")
 	fmt.Println("Send POST requests to /validate with an OCIManifestAdmissionRequest")
-	fmt.Println("\nPress Ctrl+C to stop the server\n")
+	fmt.Println("\nPress Ctrl+C to stop the server")
 	
 	return proxy.Run()
 }
