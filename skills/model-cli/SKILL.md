@@ -169,9 +169,9 @@ This CLI enables the vision from your user journey matrix:
 ```
 Phase 1: Author & Package
   ↓
-Phase 2: Harden & Sign (SBOM + MOF + Signing)
+Phase 2: Enterprise OCI Registry Integration (SBOM + MOF + Signing)
   ↓
-Phase 3: Publish & Discovery (OCI Registry)
+Phase 3: Kubernetes Production Cluster (The Outer Loop)
   ↓
 Phase 4: GitOps Promotion (Argo/Flux)
   ↓

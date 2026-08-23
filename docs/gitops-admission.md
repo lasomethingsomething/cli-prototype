@@ -1,6 +1,6 @@
 # GitOps Admission & Policy Enforcement
 
-This document describes how to configure GitOps tools (Argo CD, Flux) to use the **Trust Profile** and **Infrastructure Requirement** annotations attached by Model CLI for admission control and policy enforcement (Stories #63, #64, and #65).
+This document describes how to configure GitOps tools (Argo CD, Flux) to use the **Trust Profile** and **Infrastructure Requirement** annotations attached by Model CLI for admission control and policy enforcement (Stories #63-66).
 
 ## Overview
 
@@ -13,7 +13,7 @@ Model CLI ensures that AI artifacts pushed to registries include annotations in 
 ### How It Works
 
 1. **Package & Push (Phase 2):** Model CLI attaches Trust Profile and Infrastructure Requirement annotations to OCI manifests (Stories #63, #64)
-2. **Pre-Flight Validation (Phase 3):** Model CLI provides `validate-gitops` command to check annotations before deployment (Story #65)
+2. **Pre-Flight Validation (Phase 3):** Model CLI provides `validate-gitops` command to check annotations and environment policies before deployment (Stories #65, #66)
 3. **GitOps Deployment:** Argo CD or Flux deploys artifacts, triggering admission webhooks
 4. **Policy Enforcement:** External policy engines validate annotations and enforce admission policies
 
