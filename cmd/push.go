@@ -459,6 +459,74 @@ func createUnifiedOCIManifest(artifactType workflow.ArtifactType, artifactName, 
 	manifest.Annotations[workflow.AnnotationMOFVersion] = "1.0"
 	manifest.Annotations[workflow.AnnotationMOFComponents] = "weights,training-data,code"
 
+	// Add Infrastructure Requirement annotations for GitOps admission (Story #64)
+	// These annotations allow policy engines (OPA/Gatekeeper, Kyverno) to verify
+	// that the artifact's requirements match the destination environment
+	// Values are extracted from the AI config
+	if manifest.AIConfig != nil {
+		switch config := manifest.AIConfig.(type) {
+		case workflow.AIModelConfig:
+			if config.Runtime != "" {
+				manifest.Annotations[workflow.AnnotationRuntime] = config.Runtime
+			}
+			if config.Accelerator != "" {
+				manifest.Annotations[workflow.AnnotationAccelerator] = config.Accelerator
+			}
+			if config.CUDAMin != "" {
+				manifest.Annotations[workflow.AnnotationCUDAVersionMin] = config.CUDAMin
+			}
+			if config.MemoryMin != "" {
+				manifest.Annotations[workflow.AnnotationMemoryMin] = config.MemoryMin
+			}
+		case workflow.AISkillConfig:
+			if config.Runtime != "" {
+				manifest.Annotations[workflow.AnnotationRuntime] = config.Runtime
+			}
+			if config.Accelerator != "" {
+				manifest.Annotations[workflow.AnnotationAccelerator] = config.Accelerator
+			}
+			if config.CUDAMin != "" {
+				manifest.Annotations[workflow.AnnotationCUDAVersionMin] = config.CUDAMin
+			}
+			if config.MemoryMin != "" {
+				manifest.Annotations[workflow.AnnotationMemoryMin] = config.MemoryMin
+			}
+		case workflow.AIPipelineConfig:
+			// Pipeline runtime requirements - set defaults that can be overridden
+			// In production, these would come from pipeline component analysis
+			if config.Runtime != "" {
+				manifest.Annotations[workflow.AnnotationRuntime] = config.Runtime
+			} else {
+				manifest.Annotations[workflow.AnnotationRuntime] = "vllm"
+			}
+			if config.Accelerator != "" {
+				manifest.Annotations[workflow.AnnotationAccelerator] = config.Accelerator
+			} else {
+				manifest.Annotations[workflow.AnnotationAccelerator] = "nvidia-gpu"
+			}
+			if config.CUDAMin != "" {
+				manifest.Annotations[workflow.AnnotationCUDAVersionMin] = config.CUDAMin
+			}
+			if config.MemoryMin != "" {
+				manifest.Annotations[workflow.AnnotationMemoryMin] = config.MemoryMin
+			}
+		}
+	}
+	
+	// Ensure at least default values for infrastructure requirements
+	if _, ok := manifest.Annotations[workflow.AnnotationRuntime]; !ok {
+		manifest.Annotations[workflow.AnnotationRuntime] = "vllm"
+	}
+	if _, ok := manifest.Annotations[workflow.AnnotationAccelerator]; !ok {
+		manifest.Annotations[workflow.AnnotationAccelerator] = "nvidia-gpu"
+	}
+	if _, ok := manifest.Annotations[workflow.AnnotationCUDAVersionMin]; !ok {
+		manifest.Annotations[workflow.AnnotationCUDAVersionMin] = "12.1"
+	}
+	if _, ok := manifest.Annotations[workflow.AnnotationMemoryMin]; !ok {
+		manifest.Annotations[workflow.AnnotationMemoryMin] = "24GiB"
+	}
+
 	return manifest, nil
 }
 
