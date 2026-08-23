@@ -5,7 +5,7 @@ description: Use Model CLI to package, sign, verify, and deploy ML models with a
 
 # Model CLI
 
-Model CLI is your **tour guide** through the secure ML model deployment journey. It provides a clean, wizard-style TUI with **Shopware CLI-style context panels** that makes complex workflows simple, transparent, and secure.
+Model CLI is your **tour guide** through the secure ML model deployment journey. It provides a clean, wizard-style TUI with context panels that makes complex workflows simple, transparent, and secure.
 
 Use this skill when:
 - Packaging ML models as OCI artifacts
@@ -247,7 +247,7 @@ All tools are pluggable via interfaces:
 
 ### Interactive TUI (huh + lipgloss + bubbletea)
 - Clean, color-coded interface
-- Step-by-step guidance with **context side panels** (Shopware CLI style)
+- Step-by-step guidance with context side panels
 - Clear success/warning indicators
 - Minimal clutter - key info only
 - Progress indicators

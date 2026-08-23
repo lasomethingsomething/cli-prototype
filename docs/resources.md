@@ -19,5 +19,3 @@
 - [spf13/cobra](https://github.com/spf13/cobra) - CLI framework
 - [spf13/viper](https://github.com/spf13/viper) - Configuration
 
-#### Inspiration
-- [Shopware CLI](https://github.com/shopware/shopware-cli) - TUI design inspiration

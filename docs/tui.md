@@ -7,7 +7,7 @@ Model CLI provides a clean, color-coded TUI built with [huh](https://github.com/
 - **Clean and uncluttered** - Only show key information
 - **Step-by-step guidance** - Clear workflow progression
 - **Color-coded** - Success (green), warnings (yellow), info (blue)
-- **Context panels** - Shopware CLI-style side panels showing important info
+- **Context panels** - side panels showing important info
 - **Consistent** - Same look and feel across all commands
 
 ## Styling
@@ -23,7 +23,7 @@ Model CLI provides a clean, color-coded TUI built with [huh](https://github.com/
 
 ## Context Side Panels
 
-The Model CLI TUI features **context panels** inspired by Shopware CLI. These panels appear at key points in the workflow and display important contextual information in an organized, easy-to-read format.
+The Model CLI TUI features **context panels**. These panels appear at key points in the workflow and display important contextual information in an organized, easy-to-read format.
 
 ### Panel Layout
 
