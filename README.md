@@ -108,6 +108,14 @@ Follow the prompts. The wizard will:
 # Package with node requirements (Story #68)
 ./model-cli package --gpu-type nvidia-h100 --vram-min 80GiB --gpu-topology 8xH100
 
+# Validate runtime availability (Story #69)
+./model-cli validate-runtime --artifact my-model:v1
+./model-cli validate-runtime --artifact my-model:v1 --namespace production
+./model-cli validate-runtime --artifact my-model:v1 --json-output
+
+# Package with runtime requirements (Story #69)
+./model-cli package --runtime-type vllm --layer-dedup true --dlc-endpoint https://dlc.example.com --skill-refs skill:sha256:abc
+
 # Cross-reference assets in registry
 ./model-cli search --destination ghcr.io/my-org --type model
 ./model-cli search --uses-model model:sha256:abc123
