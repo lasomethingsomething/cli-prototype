@@ -6,7 +6,7 @@ Model CLI makes it easy to package, sign, verify, and deploy ML models with a cl
 
 ## Quick Test Drive (5 minutes)
 
-You can test the entire CLI with just a text file - no real model, registry, or GPU required:
+Try the CLI immediately with just a text file - no real model, registry, or GPU required:
 
 ```bash
 # 1. Create a dummy model
@@ -33,10 +33,6 @@ After answering, you'll see:
 - SBOM generation attempted (warning if syft not installed)
 - MOF classification applied
 - Provenance attestation generated
-
-**See [Trial Run Guide](docs/trial-run.md) for a complete walkthrough with explanations.**
-
-**New users:** See [Quick Start](docs/quick-start.md) for detailed getting started instructions.
 
 ---
 
@@ -173,7 +169,6 @@ The **Standardized Metadata Contract** ensures all models have required annotati
 
 ## Documentation
 
-- [Trial Run Guide](docs/trial-run.md) - 5-minute test drive with explanations
 - [Quick Start](docs/quick-start.md) - Detailed getting started instructions
 - [Architecture](docs/architecture.md) - Understand how it works
 - [Enterprise OCI Registry](docs/enterprise-oci-registry.md) - Phase 2: Registry integration
