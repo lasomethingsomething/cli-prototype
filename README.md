@@ -1,8 +1,42 @@
 # Model CLI
 
-Your tour guide through the secure ML model deployment journey.
+**Your tour guide through the secure ML model deployment journey.**
 
-Model CLI makes it easy to package, sign, verify, and deploy ML models with a clean, guided TUI (Terminal User Interface).
+Model CLI makes it easy to package, sign, verify, and deploy ML models with a clean, guided TUI (Terminal User Interface). It follows a simple principle: **orchestrate the workflow, don't duplicate the tools.**
+
+## Quick Test Drive (5 minutes)
+
+You can test the entire CLI with just a text file - no real model, registry, or GPU required:
+
+```bash
+# 1. Create a dummy model
+mkdir -p ~/test-model
+echo "test" > ~/test-model/model.txt
+
+# 2. Build the CLI
+cd cli-prototype
+go build -o model-cli .
+
+# 3. Package it
+./model-cli package \\
+  --model test-model \\
+  --model-path ~/test-model \\
+  --artifact test:v1 \\
+  --registry oras \\
+  --registry-url ""
+```
+
+The CLI will ask you a few questions (runtime, accelerator, etc.). **These are just metadata - you don't need the actual hardware or software installed.**
+
+After answering, you'll see:
+- OCI manifest created with annotations
+- SBOM generation attempted (warning if syft not installed)
+- MOF classification applied
+- Provenance attestation generated
+
+**See [Trial Run Guide](docs/trial-run.md) for a complete walkthrough with explanations.**
+
+---
 
 ## Get Started
 
@@ -25,25 +59,45 @@ go build -o model-cli .
 
 That's it! The wizard will guide you through every step.
 
-## What is Model CLI?
+---
 
-Model CLI is a tour guide CLI that helps you:
+## What Makes Model CLI Different
 
-- Package ML models as OCI artifacts
-- Package agentic skills using the agentskills.io standard format
-- Generate SBOMs for supply chain transparency
-- Classify models with MOF (Model Openness Framework)
-- Run local compliance checks before push
-- Sign artifacts with Sigstore or Notary v2
-- Verify signatures before deployment
-- Validate pushes against standardized metadata contract
-- Enforce metadata contract at manifest level
-- Cross-reference AI assets in registries
-- Map complex relationships between assets (model → skill → pipeline)
-- Deploy to Kubernetes with Argo or Flux
-- Serve models with vLLM or KServe
+### Orchestrate, Don't Duplicate
 
-All through a clean, colorful, step-by-step TUI that shows you exactly what's happening.
+Model CLI **doesn't implement** the functionality of other tools. Instead, it:
+
+1. **Collects** your preferences and model information
+2. **Attaches** standardized metadata (annotations) to OCI manifests
+3. **Validates** that required metadata is present
+4. **Hands off** to the right tool for each job
+5. **Provides** clear error messages when tools are missing
+
+### The Tools It Integrates With
+
+| What You Want To Do | What Model CLI Does | What External Tool Does |
+|---------------------|--------------------|------------------------|
+| Package a model | Collects model info, creates manifest, injects annotations | ORAS/ModelPack creates OCI artifact |
+| Generate SBOM | Sets up SBOM config, attaches to manifest | Syft generates the SBOM |
+| Sign artifact | Sets up signing config | Cosign/Notation creates signature |
+| Verify signature | Checks manifest | Cosign/Notation verifies |
+| Deploy to K8s | Collects GitOps preferences, validates | Argo CD/Flux deploys |
+| Validate nodes | Collects requirements, checks cluster | kubectl queries nodes |
+
+### You Only Need Go
+
+The CLI itself requires only Go. All other tools are **optional** and checked at runtime:
+
+```bash
+# Build the CLI (only Go required)
+go build -o model-cli .
+
+# Run any command - CLI tells you if other tools are needed
+./model-cli package --model my-model --model-path ./my-model
+# If ORAS isn't installed: "oras not installed. Install with: brew install oras"
+```
+
+---
 
 ## Quick Examples
 
@@ -59,6 +113,8 @@ Follow the prompts. The wizard will:
 3. Package your model as an OCI artifact
 4. Optionally sign and verify
 5. Optionally deploy to Kubernetes
+
+**All metadata is attached automatically. No manual JSON editing.**
 
 ### Skip Steps You Don't Need
 
@@ -84,66 +140,51 @@ Follow the prompts. The wizard will:
 
 # Validate metadata contract
 ./model-cli validate --manifest my-manifest.json
-./model-cli validate --manifest my-manifest.json --json-schema --strict
 
-# Enforce metadata contract at registry level
-./model-cli enforce --manifest my-manifest.json
-./model-cli enforce --webhook --port 8443
-
-# Validate for GitOps deployment (Story #65, #66)
+# Validate for GitOps deployment
 ./model-cli validate-gitops --artifact my-model:v1
-./model-cli validate-gitops --artifact my-model:v1 --env air-gapped
-./model-cli validate-gitops --artifact my-model:v1 --env hybrid-cloud --region us-east-1
 
-# Admission evaluation (Story #67)
+# Evaluate artifact for admission
 ./model-cli admit --artifact my-model:v1
-./model-cli admit --artifact my-model:v1 --env production
-./model-cli admit --artifact my-model:v1 --json-output
 
-# Validate node hardware requirements (Story #68)
+# Validate node hardware requirements
 ./model-cli validate-nodes --artifact my-model:v1
-./model-cli validate-nodes --artifact my-model:v1 --namespace production
-./model-cli validate-nodes --artifact my-model:v1 --json-output
 
-# Package with node requirements (Story #68)
+# Validate runtime availability
+./model-cli validate-runtime --artifact my-model:v1
+
+# Package with node requirements
 ./model-cli package --gpu-type nvidia-h100 --vram-min 80GiB --gpu-topology 8xH100
 
-# Validate runtime availability (Story #69)
-./model-cli validate-runtime --artifact my-model:v1
-./model-cli validate-runtime --artifact my-model:v1 --namespace production
-./model-cli validate-runtime --artifact my-model:v1 --json-output
-
-# Package with runtime requirements (Story #69)
-./model-cli package --runtime-type vllm --layer-dedup true --dlc-endpoint https://dlc.example.com --skill-refs skill:sha256:abc
-
-# Cross-reference assets in registry
-./model-cli search --destination ghcr.io/my-org --type model
-./model-cli search --uses-model model:sha256:abc123
-
-# Map relationships between assets
-./model-cli map --model my-model --skill my-skill --pipeline my-pipeline
-
-# Deploy only
-./model-cli deploy --gitops argo --registry oras --model my-model
+# Package with runtime requirements
+./model-cli package --runtime-type vllm --layer-dedup true
 ```
 
-### Agentic Skills
+---
 
-Package agentic skills using the agentskills.io standard format:
+## What is Model CLI?
 
-```bash
-# Package a skill directory
-./model-cli package --model my-skill --model-path ./skills/my-skill --skill
+Model CLI is a tour guide CLI that helps you:
 
-# Or use the short form
-./model-cli package --skill --model-path ./my-skill --artifact my-org/my-skill:v1
-```
+- Package ML models as OCI artifacts with standardized annotations
+- Package agentic skills using the agentskills.io standard format
+- Generate SBOMs for supply chain transparency
+- Classify models with MOF (Model Openness Framework)
+- Run local compliance checks before push
+- Sign artifacts with Sigstore or Notary v2
+- Verify signatures before deployment
+- Validate pushes against standardized metadata contract
+- Enforce metadata contract at manifest level
+- Cross-reference AI assets in registries
+- Map complex relationships between assets (model → skill → pipeline)
+- Validate cluster nodes match hardware requirements
+- Validate runtime operators are available
+- Deploy to Kubernetes with Argo or Flux
+- Serve models with vLLM or KServe
 
-Agentic skills are packaged as OCI artifacts with the `org.cncf.ai.artifact.type=skill` annotation,
-following the agentskills.io standard format. This enables:
-- Skill discovery and reuse across projects
-- Composable AI workflows
-- Standardized skill packaging
+All through a clean, colorful, step-by-step TUI that shows you exactly what's happening at each step.
+
+---
 
 ## Features
 
@@ -151,7 +192,8 @@ following the agentskills.io standard format. This enables:
 - Interactive TUI with huh and lipgloss
 - Clean, color-coded output
 - Step-by-step guidance through complex workflows
-- Clear success and warning indicators
+- Clear success, warning, and error indicators
+- Context panel with progress, config, model info, and logs
 
 ### Pluggable Architecture
 All tools are pluggable via interfaces:
@@ -175,54 +217,102 @@ Every interactive command also supports non-interactive mode via flags for CI/CD
 
 ```bash
 # Same as interactive, but via flags
-./model-cli package \
-  --model phi-4-mini \
-  --model-path ./models \
-  --artifact my-model:v1 \
+./model-cli package \\
+  --model phi-4-mini \\
+  --model-path ./models \\
+  --artifact my-model:v1 \\
   --registry oras
 ```
 
+---
+
 ## Tool Requirements
 
-Model CLI itself only needs Go. The tools it integrates with are optional and checked at runtime:
+**Model CLI itself only needs Go.** The tools it integrates with are optional and checked at runtime with clear installation instructions:
 
 | Tool | Install | Purpose |
 |------|---------|---------|
-| oras | `brew install oras` | OCI registry |
-| argocd | `brew install argoproj/tap/argocd` | GitOps (UI) |
-| flux | `brew install fluxcd/tap/flux` | GitOps (agents) |
-| cosign | `brew install sigstore/tap/cosign` | Signing |
-| notation | `brew install notation` | Signing |
-| syft | `brew install anchore/syft/syft` | SBOM generation (SPDX, CycloneDX) |
-| trivy | `brew install aquasecurity/trivy/trivy` | SBOM generation (SPDX, CycloneDX) |
-| cdxgen | `npm install -g @cyclonedx/cdxgen` | SBOM generation (CycloneDX) |
+| oras | `brew install oras` | OCI registry operations |
+| argocd | `brew install argoproj/tap/argocd` | GitOps (UI-based) |
+| flux | `brew install fluxcd/tap/flux` | GitOps (agent-based) |
+| cosign | `brew install sigstore/tap/cosign` | Signing (Sigstore) |
+| notation | `brew install notation` | Signing (Notary v2) |
+| syft | `brew install anchore/syft/syft` | SBOM generation |
 
-If a tool isn't installed, Model CLI will tell you exactly how to install it.
+**If a tool isn't installed, Model CLI will tell you exactly how to install it.**
 
-## MOF Metadata License
-
-When generating MOF/MOT-compliant metadata config files (`mof.json`), the default license is **CC-BY-4.0** as recommended by the MOF specification for metadata and documentation. You can override this via:
-
-- `--license` flag on the `model-cli harden` command
-- Configuration file setting
-
-Example:
-```bash
-# Use default CC-BY-4.0
-./model-cli harden
-
-# Override with custom license
-./model-cli harden --license MIT
+Example error message:
 ```
+oras not installed. Install with: brew install oras
+```
+
+---
+
+## Understanding the "Errors"
+
+You may see warning messages like:
+
+```
+Warning: SBOM generation failed: syft not installed. Install with: brew install anchore/syft/syft
+```
+
+**This is not a failure - it's a feature!** The CLI is:
+
+1. Checking if required tools are available
+2. Telling you exactly which tool is missing
+3. Giving you the exact command to install it
+4. Continuing with the workflow anyway
+
+This is the "orchestrate and hand off" design. The CLI doesn't crash when tools are missing - it guides you to install them.
+
+---
+
+## Key Concepts
+
+### OCI Artifacts
+
+Model CLI packages models as **OCI artifacts** - the same standard format used by Docker, Kubernetes, and container registries. This means:
+
+- Your models can be stored in any OCI-compliant registry (Docker Hub, GHCR, AWS ECR, etc.)
+- You can use standard OCI tools to push, pull, and manage models
+- GitOps tools can discover and deploy models without special integration
+
+### Annotations
+
+Annotations are **metadata attached to OCI manifests**. Model CLI automatically injects:
+
+- **Profile annotations**: Version, artifact type
+- **Security annotations**: Signing framework, SBOM format, provenance type
+- **MOF annotations**: Openness class, version, components
+- **Runtime annotations**: Serving runtime, accelerator, memory
+- **Infrastructure annotations**: GPU type, vRAM, topology
+
+These annotations enable:
+- Policy engines to validate models without downloading them
+- GitOps tools to route models to appropriate clusters
+- Registry tools to index and search models
+- Deployment tools to match models to hardware
+
+### Metadata Contract
+
+The **Standardized Metadata Contract** ensures all models have the required annotations for:
+
+- **Security**: Signature verification, SBOM presence
+- **Compliance**: MOF classification, license info
+- **Deployment**: Runtime requirements, hardware needs
+- **Discovery**: Model type, relationships, dependencies
+
+---
 
 ## Documentation
 
+- [Trial Run Guide](docs/trial-run.md) - 5-minute test drive with explanations
 - [Installation](docs/installation.md) - Get Model CLI installed
 - [Quick Start](docs/quick-start.md) - Try the wizard
 - [Architecture](docs/architecture.md) - Understand how it works
 - [Enterprise OCI Registry](docs/enterprise-oci-registry.md) - Phase 2: Registry integration
 - [GitOps Admission & Policy Enforcement](docs/gitops-admission.md) - Phase 3: Kubernetes production cluster
-- [TUI](docs/tui.md) - Learn about the terminal interface
+- [TUI Guide](docs/tui.md) - Learn about the terminal interface
 - [Resources](docs/resources.md) - Standards and tools
 
 ## Skills
