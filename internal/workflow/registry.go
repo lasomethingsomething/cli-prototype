@@ -2,6 +2,7 @@ package workflow
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"sort"
 )
@@ -16,6 +17,11 @@ type RegistryProvider interface {
 	// be nil or empty when no manifest-level annotations should be set.
 	Push(artifact, registry string, annotations map[string]string) error
 	Pull(artifact, registry string) error
+	// PushReferrer pushes a referrer (like provenance attestation) to the registry
+	// The referrer is associated with the artifact and can be fetched later
+	PushReferrer(artifact, registry, referrerType string, data []byte, annotations map[string]string) error
+	// GetReferrers fetches all referrers of a given type for an artifact from the registry
+	GetReferrers(artifact, registry, referrerType string) ([][]byte, error)
 }
 
 // annotationArgs converts an annotation map into repeated "--annotation
@@ -74,6 +80,57 @@ func (o *ORASProvider) Pull(artifact, registry string) error {
 	return nil
 }
 
+func (o *ORASProvider) PushReferrer(artifact, registry, referrerType string, data []byte, annotations map[string]string) error {
+	// ORAS supports pushing referrers (manifests that reference other manifests)
+	// For provenance attestations, we use the in-toto attestation type
+	fullArtifact := registry + "/" + artifact
+	
+	// Create a temporary file for the referrer
+	tmpFile, err := os.CreateTemp("", "referrer-*.json")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file for referrer: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	
+	if _, err := tmpFile.Write(data); err != nil {
+		return fmt.Errorf("failed to write referrer data: %v", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("failed to close temp file: %v", err)
+	}
+	
+	// Build ORAS command to push the referrer
+	args := []string{"push", fullArtifact, tmpFile.Name()}
+	args = append(args, "--artifact-type", referrerType)
+	args = append(args, annotationArgs(annotations)...)
+	
+	cmd := exec.Command("oras", args...)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to push referrer with ORAS: %v", err)
+	}
+	
+	fmt.Printf("Pushed %s referrer for %s to %s\n", referrerType, artifact, registry)
+	return nil
+}
+
+func (o *ORASProvider) GetReferrers(artifact, registry, referrerType string) ([][]byte, error) {
+	fullArtifact := registry + "/" + artifact
+	
+	// ORAS can fetch referrers by artifact type
+	cmd := exec.Command("oras", "manifest", "fetch", fullArtifact, "--artifact-type", referrerType)
+	output, err := cmd.Output()
+	if err != nil {
+		// It's okay if no referrers exist
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to fetch referrers with ORAS: %v", err)
+	}
+	
+	// Return the referrer data
+	return [][]byte{output}, nil
+}
+
 // --- ModelPack Provider ---
 
 type ModelPackProvider struct{}
@@ -102,6 +159,21 @@ func (m *ModelPackProvider) Push(artifact, registry string, annotations map[stri
 func (m *ModelPackProvider) Pull(artifact, registry string) error {
 	fmt.Printf("Pulled artifact %s from %s using ModelPack\n", artifact, registry)
 	return nil
+}
+
+func (m *ModelPackProvider) PushReferrer(artifact, registry, referrerType string, data []byte, annotations map[string]string) error {
+	// ModelPack supports referrers similar to ORAS
+	// For now, ModelPack implementation is a stub
+	// In a real implementation, this would use modelpack CLI to push referrers
+	fmt.Printf("Pushed %s referrer for %s to %s using ModelPack (stub)\n", referrerType, artifact, registry)
+	return nil
+}
+
+func (m *ModelPackProvider) GetReferrers(artifact, registry, referrerType string) ([][]byte, error) {
+	// Stub implementation for ModelPack
+	// In a real implementation, this would fetch referrers from the registry
+	fmt.Printf("Fetched referrers for %s from %s using ModelPack (stub)\n", artifact, registry)
+	return nil, nil
 }
 
 // GetRegistryProvider returns the appropriate Registry provider by name
