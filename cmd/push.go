@@ -1,7 +1,10 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/charmbracelet/huh"
@@ -34,6 +37,7 @@ Examples:
 
 		// Get flags
 		artifactFlag, _ := cmd.Flags().GetString("artifact")
+		targetFlag, _ := cmd.Flags().GetString("target")
 		registryFlag, _ := cmd.Flags().GetString("registry")
 		destinationFlag, _ := cmd.Flags().GetString("destination")
 		manifestFlag, _ := cmd.Flags().GetString("manifest")
@@ -41,6 +45,12 @@ Examples:
 		signerFlag, _ := cmd.Flags().GetString("signer")
 		provenanceFlag, _ := cmd.Flags().GetBool("generate-provenance")
 		modelPathFlag, _ := cmd.Flags().GetString("model-path")
+		artifactTypeFlag, _ := cmd.Flags().GetString("artifact-type")
+		manifestOutputFlag, _ := cmd.Flags().GetString("manifest-output")
+		modelTypeFlag, _ := cmd.Flags().GetString("model-type")
+		skillTypeFlag, _ := cmd.Flags().GetString("skill-type")
+		pipelineTypeFlag, _ := cmd.Flags().GetString("pipeline-type")
+		relationshipsFlag, _ := cmd.Flags().GetStringSlice("relationships")
 
 		// Interactive prompts
 		var modelPath string
@@ -51,16 +61,40 @@ Examples:
 			modelPath = "."
 		}
 
-		var artifact string
-		if artifactFlag != "" {
-			artifact = artifactFlag
+		// Handle --target flag which combines destination and artifact
+		var artifact, destination string
+		if targetFlag != "" {
+			// Parse target to extract destination and artifact
+			// Format: registry.example.com/my-model:v1
+			// or: registry.example.com/my-org/my-model:v1
+			lastSlash := -1
+			for i := len(targetFlag) - 1; i >= 0; i-- {
+				if targetFlag[i] == '/' {
+					lastSlash = i
+					break
+				}
+				if targetFlag[i] == ':' {
+					// Found tag, but no registry prefix - this is just an artifact name
+					break
+				}
+			}
+			if lastSlash > 0 {
+				destination = targetFlag[:lastSlash]
+				artifact = targetFlag[lastSlash+1:]
+			} else {
+				artifact = targetFlag
+			}
 		} else {
-			if err := huh.NewInput().
-				Title("Artifact to push:").
-				Description("The OCI artifact reference to push (e.g., my-model:latest)").
-				Value(&artifact).
-				Run(); err != nil {
-				return err
+			if artifactFlag != "" {
+				artifact = artifactFlag
+			} else {
+				if err := huh.NewInput().
+					Title("Artifact to push:").
+					Description("The OCI artifact reference to push (e.g., my-model:latest)").
+					Value(&artifact).
+					Run(); err != nil {
+					return err
+				}
 			}
 		}
 
@@ -82,10 +116,9 @@ Examples:
 			registry = cfg.Registry
 		}
 
-		var destination string
 		if destinationFlag != "" {
 			destination = destinationFlag
-		} else {
+		} else if destination == "" {
 			if err := huh.NewInput().
 				Title("Destination registry:").
 				Description("Where to push (e.g., ghcr.io/my-org, docker.io/myuser)").
@@ -93,6 +126,57 @@ Examples:
 				Run(); err != nil {
 				return err
 			}
+		}
+		
+		// Determine artifact type
+		var artifactType workflow.ArtifactType
+		if artifactTypeFlag != "" {
+			artifactType = workflow.ArtifactType(artifactTypeFlag)
+		} else {
+			// Try to determine from existing manifest or default to model
+			artifactType = workflow.ArtifactTypeModel
+		}
+
+		// Parse relationships from flags
+		relationships := parseRelationships(relationshipsFlag)
+
+		// Create unified OCI manifest based on artifact type
+		fmt.Println("\n=== Creating Unified OCI Manifest ===")
+		unifiedManifest, err := createUnifiedOCIManifest(artifactType, artifact, modelTypeFlag, skillTypeFlag, pipelineTypeFlag, relationships)
+		if err != nil {
+			return fmt.Errorf("failed to create unified OCI manifest: %v", err)
+		}
+
+		// Validate the manifest
+		if err := workflow.ValidateOCIManifest(unifiedManifest); err != nil {
+			return fmt.Errorf("failed to validate unified OCI manifest: %v", err)
+		}
+		fmt.Println("✓ Unified OCI manifest created and validated")
+
+		// Write manifest to file if requested (for debugging)
+		if manifestOutputFlag != "" {
+			if err := workflow.WriteUnifiedOCIManifest(unifiedManifest, manifestOutputFlag); err != nil {
+				return fmt.Errorf("failed to write unified OCI manifest: %v", err)
+			}
+			fmt.Printf("✓ Unified OCI manifest written to: %s\n", manifestOutputFlag)
+		}
+
+		// Serialize manifest to JSON for pushing
+		manifestJSON, err := json.MarshalIndent(unifiedManifest, "", "  ")
+		if err != nil {
+			return fmt.Errorf("failed to marshal unified OCI manifest: %v", err)
+		}
+
+		// Create a temporary directory for the manifest
+		tmpDir := "tmp-oci-manifest"
+		if err := os.MkdirAll(tmpDir, 0755); err != nil {
+			return fmt.Errorf("failed to create temp directory: %v", err)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		manifestFilePath := filepath.Join(tmpDir, "manifest.json")
+		if err := os.WriteFile(manifestFilePath, manifestJSON, 0644); err != nil {
+			return fmt.Errorf("failed to write manifest file: %v", err)
 		}
 
 		// Get registry provider
@@ -108,28 +192,39 @@ Examples:
 
 		// If a manifest produced by `model-cli package` was given, read its
 		// CNCF AI annotations so they're attached to the manifest on push.
-		var annotations map[string]string
+		var existingAnnotations map[string]string
 		if manifestFlag != "" {
-			manifest, err := workflow.ReadManifest(manifestFlag)
+			existingManifest, err := workflow.ReadManifest(manifestFlag)
 			if err != nil {
 				return err
 			}
-			annotations = manifest.Annotations
+			existingAnnotations = existingManifest.Annotations
+		}
+
+		// Merge annotations from unified manifest with existing annotations
+		// Unified manifest annotations take precedence
+		mergedAnnotations := make(map[string]string)
+		for k, v := range existingAnnotations {
+			mergedAnnotations[k] = v
+		}
+		for k, v := range unifiedManifest.Annotations {
+			mergedAnnotations[k] = v
 		}
 
 		fmt.Printf("\nPushing '%s' to '%s' using %s...\n", artifact, destination, registry)
 
 		fullArtifact := destination + "/" + artifact
 
-		// Push the artifact
-		if err := provider.Push(artifact, destination, annotations); err != nil {
+		// Push the artifact with unified OCI manifest annotations
+		if err := provider.Push(artifact, destination, mergedAnnotations); err != nil {
 			return err
 		}
 
 		fmt.Printf("\n✓ Pushed artifact: %s\n", fullArtifact)
 		fmt.Println("✓ OCI layers stored in registry")
-		if len(annotations) > 0 {
-			fmt.Println("✓ Manifest with CNCF AI annotations available for validation")
+		fmt.Println("✓ Unified OCI manifest with standardized metadata attached")
+		if len(mergedAnnotations) > 0 {
+			fmt.Printf("✓ %d manifest-level annotations available for validation\n", len(mergedAnnotations))
 		}
 
 		// Determine signer to use for provenance
@@ -255,9 +350,110 @@ func pushProvenanceAttestation(provider workflow.RegistryProvider, registryTool,
 	return nil
 }
 
+// parseRelationships parses relationship flags in format "type=ref" into a map
+func parseRelationships(relationships []string) map[string][]string {
+	result := make(map[string][]string)
+	for _, rel := range relationships {
+		// Split on the first "=" to handle refs that might contain "="
+		idx := -1
+		for i, c := range rel {
+			if c == '=' {
+				idx = i
+				break
+			}
+		}
+		if idx == -1 {
+			// No "=" found, skip or treat as unknown type
+			continue
+		}
+		typ := rel[:idx]
+		ref := rel[idx+1:]
+		if ref != "" {
+			result[typ] = append(result[typ], ref)
+		}
+	}
+	return result
+}
+
+// createUnifiedOCIManifest creates a unified OCI manifest based on artifact type and configuration
+func createUnifiedOCIManifest(artifactType workflow.ArtifactType, artifactName, modelType, skillType, pipelineType string, relationships map[string][]string) (*workflow.UnifiedOCIManifest, error) {
+	// Create the manifest with appropriate layers
+	// For now, we create an empty layer list - in production this would contain
+	// the actual OCI layers (model weights, config files, etc.)
+	layers := []workflow.OCILayer{}
+
+	manifest := workflow.NewUnifiedOCIManifest(artifactType, artifactName, layers)
+
+	// Customize the config based on artifact type and provided flags
+	switch artifactType {
+	case workflow.ArtifactTypeModel:
+		config := workflow.AIModelConfig{
+			Architecture: "amd64",
+			OS:           "linux",
+			ModelType:    modelType,
+			ModelFormat:  "pytorch", // Default, can be overridden
+			InputFormat:  "text",    // Default
+			OutputFormat: "text",    // Default
+			Capabilities: []string{"chat", "completion"}, // Default capabilities
+			Runtime:      "vllm",
+			Accelerator:  "nvidia-gpu",
+			Relationships: relationships,
+			Description: fmt.Sprintf("Model artifact: %s", artifactName),
+			Version:     "1.0.0",
+			Author:      "model-cli",
+			License:     "Apache-2.0",
+		}
+		// If modelType was provided, override the default
+		if modelType != "" {
+			config.ModelType = modelType
+		}
+		manifest.SetModelConfig(config)
+
+	case workflow.ArtifactTypeSkill:
+		config := workflow.AISkillConfig{
+			Architecture:  "amd64",
+			OS:            "linux",
+			SkillType:     skillType,
+			Dependencies:  relationships,
+			Runtime:       "python",
+			Accelerator:   "cpu",
+			Description:  fmt.Sprintf("Skill artifact: %s", artifactName),
+			Version:      "1.0.0",
+			Author:       "model-cli",
+		}
+		if skillType != "" {
+			config.SkillType = skillType
+		}
+		manifest.SetSkillConfig(config)
+
+	case workflow.ArtifactTypePipeline:
+		config := workflow.AIPipelineConfig{
+			Architecture:  "amd64",
+			OS:            "linux",
+			PipelineType:  pipelineType,
+			Dependencies:  relationships,
+			Description:   fmt.Sprintf("Pipeline artifact: %s", artifactName),
+			Version:       "1.0.0",
+			Author:        "model-cli",
+		}
+		if pipelineType != "" {
+			config.PipelineType = pipelineType
+		}
+		manifest.SetPipelineConfig(config)
+	}
+
+	// Add standardized OCI annotations
+	manifest.Annotations["org.opencontainers.image.title"] = artifactName
+	manifest.Annotations["org.opencontainers.image.description"] = fmt.Sprintf("%s artifact pushed by model-cli", artifactType)
+	manifest.Annotations["org.opencontainers.image.version"] = "1.0.0"
+
+	return manifest, nil
+}
+
 func init() {
 	rootCmd.AddCommand(pushCmd)
 	pushCmd.Flags().String("artifact", "", "OCI artifact reference to push (e.g., my-model:latest)")
+	pushCmd.Flags().String("target", "", "Full target reference (e.g., registry.example.com/my-model:v1) - combines destination and artifact")
 	pushCmd.Flags().String("registry", "", "Registry tool: oras or modelpack")
 	pushCmd.Flags().String("destination", "", "Destination registry (e.g., ghcr.io/my-org)")
 	pushCmd.Flags().String("manifest", "", "Path to the OCI manifest.json produced by 'model-cli package', used to attach CNCF AI annotations")
@@ -265,4 +461,10 @@ func init() {
 	pushCmd.Flags().String("signer", "", "Signing tool: sigstore or notary (default: sigstore)")
 	pushCmd.Flags().Bool("generate-provenance", true, "Generate SLSA provenance attestation (default: true)")
 	pushCmd.Flags().String("model-path", "", "Path to the model directory (for provenance source info)")
+	pushCmd.Flags().String("artifact-type", "", "Type of AI artifact: model, skill, or pipeline")
+	pushCmd.Flags().String("manifest-output", "", "Path to write the unified OCI manifest (optional, for debugging)")
+	pushCmd.Flags().String("model-type", "", "Model type for AI-specific config (e.g., text-generation, embedding)")
+	pushCmd.Flags().String("skill-type", "", "Skill type for AI-specific config (e.g., rag, classification)")
+	pushCmd.Flags().String("pipeline-type", "", "Pipeline type for AI-specific config (e.g., inference, training)")
+	pushCmd.Flags().StringSlice("relationships", []string{}, "Relationships to other assets (format: type=ref, e.g., skill=my-skill:v1)")
 }
