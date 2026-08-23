@@ -83,13 +83,13 @@ Model CLI **orchestrates** your ML deployment workflow. It collects your prefere
 | Task | Model CLI Role | External Tool |
 |------|----------------|---------------|
 | Package model | Collects model info, creates manifest, injects annotations | ORAS or ModelPack |
-| Generate SBOM | Sets up SBOM config, attaches to manifest | Syft, Trivy, or cdxgen |
+| Generate SBOM | Sets up SBOM config, attaches SPDX to manifest | Syft |
 | Sign artifact | Sets up signing config | Cosign (Sigstore) or Notation (Notary v2) |
 | Verify signature | Checks manifest | Cosign or Notation |
 | Deploy to K8s | Collects GitOps preferences, validates | Argo CD or Flux |
 | Validate nodes | Collects requirements, checks cluster | kubectl |
 
-**Model CLI only requires Go.** All other tools are optional and checked at runtime with clear installation instructions. Model CLI aligns with: [OCI Specification](https://specs.opencontainers.org/image-spec/), [OCI Distribution Spec](https://github.com/opencontainers/distribution-spec), [OSSF Model Signing Spec](https://github.com/ossf/model-signing-spec), [Model Openness Framework](https://github.com/Adopt-MOF/MOF), [JSON Schema](https://json-schema.org/), and GitOps principles.
+**Model CLI only requires Go.** All other tools are optional and checked at runtime with clear installation instructions. Model CLI aligns with: [OCI Specification](https://specs.opencontainers.org/image-spec/), [OCI Distribution Spec](https://github.com/opencontainers/distribution-spec), [OSSF Model Signing Spec](https://github.com/ossf/model-signing-spec), [Model Openness Framework](https://github.com/Adopt-MOF/MOF), [JSON Schema](https://json-schema.org/), [SPDX](https://spdx.dev/), and GitOps principles.
 
 AI agent guidance: [skills/model-cli/SKILL.md](skills/model-cli/SKILL.md)
 

@@ -25,7 +25,7 @@ model-cli wizard
 ```
 
 The wizard will guide you through:
-1. **Setup Preferences** - Choose your tools (registry, GitOps, signing)
+1. **Setup Preferences** - Choose your tools (registry: ORAS or ModelPack, GitOps, signing)
 2. **Model Details** - Enter your model information
 3. **Kubernetes Setup** - Configure deployment options
 4. **Package** - Create OCI artifact with standardized annotations
@@ -53,8 +53,11 @@ model-cli wizard
 
 ### Individual Commands
 ```bash
-# Package
+# Package with ORAS
 model-cli package --model phi-4-mini --model-path ./models --registry oras
+
+# Package with ModelPack
+model-cli package --model phi-4-mini --model-path ./models --registry modelpack
 
 # Local compliance check
 model-cli check --model-path ./models
@@ -114,13 +117,14 @@ Model CLI only requires Go. The tools it integrates with are checked at runtime:
 | Tool | Purpose | Install | Required for |
 |------|---------|---------|---------------|
 | oras | OCI registry | `brew install oras` | Package/Push |
+| modelpack | OCI registry | `brew install modelpack` | Package/Push |
 | argocd | GitOps (UI) | `brew install argoproj/tap/argocd` | Deploy |
 | flux | GitOps (agents) | `brew install fluxcd/tap/flux` | Deploy |
 | cosign | Signing (Sigstore) | `brew install sigstore/tap/cosign` | Sign/Verify |
-| notation | Signing (Notary v2) | `brew install notation` | Sign/Verify |
-| syft | SBOM generation | `brew install anchore/syft/syft` | Supply chain |
+| notation | Signing (Notary v2/CNCF) | `brew install notation` | Sign/Verify |
+| syft | SBOM generation (SPDX) | `brew install anchore/syft/syft` | Supply chain |
 
-**Note:** The CLI will tell you exactly how to install any missing tool when you need it.
+**Note:** The CLI will tell you exactly how to install any missing tool when you need it. Model CLI supports SPDX format for SBOM generation.
 
 ## Configuration
 
@@ -129,8 +133,8 @@ Model CLI saves your preferences to `~/.model-cli.yaml`. After running the wizar
 Example config:
 ```yaml
 gitops: flux
-registry: oras
-signer: sigstore
+registry: oras  # or modelpack
+signer: sigstore  # or notation
 runtime: vllm
 ```
 
