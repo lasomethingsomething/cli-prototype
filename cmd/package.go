@@ -57,6 +57,10 @@ Examples:
 		signFlag, _ := cmd.Flags().GetBool("sign")
 		signerFlag, _ := cmd.Flags().GetString("signer")
 		provenanceFlag, _ := cmd.Flags().GetBool("generate-provenance")
+		// Node requirement flags for infrastructure orchestration (Story #68)
+		gpuTypeFlag, _ := cmd.Flags().GetString("gpu-type")
+		vramMinFlag, _ := cmd.Flags().GetString("vram-min")
+		gpuTopologyFlag, _ := cmd.Flags().GetString("gpu-topology")
 
 		// Interactive prompts if not set in config or via flags
 		if cfg.Registry == "" && registryFlag == "" {
@@ -213,6 +217,43 @@ Examples:
 			}
 		}
 
+		// Node requirement annotations for infrastructure orchestration (Story #68)
+		if gpuTypeFlag != "" {
+			annotations.GPUType = gpuTypeFlag
+		} else {
+			if err := huh.NewInput().
+				Title("GPU type:").
+				Description("Specific GPU type required (e.g., nvidia-a100, nvidia-h100, leave empty if not applicable)").
+				Value(&annotations.GPUType).
+				Run(); err != nil {
+				return err
+			}
+		}
+
+		if vramMinFlag != "" {
+			annotations.VRAMMin = vramMinFlag
+		} else {
+			if err := huh.NewInput().
+				Title("Minimum vRAM per GPU:").
+				Description("Minimum vRAM required per GPU (e.g., 40GiB, 80GiB, leave empty if not applicable)").
+				Value(&annotations.VRAMMin).
+				Run(); err != nil {
+				return err
+			}
+		}
+
+		if gpuTopologyFlag != "" {
+			annotations.GPUTopology = gpuTopologyFlag
+		} else {
+			if err := huh.NewInput().
+				Title("GPU topology:").
+				Description("GPU topology requirement (e.g., 8xH100, 4xA100, leave empty if not applicable)").
+				Value(&annotations.GPUTopology).
+				Run(); err != nil {
+				return err
+			}
+		}
+
 		// MOF classification
 		if mofClassFlag != "" {
 			annotations.MOFClass = mofClassFlag
@@ -286,6 +327,10 @@ func init() {
 	packageCmd.Flags().String("memory-min", "", "Minimum memory (e.g., 24GiB)")
 	packageCmd.Flags().String("mof-class", "", "MOF Class: I, II, or III")
 	packageCmd.Flags().String("mof-components", "", "MOF components (comma-separated)")
+	// Node requirement flags for infrastructure orchestration (Story #68)
+	packageCmd.Flags().String("gpu-type", "", "Specific GPU type (e.g., nvidia-a100, nvidia-h100)")
+	packageCmd.Flags().String("vram-min", "", "Minimum vRAM per GPU (e.g., 40GiB, 80GiB)")
+	packageCmd.Flags().String("gpu-topology", "", "GPU topology requirement (e.g., 8xH100, 4xA100)")
 	packageCmd.Flags().Bool("skill", false, "Package as an agentic skill (agentskills.io format)")
 	packageCmd.Flags().Bool("sign", false, "Sign the artifact automatically after packaging")
 	packageCmd.Flags().String("signer", "", "Signing tool: sigstore or notary (default: sigstore)")

@@ -347,6 +347,15 @@ Model CLI implements a complete Enterprise OCI Registry Integration workflow:
 - Support `--registry`, `--json-output` flags for CI/CD integration
 - Provide comprehensive admission decision with pass/fail status
 
+#### Phase 3: Production Deployment
+
+**Story #68: Infrastructure & Resource Orchestration**
+- Attach node requirement annotations (GPU type, vRAM minimum, GPU topology) to OCI manifests during packaging
+- Provide `validate-nodes` command to check cluster nodes against artifact requirements
+- Support `--gpu-type`, `--vram-min`, `--gpu-topology` flags in package command
+- Support `--namespace`, `--json-output` flags in validate-nodes command
+- Hand off to Kubernetes scheduler (does NOT implement scheduling)
+- Annotations: `ai.node.gpu.type`, `ai.node.vram.min`, `ai.node.gpu.topology`
 
 #### Metadata Contract Validation
 ```bash

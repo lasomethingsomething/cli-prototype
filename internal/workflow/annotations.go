@@ -76,6 +76,19 @@ const (
 	// NetworkAccess identifies network access requirement
 	// Value: "internal", "private", "public"
 	AnnotationNetworkAccess = "org.cncf.ai.network.access"
+
+	// Node requirement annotations for infrastructure orchestration (Story #68)
+	// GPUType identifies the specific GPU type required
+	// Value: e.g., "nvidia-a100", "nvidia-h100", "nvidia-l40s"
+	AnnotationGPUType = "ai.node.gpu.type"
+
+	// VRAMLabel identifies the minimum vRAM requirement per GPU
+	// Value: string with unit (e.g., "40GiB", "80GiB")
+	AnnotationVRAMMin = "ai.node.vram.min"
+
+	// GPUTopology identifies the GPU topology requirement
+	// Value: e.g., "8xH100", "4xA100", "2xL40S"
+	AnnotationGPUTopology = "ai.node.gpu.topology"
 )
 
 // AnnotationSet represents a collection of annotations for an OCI artifact
@@ -100,6 +113,11 @@ type AnnotationSet struct {
 	Accelerator  string
 	CUDAMin      string
 	MemoryMin    string
+
+	// Node requirements for infrastructure orchestration (Story #68)
+	GPUType     string
+	VRAMMin     string
+	GPUTopology string
 }
 
 // NewAnnotationSet creates a new annotation set with sensible defaults
@@ -170,6 +188,17 @@ func (a *AnnotationSet) ToMap() map[string]string {
 		annotations[AnnotationMemoryMin] = a.MemoryMin
 	}
 
+	// Node requirement annotations (Story #68)
+	if a.GPUType != "" {
+		annotations[AnnotationGPUType] = a.GPUType
+	}
+	if a.VRAMMin != "" {
+		annotations[AnnotationVRAMMin] = a.VRAMMin
+	}
+	if a.GPUTopology != "" {
+		annotations[AnnotationGPUTopology] = a.GPUTopology
+	}
+
 	return annotations
 }
 
@@ -196,4 +225,9 @@ func (a *AnnotationSet) Print() {
 	fmt.Printf("    %s: %s\n", AnnotationAccelerator, a.Accelerator)
 	fmt.Printf("    %s: %s\n", AnnotationCUDAVersionMin, a.CUDAMin)
 	fmt.Printf("    %s: %s\n", AnnotationMemoryMin, a.MemoryMin)
+
+	fmt.Println("  Node Requirements:")
+	fmt.Printf("    %s: %s\n", AnnotationGPUType, a.GPUType)
+	fmt.Printf("    %s: %s\n", AnnotationVRAMMin, a.VRAMMin)
+	fmt.Printf("    %s: %s\n", AnnotationGPUTopology, a.GPUTopology)
 }

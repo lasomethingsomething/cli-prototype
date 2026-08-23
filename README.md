@@ -100,6 +100,14 @@ Follow the prompts. The wizard will:
 ./model-cli admit --artifact my-model:v1 --env production
 ./model-cli admit --artifact my-model:v1 --json-output
 
+# Validate node hardware requirements (Story #68)
+./model-cli validate-nodes --artifact my-model:v1
+./model-cli validate-nodes --artifact my-model:v1 --namespace production
+./model-cli validate-nodes --artifact my-model:v1 --json-output
+
+# Package with node requirements (Story #68)
+./model-cli package --gpu-type nvidia-h100 --vram-min 80GiB --gpu-topology 8xH100
+
 # Cross-reference assets in registry
 ./model-cli search --destination ghcr.io/my-org --type model
 ./model-cli search --uses-model model:sha256:abc123
