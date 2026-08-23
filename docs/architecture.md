@@ -16,12 +16,18 @@ Commands (cobra)
   - wizard, package, sign, verify, deploy
   - serve, push, admit, validate, schedule
   - harden (Step 2: Local Hardening & Compliance)
+  - search (Story #61: Cross-Reference Assets)
+  - map (Story #60: Map Complex Relationships)
   |
   v
 Workflows (internal/workflow)
   - DeployWorkflow, PackageWorkflow
   - SignWorkflow, VerifyWorkflow
   - HardenWorkflow (SBOM + MOF classification)
+  - AdmissionWebhook (Story #59: Enforce Metadata Contract)
+  - MetadataContractValidation (Story #62: Validate Pushes)
+  - SearchWorkflow (Story #61: Cross-Reference Assets)
+  - RelationshipMapping (Story #60: Map Relationships)
   |
   v
 Providers (pluggable tools)
@@ -77,3 +83,60 @@ func GetNewToolProvider(name string) (NewToolProvider, error) {
     }
 }
 ```
+
+#### Enterprise OCI Registry Architecture
+
+The Enterprise OCI Registry Integration (Phase 2) follows a **decoupled handoff pattern**:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Model CLI (Orchestrator)                   │
+├─────────────────────────────────────────────────────────────────┤
+│  Commands: push, validate, enforce, search, map                    │
+│  Workflows: Package, Sign, Verify, Deploy, Search, Validate        │
+└─────────────────────┬───────────────────────────────────────────┘
+                      │
+                      ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Registry Provider Interface                    │
+├─────────────────────────────────────────────────────────────────┤
+│  - ORAS Provider (full implementation)                           │
+│  - ModelPack Provider (stub implementation)                     │
+│  - Methods: Push, Pull, Search, GetArtifactDigest, etc.          │
+└─────────────────────┬───────────────────────────────────────────┘
+                      │
+        ┌─────────────┴─────────────┐
+        ▼                           ▼
+┌───────────────────┐    ┌─────────────────────┐
+│      ORAS CLI     │    │    ModelPack CLI     │
+│  - oras push      │    │  - modelpack push    │
+│  - oras pull      │    │  - modelpack pull    │
+│  - oras discover  │    │  - (stub) search     │
+└───────────────────┘    └─────────────────────┘
+        │                           │
+        └─────────────┬─────────────┘
+                      ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      OCI Registry (ghcr.io, etc.)                │
+│  - Stores OCI artifacts with manifest annotations                 │
+│  - Supports OCI Distribution Spec filtering                       │
+│  - Enables admission webhooks for validation                     │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Key Design Principles:**
+1. **CLI as Orchestrator**: Model CLI delegates to registry tools (ORAS, ModelPack)
+2. **Manifest-Level Metadata**: All AI-specific metadata stored in OCI annotations
+3. **Client-Side Filtering**: Complex queries filtered client-side when needed
+4. **Decoupled Validation**: Validation happens at CLI level, enforcement at registry level
+5. **Extensible Providers**: Easy to add new registry tools via the RegistryProvider interface
+
+**Data Flow:**
+1. User runs `model-cli push` with metadata
+2. CLI creates UnifiedOCIManifest with annotations
+3. CLI delegates to ORAS/ModelPack to push to registry
+4. Registry stores manifest with annotations
+5. User runs `model-cli search` to query
+6. CLI delegates to ORAS/ModelPack to fetch manifests
+7. CLI parses and filters results client-side
+8. CLI displays structured results to user

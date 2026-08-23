@@ -45,6 +45,10 @@ This single command guides users through the **complete workflow**:
 | `sign` | Sign artifact | After packaging, before deployment |
 | `verify` | Verify signature | Before deploying to production |
 | `deploy` | Deploy to Kubernetes | After signing/verification |
+| `validate` | Validate metadata contract | Before pushing to registry |
+| `enforce` | Enforce metadata contract | At registry/admission proxy level |
+| `search` | Cross-reference assets | Discover assets in registry |
+| `map` | Map relationships | Define model→skill→pipeline relationships |
 
 ## The Secure Supply Chain Workflow
 
@@ -271,6 +275,72 @@ This makes it easy to add new tool integrations without changing existing code.
 - Registry interoperability
 
 ### Model Openness Framework (MOF)
+
+### Enterprise OCI Registry Integration
+Model CLI implements a complete Enterprise OCI Registry Integration workflow:
+
+#### Phase 2: Enterprise OCI Registry (Stories #58-62)
+
+**Story #58: Push Unified OCI Manifest to Registry**
+- Push unified OCI manifests with standardized metadata to registries
+- Attach CNCF AI annotations to manifests
+- Generate and freeze immutable provenance/attestation metadata
+
+**Story #59: Enforce Standardized Metadata Contract at Manifest Level**
+- Validate required fields (model.framework, skill.pipeline_ref)
+- Reject pushes with invalid or missing metadata
+- Use admission webhooks (Kubernetes-style) or registry middleware
+
+**Story #60: Map Complex Relationships in Manifest**
+- Embed relationship maps (model → skill → pipeline) in OCI manifest
+- Support ai.relationships field in manifest annotations
+- Enable registry to parse dependencies without unpacking artifacts
+
+**Story #61: Cross-Reference Assets in Registry**
+- Query registry to discover and cross-reference AI assets
+- Support filtering by metadata (e.g., ?filter=ai.model.type=llm)
+- CLI search commands (e.g., model-cli search --model my-llm --type pipeline)
+- Return structured results (list of pipelines + their skills/models)
+
+**Story #62: Validate Pushes Against Metadata Contract**
+- Validate required fields (model.type, skill.dependencies)
+- Return clear error messages for missing/invalid metadata
+- Support dry-run validation (model-cli validate --manifest my-manifest.json)
+- Use JSON Schema for contract validation
+
+#### Metadata Contract Validation
+```bash
+# Dry-run validation before push
+model-cli validate --manifest my-manifest.json
+
+# Strict JSON Schema validation
+model-cli validate --manifest my-manifest.json --json-schema --strict
+
+# Enforce at registry level (admission webhook)
+model-cli enforce --manifest my-manifest.json
+model-cli enforce --webhook --port 8443
+```
+
+#### Registry Search and Discovery
+```bash
+# Search for all models in a registry
+model-cli search --destination ghcr.io/my-org --type model
+
+# Find all pipelines using a specific model
+model-cli search --uses-model model:sha256:abc123
+
+# Filter by metadata
+model-cli search --metadata ai.model.type=llm
+```
+
+#### Relationship Mapping
+```bash
+# Create relationship graph in manifest
+model-cli map --model my-model --skill my-skill --pipeline my-pipeline
+
+# Validate relationships
+model-cli validate --manifest my-manifest.json --check-relationships
+```
 - Class I: Open weights, open training data, open code
 - Class II: Open weights, closed training data or code
 - Class III: Closed weights

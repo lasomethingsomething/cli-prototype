@@ -36,6 +36,10 @@ Model CLI is a tour guide CLI that helps you:
 - Run local compliance checks before push
 - Sign artifacts with Sigstore or Notary v2
 - Verify signatures before deployment
+- Validate pushes against standardized metadata contract
+- Enforce metadata contract at manifest level
+- Cross-reference AI assets in registries
+- Map complex relationships between assets (model → skill → pipeline)
 - Deploy to Kubernetes with Argo or Flux
 - Serve models with vLLM or KServe
 
@@ -77,6 +81,21 @@ Follow the prompts. The wizard will:
 
 # Sign only
 ./model-cli sign --artifact my-model:v1 --signer sigstore
+
+# Validate metadata contract
+./model-cli validate --manifest my-manifest.json
+./model-cli validate --manifest my-manifest.json --json-schema --strict
+
+# Enforce metadata contract at registry level
+./model-cli enforce --manifest my-manifest.json
+./model-cli enforce --webhook --port 8443
+
+# Cross-reference assets in registry
+./model-cli search --destination ghcr.io/my-org --type model
+./model-cli search --uses-model model:sha256:abc123
+
+# Map relationships between assets
+./model-cli map --model my-model --skill my-skill --pipeline my-pipeline
 
 # Deploy only
 ./model-cli deploy --gitops argo --registry oras --model my-model
@@ -175,6 +194,7 @@ Example:
 - [Installation](docs/installation.md) - Get Model CLI installed
 - [Quick Start](docs/quick-start.md) - Try the wizard
 - [Architecture](docs/architecture.md) - Understand how it works
+- [Enterprise OCI Registry](docs/enterprise-oci-registry.md) - Phase 2: Registry integration
 - [TUI](docs/tui.md) - Learn about the terminal interface
 - [Resources](docs/resources.md) - Standards and tools
 
@@ -186,8 +206,10 @@ AI agent guidance: [skills/model-cli/SKILL.md](skills/model-cli/SKILL.md)
 
 Model CLI aligns with:
 - [OCI Specification](https://specs.opencontainers.org/image-spec/) - Artifact format
+- [OCI Distribution Spec](https://github.com/opencontainers/distribution-spec) - Registry operations
 - [OSSF Model Signing Spec](https://github.com/ossf/model-signing-spec) - Signing standards
 - [Model Openness Framework](https://github.com/Adopt-MOF/MOF) - Classification
+- [JSON Schema](https://json-schema.org/) - Metadata contract validation
 - GitOps principles - Deployment patterns
 
 ## Contributing
