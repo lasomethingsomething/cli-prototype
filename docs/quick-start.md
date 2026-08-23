@@ -44,6 +44,69 @@ model-cli wizard --skip-signing --skip-deploy
 model-cli wizard --skip-deploy
 ```
 
+## Quick Examples
+
+### Full Guided Journey
+```bash
+model-cli wizard
+```
+
+### Individual Commands
+```bash
+# Package
+model-cli package --model phi-4-mini --model-path ./models --registry oras
+
+# Local compliance check
+model-cli check --model-path ./models
+
+# Sign
+model-cli sign --artifact my-model:v1
+
+# Validate metadata contract
+model-cli validate --manifest my-manifest.json
+
+# Validate for GitOps deployment
+model-cli validate-gitops --artifact my-model:v1
+
+# Evaluate artifact for admission
+model-cli admit --artifact my-model:v1
+
+# Validate node hardware requirements
+model-cli validate-nodes --artifact my-model:v1
+
+# Validate runtime availability
+model-cli validate-runtime --artifact my-model:v1
+
+# Package with node requirements
+model-cli package --gpu-type nvidia-h100 --vram-min 80GiB --gpu-topology 8xH100
+
+# Package with runtime requirements
+model-cli package --runtime-type vllm --layer-dedup true
+
+# Package agentic skills (agentskills.io format)
+model-cli package --skill --skill-refs "skill1:sha256:abc,skill2:sha256:def"
+
+# Map relationships between assets
+model-cli map --model my-model --skill my-skill --pipeline my-pipeline
+```
+
+## Understanding the Warnings
+
+You may see messages like:
+
+```
+Warning: SBOM generation failed: syft not installed. Install with: brew install anchore/syft/syft
+```
+
+**This is not a failure - it's a feature!** The CLI:
+
+1. Checks if required tools are available
+2. Tells you exactly which tool is missing
+3. Gives you the exact command to install it
+4. Continues with the workflow anyway
+
+This is the "orchestrate and hand off" design. The CLI doesn't crash when tools are missing - it guides you to install them.
+
 ## Tool Requirements
 
 Model CLI only requires Go. The tools it integrates with are checked at runtime:

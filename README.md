@@ -36,101 +36,6 @@ After answering, you'll see:
 
 ---
 
-## How It Works
-
-Model CLI **orchestrates** your ML deployment workflow. It collects your preferences and model information, attaches standardized metadata (annotations) to OCI manifests, validates requirements, then hands off to the right external tool for each job.
-
-### Tool Integration
-
-| Task | Model CLI Role | External Tool |
-|------|----------------|---------------|
-| Package model | Collects model info, creates manifest, injects annotations | ORAS or ModelPack |
-| Generate SBOM | Sets up SBOM config, attaches to manifest | Syft, Trivy, or cdxgen |
-| Sign artifact | Sets up signing config | Cosign (Sigstore) or Notation (Notary v2) |
-| Verify signature | Checks manifest | Cosign or Notation |
-| Deploy to K8s | Collects GitOps preferences, validates | Argo CD or Flux |
-| Validate nodes | Collects requirements, checks cluster | kubectl |
-
-**Model CLI only requires Go.** All other tools are optional and checked at runtime with clear installation instructions.
-
----
-
-## Quick Examples
-
-### Full Guided Journey
-```bash
-./model-cli wizard
-```
-
-### Skip Steps
-```bash
-# Just package, skip signing and deployment
-./model-cli wizard --skip-signing --skip-deploy
-
-# Package and sign, but skip deployment
-./model-cli wizard --skip-deploy
-```
-
-### Individual Commands
-```bash
-# Package
-./model-cli package --model phi-4-mini --model-path ./models --registry oras
-
-# Local compliance check
-./model-cli check --model-path ./models
-
-# Sign
-./model-cli sign --artifact my-model:v1
-
-# Validate metadata contract
-./model-cli validate --manifest my-manifest.json
-
-# Validate for GitOps deployment
-./model-cli validate-gitops --artifact my-model:v1
-
-# Evaluate artifact for admission
-./model-cli admit --artifact my-model:v1
-
-# Validate node hardware requirements
-./model-cli validate-nodes --artifact my-model:v1
-
-# Validate runtime availability
-./model-cli validate-runtime --artifact my-model:v1
-
-# Package with node requirements
-./model-cli package --gpu-type nvidia-h100 --vram-min 80GiB --gpu-topology 8xH100
-
-# Package with runtime requirements
-./model-cli package --runtime-type vllm --layer-dedup true
-
-# Package agentic skills (agentskills.io format)
-./model-cli package --skill --skill-refs "skill1:sha256:abc,skill2:sha256:def"
-
-# Map relationships between assets
-./model-cli map --model my-model --skill my-skill --pipeline my-pipeline
-```
-
----
-
-## Understanding the "Warnings"
-
-You may see messages like:
-
-```
-Warning: SBOM generation failed: syft not installed. Install with: brew install anchore/syft/syft
-```
-
-**This is not a failure - it's a feature!** The CLI:
-
-1. Checks if required tools are available
-2. Tells you exactly which tool is missing
-3. Gives you the exact command to install it
-4. Continues with the workflow anyway
-
-This is the "orchestrate and hand off" design. The CLI doesn't crash when tools are missing - it guides you to install them.
-
----
-
 ## Key Concepts
 
 ### OCI Artifacts
@@ -167,37 +72,32 @@ The **Standardized Metadata Contract** ensures all models have required annotati
 
 ---
 
+## How It Works
+
+Model CLI **orchestrates** your ML deployment workflow. It collects your preferences and model information, attaches standardized metadata (annotations) to OCI manifests, validates requirements, then hands off to the right external tool for each job.
+
+### Tool Integration
+
+| Task | Model CLI Role | External Tool |
+|------|----------------|---------------|
+| Package model | Collects model info, creates manifest, injects annotations | ORAS or ModelPack |
+| Generate SBOM | Sets up SBOM config, attaches to manifest | Syft, Trivy, or cdxgen |
+| Sign artifact | Sets up signing config | Cosign (Sigstore) or Notation (Notary v2) |
+| Verify signature | Checks manifest | Cosign or Notation |
+| Deploy to K8s | Collects GitOps preferences, validates | Argo CD or Flux |
+| Validate nodes | Collects requirements, checks cluster | kubectl |
+
+**Model CLI only requires Go.** All other tools are optional and checked at runtime with clear installation instructions. Model CLI aligns with: [OCI Specification](https://specs.opencontainers.org/image-spec/), [OCI Distribution Spec](https://github.com/opencontainers/distribution-spec), [OSSF Model Signing Spec](https://github.com/ossf/model-signing-spec), [Model Openness Framework](https://github.com/Adopt-MOF/MOF), [JSON Schema](https://json-schema.org/), and GitOps principles.
+
+AI agent guidance: [skills/model-cli/SKILL.md](skills/model-cli/SKILL.md)
+
+---
+
 ## Documentation
 
-- [Quick Start](docs/quick-start.md) - Detailed getting started instructions
+- [Quick Start](docs/quick-start.md) - Phase 1: Developer Laptop
 - [Architecture](docs/architecture.md) - Understand how it works
 - [Enterprise OCI Registry](docs/enterprise-oci-registry.md) - Phase 2: Registry integration
 - [GitOps Admission & Policy Enforcement](docs/gitops-admission.md) - Phase 3: Kubernetes production cluster
 - [TUI Guide](docs/tui.md) - Learn about the terminal interface
 - [Resources](docs/resources.md) - Standards and tools
-
-## Skills
-
-AI agent guidance: [skills/model-cli/SKILL.md](skills/model-cli/SKILL.md)
-
-## Standards
-
-Model CLI aligns with:
-- [OCI Specification](https://specs.opencontainers.org/image-spec/) - Artifact format
-- [OCI Distribution Spec](https://github.com/opencontainers/distribution-spec) - Registry operations
-- [OSSF Model Signing Spec](https://github.com/ossf/model-signing-spec) - Signing standards
-- [Model Openness Framework](https://github.com/Adopt-MOF/MOF) - Classification
-- [JSON Schema](https://json-schema.org/) - Metadata contract validation
-- GitOps principles - Deployment patterns
-
-## Contributing
-
-1. Add interface in `internal/workflow/providers.go`
-2. Implement concrete provider
-3. Register in factory function (`Get*Provider`)
-4. Add CLI command
-5. Support both interactive and non-interactive modes
-
-## License
-
-Apache License 2.0
