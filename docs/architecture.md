@@ -60,7 +60,7 @@ The Model CLI uses a layered TUI architecture:
 
 All external tool integrations follow the same pattern:
 
-1. Define interface in providers.go
+1. Define the interface in the matching `internal/workflow/*.go` file (`registry.go`, `signing.go`, `sbom.go`, `gitops.go`, `runtime.go`)
 2. Implement concrete provider
 3. Register in factory function (Get*Provider)
 4. Use via dependency injection in workflows

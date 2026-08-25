@@ -2,22 +2,28 @@
 
 **Your tour guide through the secure ML model deployment journey.**
 
-Model CLI makes it easy to package, sign, verify, and deploy ML models with a clean, guided TUI. It follows a simple principle: **orchestrate the workflow, don't duplicate the tools.**
+Model CLI packages, signs, verifies, and deploys ML models as OCI artifacts through a guided TUI. It follows one principle: **orchestrate the workflow, don't duplicate the tools.** It collects your intent, attaches standardized metadata to OCI manifests, validates it, and hands the actual work to ORAS, Cosign, Syft, Argo CD, and friends.
+
+> **Status: prototype.** The workflow, annotation model, and validation commands are real. Some tool integrations are still placeholders — see [Known limitations](#known-limitations) before relying on any single step.
 
 ## Quick Test Drive (5 minutes)
 
-Try the CLI immediately with just a text file - no real model, registry, or GPU required:
+Try the CLI with a plain text file. No real model, registry, or GPU required.
 
 ```bash
 # 1. Create a dummy model
 mkdir -p ~/test-model
 echo "test" > ~/test-model/model.txt
 
-# 2. Build the CLI
+# 2. Build the CLI (requires Go 1.23+)
+git clone https://github.com/lasomethingsomething/cli-prototype.git
 cd cli-prototype
 go build -o model-cli .
 
-# 3. Package it
+# 3. Install ORAS - `package` checks for it up front
+brew install oras   # or see https://oras.land
+
+# 4. Package it (empty --registry-url = keep it local, push nothing)
 ./model-cli package \
   --model test-model \
   --model-path ~/test-model \
@@ -26,78 +32,97 @@ go build -o model-cli .
   --registry-url ""
 ```
 
-The CLI will ask you a few questions (runtime, accelerator, etc.). **These are just metadata - you don't need the actual hardware or software installed.**
+The CLI asks a few questions (runtime, accelerator, MOF class, ...). **These are metadata only** - you don't need the hardware or software installed. Press Enter to accept defaults.
 
-After answering, you'll see:
-- OCI manifest created with standardized annotations
-- SBOM generation attempted (warning if syft not installed)
-- MOF classification applied
-- Provenance attestation generated
+You'll end up with:
 
-See [trial-run-report.md](https://github.com/lasomethingsomething/cli-prototype/blob/main/docs/trial-run-report.md) for a detailed account of a test run.
+- `~/test-model/manifest.json` - an OCI manifest carrying CNCF AI Interoperability Profile annotations
+- `~/test-model/attestation.json` - a SLSA provenance attestation
+- an SBOM at `~/test-model/sbom.spdx-json` if `syft` is installed (otherwise a warning, not a failure)
 
----
+A detailed, annotated walkthrough of this run is in [docs/trial-run-report.md](docs/trial-run-report.md).
+
+Any value you pass as a flag is not prompted for again (`--runtime vllm --accelerator cpu --mof-class II ...`). Empty values and the RAG confirmation still prompt, so `package` cannot yet run without a terminal - see [Known limitations](#known-limitations).
+
+## Commands
+
+Start with `model-cli wizard` for the guided end-to-end journey. Each step is also its own command:
+
+| Phase | Command | What it does |
+|-------|---------|--------------|
+| Package | `package` | Package a model or agentic skill as an OCI artifact, inject annotations, generate SBOM + provenance |
+| Package | `harden` | Apply local hardening (SBOM, MOF classification) to an existing artifact |
+| Package | `check` | Local compliance check against the metadata contract before pushing |
+| Sign | `sign` / `verify` | Sign and verify with Sigstore (cosign) or Notary v2 (notation) |
+| Registry | `push` | Push an artifact to an OCI registry |
+| Registry | `validate` / `enforce` | Validate a manifest against the metadata contract (JSON Schema); `enforce` can run as an admission webhook |
+| Registry | `map` / `search` | Embed and query model → skill → pipeline relationships |
+| Deploy | `validate-gitops` | Pre-sync validation of trust-profile and infrastructure annotations for Argo CD / Flux |
+| Deploy | `admit` | Evaluate an artifact for GitOps admission (fetches the real manifest) |
+| Deploy | `validate-nodes` / `validate-runtime` / `schedule` | Check cluster nodes and runtime operators against artifact requirements |
+| Deploy | `deploy` / `serve` | Hand off to Argo CD / Flux and vLLM / KServe |
+
+Every command takes flags and falls back to prompts for anything you leave out. Tool choices are remembered in `~/.model-cli.yaml`.
 
 ## Key Concepts
 
-### OCI Artifacts
+**OCI artifacts.** Models are packaged in the same format Docker, Kubernetes, and every container registry already understand, so standard tooling can push, pull, sign, and route them.
 
-Model CLI packages models as **OCI artifacts** - the same standard format used by Docker, Kubernetes, and container registries:
-- Store models in any OCI-compliant registry (Docker Hub, GHCR, AWS ECR, etc.)
-- Use standard OCI tools to push, pull, and manage models
-- Enable GitOps tools to discover and deploy models without special integration
+**Annotations.** Model CLI attaches metadata to the OCI manifest under the CNCF AI Interoperability Profile keys:
 
-### Annotations
+- Profile - `org.cncf.ai.interop.profile.version`, `org.cncf.ai.artifact.type`
+- Security - signing framework, SBOM format, provenance type, packaging format
+- MOF - openness class (I / II / III), version, components
+- Runtime - serving runtime, accelerator, minimum CUDA and memory
+- Infrastructure - `ai.node.gpu.type`, `ai.node.vram.min`, `ai.node.gpu.topology`
+- Execution - `ai.runtime.type`, layer dedup, skill DLC endpoint, skill references
 
-Annotations are metadata attached to OCI manifests. Model CLI automatically injects:
+Policy engines, GitOps tools, and registries can act on these without downloading the model.
 
-- **Profile**: Version, artifact type
-- **Security**: Signing framework, SBOM format, provenance type
-- **MOF**: Openness class (I, II, or III), version, components
-- **Runtime**: Serving runtime (vLLM, KServe), accelerator, memory
-- **Infrastructure**: GPU type, vRAM, topology
-- **Relationships**: Model→Skill→Pipeline dependency mapping
+**Metadata contract.** `check`, `validate`, `enforce`, and `admit` all evaluate the same JSON-Schema-backed contract, so a model that passes locally passes at the registry and at admission.
 
-These annotations enable:
-- Policy engines to validate models without downloading them
-- GitOps tools to route models to appropriate clusters
-- Registry tools to index and search models
-- Deployment tools to match models to hardware
+## Tool Integration
 
-### Metadata Contract
-
-The **Standardized Metadata Contract** ensures all models have required annotations for:
-- **Security**: Signature verification, SBOM presence
-- **Compliance**: MOF classification, license info
-- **Deployment**: Runtime requirements, hardware needs
-- **Discovery**: Model type, relationships, dependencies
-
----
-
-## How It Works
-
-Model CLI **orchestrates** your ML deployment workflow. It collects your preferences and model information, attaches standardized metadata (annotations) to OCI manifests, validates requirements, then hands off to the right external tool for each job.
-
-### Tool Integration
-
-| Task | Model CLI Role | External Tool |
+| Task | Model CLI role | External tool |
 |------|----------------|---------------|
-| Package model | Collects model info, creates manifest, injects annotations | ORAS or ModelPack |
-| Generate SBOM | Sets up SBOM config, attaches SPDX to manifest | Syft |
-| Sign artifact | Sets up signing config | Cosign (Sigstore) or Notation (Notary v2) |
-| Verify signature | Checks manifest | Cosign or Notation |
-| Deploy to K8s | Collects GitOps preferences, validates | Argo CD or Flux |
-| Validate nodes | Collects requirements, checks cluster | kubectl |
+| Package / push | Build manifest, inject annotations | ORAS (ModelPack planned) |
+| SBOM | Configure format, attach result | Syft |
+| Sign / verify | Configure signer, run it | Cosign (Sigstore) or Notation (Notary v2) |
+| Provenance | Generate SLSA v1.0 attestation | built in |
+| Deploy | Validate, then hand off | Argo CD or Flux |
+| Cluster checks | Compare annotations with nodes | kubectl |
 
-**Model CLI only requires Go.** All other tools are optional and checked at runtime with clear installation instructions. Model CLI aligns with: [OCI Specification](https://specs.opencontainers.org/image-spec/), [OCI Distribution Spec](https://github.com/opencontainers/distribution-spec), [OSSF Model Signing Spec](https://github.com/ossf/model-signing-spec), [Model Openness Framework](https://github.com/Adopt-MOF/MOF), [JSON Schema](https://json-schema.org/), [SPDX](https://spdx.dev/), and GitOps principles.
+**Only Go is required to build.** Every other tool is optional, detected at runtime, and reported with an install command when missing.
 
-AI agent guidance: [skills/model-cli/SKILL.md](skills/model-cli/SKILL.md)
+Standards: [OCI Image Spec](https://specs.opencontainers.org/image-spec/), [OCI Distribution Spec](https://github.com/opencontainers/distribution-spec), [OSSF Model Signing Spec](https://github.com/ossf/model-signing-spec), [Model Openness Framework](https://github.com/Adopt-MOF/MOF), [SPDX](https://spdx.dev/), [SLSA](https://slsa.dev/), [JSON Schema](https://json-schema.org/).
 
----
+## Known limitations
+
+Honest list of what is scaffolding today:
+
+- **ModelPack provider is a stub** - it prints success without calling anything. Use `--registry oras`.
+- **The written `manifest.json` is minimal** - it has annotations and a config media type but no layers or digests, so it is not yet a manifest a registry would accept as-is. On push, ORAS builds the real manifest and the annotations are passed to it.
+- **MOF auto-classification is informational** - the class you answer in the prompt (or `--mof-class`) is what lands in the manifest; the classifier's result is printed but not applied.
+- **Local parity check is a placeholder** - the registry-side digest is not a real content digest yet.
+- **`package` always needs a TTY** - flags suppress their prompt only when non-empty, and the RAG confirm always asks, so it fails in CI with `huh: could not open a new TTY`. The `MODEL_CLI_NO_INTERACTIVE` variable mentioned in older docs is not implemented.
+- **No published binaries yet**; build from source or tag a release.
+
+## Development
+
+```bash
+go build ./...
+go test ./...
+gofmt -l .          # should print nothing
+```
+
+CI runs build and tests on every PR. Tagging `v*` builds binaries for Linux, macOS, and Windows and attaches them to a GitHub release (see `.github/workflows/release.yml`).
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the provider pattern used to add new tool integrations. AI agent guidance lives in [skills/model-cli/SKILL.md](skills/model-cli/SKILL.md).
 
 ## Documentation
 
 - [Quick Start](docs/quick-start.md)
+- [Trial Run Report](docs/trial-run-report.md)
 - [Architecture](docs/architecture.md)
 - [Enterprise OCI Registry](docs/enterprise-oci-registry.md)
 - [GitOps Admission & Policy Enforcement](docs/gitops-admission.md)

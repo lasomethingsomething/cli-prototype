@@ -8,6 +8,7 @@ import (
 func TestBuildSummaryLines_AllSucceeded(t *testing.T) {
 	r := wizardResult{
 		packageSucceeded: true,
+		checkSucceeded:   true,
 		signSucceeded:    true,
 		verifySucceeded:  true,
 		deploySucceeded:  true,
@@ -16,7 +17,7 @@ func TestBuildSummaryLines_AllSucceeded(t *testing.T) {
 		gitOps:           "argo",
 	}
 	lines := buildSummaryLines(r)
-	checks := []string{"✓ Packaged", "✓ Signed with sigstore", "✓ Verified", "✓ Deployed"}
+	checks := []string{"✓ Packaged", "✓ Compliance check passed", "✓ Signed with sigstore", "✓ Verified", "✓ Deployed"}
 	for i, want := range checks {
 		if i >= len(lines) {
 			t.Fatalf("expected at least %d lines, got %d", i+1, len(lines))
