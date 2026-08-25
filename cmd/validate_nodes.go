@@ -4,272 +4,91 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
-	"strings"
 
-	"github.com/lasomethingsomething/cli-prototype/config"
 	"github.com/lasomethingsomething/cli-prototype/internal/workflow"
 	"github.com/spf13/cobra"
 )
 
-var validateNodesCmd = &cobra.Command{
-	Use:   "validate-nodes",
-	Short: "Validate cluster nodes match artifact hardware requirements",
-	Long: `Validate that cluster nodes have the required hardware to run an OCI artifact.
-
-This command handles Phase 3, Step 6: Infrastructure & Resource Orchestration (Story #68).
-It fetches the artifact manifest from the registry, reads node requirement annotations
-(GPU type, vRAM minimum, GPU topology), and checks cluster node labels to ensure
-compatibility before Kubernetes schedules the workload.
-
-Features:
-- Fetches artifact manifest from registry (ORAS, ModelPack)
-- Extracts node requirement annotations (ai.node.gpu.type, ai.node.vram.min, ai.node.gpu.topology)
-- Queries cluster nodes and checks labels against requirements
-- Returns exit code 0 for pass, non-zero for fail
-- Outputs structured results for CI/CD integration
-
-Note: This command performs validation only. Actual pod scheduling is delegated to
-Kubernetes scheduler. The CLI orchestrates and hands off to external tools.
+func newValidateNodesCmd() *cobra.Command {
+	c := &cobra.Command{
+		Use:   "nodes",
+		Short: "Validate cluster nodes match artifact hardware requirements",
+		Long: `Check that the cluster has nodes satisfying the artifact's node requirement
+annotations (ai.node.gpu.type, ai.node.vram.min, ai.node.gpu.topology). Nodes are read
+with kubectl; scheduling itself is left to Kubernetes.
 
 Examples:
-  model-cli validate-nodes
-  model-cli validate-nodes --artifact my-registry/my-model:latest
-  model-cli validate-nodes --artifact my-registry/my-model:latest --registry oras
-  model-cli validate-nodes --artifact my-registry/my-model:latest --namespace production
-  model-cli validate-nodes --artifact my-registry/my-model:latest --quiet
-  model-cli validate-nodes --artifact my-registry/my-model:latest --json-output`,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		// Get flags
-		namespaceFlag, _ := cmd.Flags().GetString("namespace")
-		quietFlag, _ := cmd.Flags().GetBool("quiet")
-		jsonOutputFlag, _ := cmd.Flags().GetBool("json-output")
+  model-cli validate nodes --artifact ghcr.io/my-org/my-model:v1
+  model-cli validate nodes --artifact my-model:v1 --namespace production --json-output`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			out := outputOptionsFrom(cmd)
+			namespace, _ := cmd.Flags().GetString("namespace")
 
-		// Interactive prompts if not provided via flags
-		var artifact string
-		if err := askString(cmd, "artifact", &artifact, "Artifact to validate:", "The OCI artifact reference (e.g., ghcr.io/my-org/my-model:latest)"); err != nil {
-			return err
-		}
-
-		cfg := config.Load()
-		if err := askSelectIfEmpty(cmd, "registry", &cfg.Registry, "Registry tool:", "Choose how to fetch the artifact manifest", []string{"oras", "modelpack"}); err != nil {
-			return err
-		}
-		registry := cfg.Registry
-		warnIfSaveFails(config.Save(cfg))
-
-		var namespace string
-		if namespaceFlag != "" {
-			namespace = namespaceFlag
-		} else {
-			// Default to current kubectl namespace or "default"
-			namespace = "default"
-		}
-
-		if err := requireValues("artifact", artifact); err != nil {
-			return err
-		}
-
-		// Get registry provider
-		registryProvider, err := workflow.GetRegistryProvider(registry)
-		if err != nil {
-			return fmt.Errorf("failed to get registry provider: %v", err)
-		}
-
-		if !quietFlag {
-			fmt.Printf("\nValidating node requirements for: %s\n\n", artifact)
-		}
-
-		// Fetch manifest annotations from registry
-		if !quietFlag {
-			fmt.Println("→ Fetching artifact manifest...")
-		}
-
-		fullArtifact := artifact
-		// If artifact doesn't include registry, prepend the configured registry URL
-		if !strings.Contains(artifact, "/") && !strings.Contains(artifact, "::") {
-			// For now, we'll try to fetch as-is; if it fails, we'll provide guidance
-			fullArtifact = artifact
-		}
-
-		annotations, err := registryProvider.FetchManifestAnnotations(fullArtifact)
-		if err != nil {
-			if !quietFlag {
-				fmt.Printf("⚠ Warning: Could not fetch manifest from registry: %v\n", err)
-				fmt.Println("  This might be because the artifact hasn't been pushed yet.")
-				fmt.Println("  For local validation, use a local registry or push first.")
+			artifact, annotations, err := fetchAnnotations(cmd, out)
+			if err != nil {
+				return err
 			}
-			// For Story #68, we'll check if we can validate from a local manifest
-			// For now, return an error
-			return fmt.Errorf("failed to fetch manifest: %v. Hint: Push artifact first or use a local registry", err)
-		}
+			report := workflow.NewValidationReport("nodes", artifact)
+			const section = "Node Requirements"
+			hints := reportHints{
+				pass: "Kubernetes scheduler can proceed with deployment.",
+				fail: "Hint: add nodes with matching hardware or adjust the artifact's node requirements.",
+			}
 
-		if !quietFlag {
-			fmt.Println("✓ Fetched artifact manifest")
-		}
+			gpuType := annotations[workflow.AnnotationGPUType]
+			vramMin := annotations[workflow.AnnotationVRAMMin]
+			gpuTopology := annotations[workflow.AnnotationGPUTopology]
+			if gpuType == "" && vramMin == "" && gpuTopology == "" {
+				report.Info(section, "requirements", "none declared; Kubernetes will schedule to any available node")
+				return printReport(report, out, hints)
+			}
 
-		// Extract node requirement annotations
-		gpuType := annotations[workflow.AnnotationGPUType]
-		vramMin := annotations[workflow.AnnotationVRAMMin]
-		gpuTopology := annotations[workflow.AnnotationGPUTopology]
+			nodes, err := getClusterNodes(namespace)
+			if err != nil {
+				return fmt.Errorf("failed to query cluster nodes: %v (ensure kubectl is configured and you have access to the cluster)", err)
+			}
+			report.Info(section, "cluster", fmt.Sprintf("%d node(s) checked in namespace %q", len(nodes), namespace))
 
-		if !quietFlag {
-			fmt.Println("\n=== Node Requirements from Manifest ===")
 			if gpuType != "" {
-				fmt.Printf("  GPU Type: %s\n", gpuType)
-			} else {
-				fmt.Println("  GPU Type: (not specified)")
+				if node := findNode(nodes, func(n ClusterNode) bool { return n.GPUType == gpuType }); node != nil {
+					report.Pass(section, workflow.AnnotationGPUType, fmt.Sprintf("%s (node %s)", gpuType, node.Name))
+				} else {
+					report.Fail(section, workflow.AnnotationGPUType, "no node with GPU type "+gpuType, "gpu type "+gpuType)
+				}
 			}
 			if vramMin != "" {
-				fmt.Printf("  vRAM Minimum: %s\n", vramMin)
-			} else {
-				fmt.Println("  vRAM Minimum: (not specified)")
+				// Simple string comparison for now; in production, parse and compare units.
+				if node := findNode(nodes, func(n ClusterNode) bool { return n.VRAM >= vramMin }); node != nil {
+					report.Pass(section, workflow.AnnotationVRAMMin, fmt.Sprintf("%s (node %s has %s)", vramMin, node.Name, node.VRAM))
+				} else {
+					report.Fail(section, workflow.AnnotationVRAMMin, "no node with vRAM >= "+vramMin, "vram >= "+vramMin)
+				}
 			}
 			if gpuTopology != "" {
-				fmt.Printf("  GPU Topology: %s\n", gpuTopology)
-			} else {
-				fmt.Println("  GPU Topology: (not specified)")
-			}
-		}
-
-		// If no node requirements are specified, consider it a pass
-		if gpuType == "" && vramMin == "" && gpuTopology == "" {
-			if !quietFlag {
-				fmt.Println("\n✓ PASS: No specific node requirements declared")
-				fmt.Println("  Kubernetes will schedule to any available node")
-			}
-			return nil
-		}
-
-		// Query cluster nodes
-		if !quietFlag {
-			fmt.Println("\n=== Checking Cluster Nodes ===")
-		}
-
-		nodes, err := getClusterNodes(namespace)
-		if err != nil {
-			if !quietFlag {
-				fmt.Printf("⚠ Warning: Could not query cluster nodes: %v\n", err)
-				fmt.Println("  Ensure kubectl is configured and you have access to the cluster.")
-			}
-			return fmt.Errorf("failed to query cluster nodes: %v", err)
-		}
-
-		if !quietFlag {
-			fmt.Printf("  Found %d node(s) in namespace '%s'\n", len(nodes), namespace)
-		}
-
-		// Validate each requirement
-		allPass := true
-		var validationErrors []string
-
-		// Check GPU Type
-		if gpuType != "" {
-			if !quietFlag {
-				fmt.Printf("\n  Checking GPU Type: %s\n", gpuType)
-			}
-			gpuTypePass := false
-			for _, node := range nodes {
-				if node.GPUType == gpuType {
-					gpuTypePass = true
-					if !quietFlag {
-						fmt.Printf("    ✓ Node %s has GPU type %s\n", node.Name, node.GPUType)
-					}
-					break
+				if node := findNode(nodes, func(n ClusterNode) bool { return n.GPUTopology == gpuTopology }); node != nil {
+					report.Pass(section, workflow.AnnotationGPUTopology, fmt.Sprintf("%s (node %s)", gpuTopology, node.Name))
+				} else {
+					report.Fail(section, workflow.AnnotationGPUTopology, "no node with GPU topology "+gpuTopology, "gpu topology "+gpuTopology)
 				}
 			}
-			if !gpuTypePass {
-				allPass = false
-				validationErrors = append(validationErrors, fmt.Sprintf("no nodes with GPU type %s", gpuType))
-				if !quietFlag {
-					fmt.Printf("    ✗ No nodes with GPU type %s\n", gpuType)
-				}
-			}
-		}
+			return printReport(report, out, hints)
+		},
+	}
+	addArtifactFlags(c)
+	addOutputFlags(c)
+	c.Flags().String("namespace", "default", "Kubernetes namespace to check")
+	return c
+}
 
-		// Check vRAM Minimum
-		if vramMin != "" {
-			if !quietFlag {
-				fmt.Printf("\n  Checking vRAM Minimum: %s\n", vramMin)
-			}
-			vramPass := false
-			for _, node := range nodes {
-				// Simple string comparison for now; in production, parse and compare
-				if node.VRAM >= vramMin {
-					vramPass = true
-					if !quietFlag {
-						fmt.Printf("    ✓ Node %s has vRAM %s (>= %s)\n", node.Name, node.VRAM, vramMin)
-					}
-					break
-				}
-			}
-			if !vramPass {
-				allPass = false
-				validationErrors = append(validationErrors, fmt.Sprintf("no nodes with vRAM >= %s", vramMin))
-				if !quietFlag {
-					fmt.Printf("    ✗ No nodes with vRAM >= %s\n", vramMin)
-				}
-			}
+// findNode returns the first node matching pred, or nil.
+func findNode(nodes []ClusterNode, pred func(ClusterNode) bool) *ClusterNode {
+	for i := range nodes {
+		if pred(nodes[i]) {
+			return &nodes[i]
 		}
-
-		// Check GPU Topology
-		if gpuTopology != "" {
-			if !quietFlag {
-				fmt.Printf("\n  Checking GPU Topology: %s\n", gpuTopology)
-			}
-			topologyPass := false
-			for _, node := range nodes {
-				// Check if node's GPU topology matches requirement
-				// For now, simple string match; in production, parse topology (e.g., 8xH100 = 8 GPUs of type H100)
-				if node.GPUTopology == gpuTopology {
-					topologyPass = true
-					if !quietFlag {
-						fmt.Printf("    ✓ Node %s has GPU topology %s\n", node.Name, node.GPUTopology)
-					}
-					break
-				}
-			}
-			if !topologyPass {
-				allPass = false
-				validationErrors = append(validationErrors, fmt.Sprintf("no nodes with GPU topology %s", gpuTopology))
-				if !quietFlag {
-					fmt.Printf("    ✗ No nodes with GPU topology %s\n", gpuTopology)
-				}
-			}
-		}
-
-		// Output results
-		if jsonOutputFlag {
-			result := map[string]interface{}{
-				"artifact":      artifact,
-				"requirements":  map[string]string{"gpu_type": gpuType, "vram_min": vramMin, "gpu_topology": gpuTopology},
-				"nodes_checked": len(nodes),
-				"pass":          allPass,
-			}
-			if !allPass {
-				result["errors"] = validationErrors
-			}
-			jsonOutput, _ := json.MarshalIndent(result, "", "  ")
-			fmt.Println(string(jsonOutput))
-		} else if !quietFlag {
-			fmt.Println("\n=== Result ===")
-			if allPass {
-				fmt.Println("✓ PASS: All node requirements can be satisfied")
-				fmt.Println("  Kubernetes scheduler can proceed with deployment")
-			} else {
-				fmt.Println("✗ FAIL: Node requirements cannot be satisfied")
-				for _, err := range validationErrors {
-					fmt.Printf("  - %s\n", err)
-				}
-				fmt.Println("\nHint: Add nodes with matching hardware or adjust artifact requirements")
-			}
-		}
-
-		if !allPass {
-			return fmt.Errorf("node validation failed: %v", validationErrors)
-		}
-
-		return nil
-	},
+	}
+	return nil
 }
 
 // ClusterNode represents a Kubernetes node with GPU information
@@ -356,13 +175,4 @@ func getClusterNodes(namespace string) ([]ClusterNode, error) {
 	}
 
 	return nodes, nil
-}
-
-func init() {
-	rootCmd.AddCommand(validateNodesCmd)
-	validateNodesCmd.Flags().String("artifact", "", "OCI artifact reference to validate")
-	validateNodesCmd.Flags().String("registry", "", "Registry tool: oras or modelpack")
-	validateNodesCmd.Flags().String("namespace", "default", "Kubernetes namespace to check")
-	validateNodesCmd.Flags().Bool("quiet", false, "Quiet mode: only output pass/fail status")
-	validateNodesCmd.Flags().Bool("json-output", false, "Output results as JSON for CI/CD integration")
 }

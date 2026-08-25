@@ -260,7 +260,7 @@ Evaluates an artifact for GitOps admission.
 
 **Non-interactive flags:**
 ```bash
-model-cli admit \
+model-cli validate admission \
   --artifact my-registry/my-model:latest \
   --env production \
   --strict
@@ -352,7 +352,7 @@ Performs local compliance check before pushing artifact to registry.
 
 **Non-interactive flags:**
 ```bash
-model-cli check \
+model-cli validate local \
   --model-path ./models \
   --artifact-path ./output \
   --strict

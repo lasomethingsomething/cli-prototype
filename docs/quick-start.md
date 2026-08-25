@@ -60,7 +60,7 @@ model-cli package --model phi-4-mini --model-path ./models --registry oras
 model-cli package --model phi-4-mini --model-path ./models --registry modelpack
 
 # Local compliance check
-model-cli check --model-path ./models
+model-cli validate local --model-path ./models
 
 # Sign
 model-cli sign --artifact my-model:v1
@@ -69,16 +69,16 @@ model-cli sign --artifact my-model:v1
 model-cli validate --manifest my-manifest.json
 
 # Validate for GitOps deployment
-model-cli validate-gitops --artifact my-model:v1
+model-cli validate gitops --artifact my-model:v1
 
 # Evaluate artifact for admission
-model-cli admit --artifact my-model:v1
+model-cli validate admission --artifact my-model:v1
 
 # Validate node hardware requirements
-model-cli validate-nodes --artifact my-model:v1
+model-cli validate nodes --artifact my-model:v1
 
 # Validate runtime availability
-model-cli validate-runtime --artifact my-model:v1
+model-cli validate runtime --artifact my-model:v1
 
 # Package with node requirements
 model-cli package --gpu-type nvidia-h100 --vram-min 80GiB --gpu-topology 8xH100
