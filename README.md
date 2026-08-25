@@ -105,7 +105,7 @@ Honest list of what is scaffolding today:
 - **MOF auto-classification is informational** - the class you answer in the prompt (or `--mof-class`) is what lands in the manifest; the classifier's result is printed but not applied.
 - **Local parity check is a placeholder** - the registry-side digest is not a real content digest yet.
 - **`package` always needs a TTY** - flags suppress their prompt only when non-empty, and the RAG confirm always asks, so it fails in CI with `huh: could not open a new TTY`. The `MODEL_CLI_NO_INTERACTIVE` variable mentioned in older docs is not implemented.
-- **No `version` command yet**, and no published binaries; build from source.
+- **No published binaries yet**; build from source or tag a release.
 
 ## Development
 
