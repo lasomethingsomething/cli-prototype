@@ -1,9 +1,14 @@
 package workflow
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
+	"sort"
+	"strings"
 )
 
 // OCI Image Spec media types
@@ -11,6 +16,9 @@ const (
 	// Media types for manifests
 	OCIManifestMediaType = "application/vnd.oci.image.manifest.v1+json"
 	OCIIndexMediaType    = "application/vnd.oci.image.index.v1+json"
+
+	// Media type used for each packaged file (ORAS's default for files)
+	OCILayerMediaType = "application/vnd.oci.image.layer.v1.tar"
 
 	// Media types for AI-specific config
 	AIModelConfigMediaType    = "application/vnd.cncf.ai.model.config.v1+json"
@@ -128,11 +136,15 @@ type PipelineComponent struct {
 	Parameters map[string]string `json:"parameters,omitempty"`
 }
 
-// UnifiedOCIManifest represents an OCI-compliant manifest with AI-specific extensions
+// UnifiedOCIManifest is the single manifest type used throughout model-cli:
+// an OCI image manifest (v1.1) carrying CNCF AI annotations, plus an inline
+// copy of the AI config for tools that inspect the manifest without pulling
+// the config blob.
 type UnifiedOCIManifest struct {
 	// OCI Image Spec v1.1 fields
-	SchemaVersion int               `json:"schemaVersion"` // Must be 2
-	MediaType     string            `json:"mediaType"`     // application/vnd.oci.image.manifest.v1+json
+	SchemaVersion int               `json:"schemaVersion"`          // Must be 2
+	MediaType     string            `json:"mediaType"`              // application/vnd.oci.image.manifest.v1+json
+	ArtifactType  string            `json:"artifactType,omitempty"` // application/vnd.cncf.ai.<model|skill|pipeline>
 	Config        OCIDescriptor     `json:"config"`
 	Layers        []OCILayer        `json:"layers,omitempty"`
 	Annotations   map[string]string `json:"annotations,omitempty"`
@@ -160,8 +172,9 @@ func NewUnifiedOCIManifest(artifactType ArtifactType, name string, layers []OCIL
 		Annotations:   make(map[string]string),
 	}
 
-	// Set artifact type annotation
+	// Set artifact type annotation and OCI artifactType
 	manifest.Annotations[AnnotationArtifactType] = string(artifactType)
+	manifest.ArtifactType = "application/vnd.cncf.ai." + string(artifactType)
 
 	// Set the config based on artifact type
 	switch artifactType {
@@ -240,8 +253,26 @@ func (m *UnifiedOCIManifest) SetRelationships(relationships map[string][]string)
 	}
 }
 
+// refreshConfigDescriptor fills the config descriptor's digest and size from
+// the inline AI config so the descriptor describes a real blob.
+func (m *UnifiedOCIManifest) refreshConfigDescriptor() error {
+	if m.AIConfig == nil {
+		return nil
+	}
+	data, err := json.Marshal(m.AIConfig)
+	if err != nil {
+		return fmt.Errorf("failed to marshal AI config: %v", err)
+	}
+	m.Config.Digest = fmt.Sprintf("sha256:%x", sha256.Sum256(data))
+	m.Config.Size = int64(len(data))
+	return nil
+}
+
 // WriteUnifiedOCIManifest writes the manifest to a file
 func WriteUnifiedOCIManifest(m *UnifiedOCIManifest, path string) error {
+	if err := m.refreshConfigDescriptor(); err != nil {
+		return err
+	}
 	data, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal unified OCI manifest: %v", err)
@@ -303,4 +334,101 @@ func ValidateOCIManifest(m *UnifiedOCIManifest) error {
 	}
 
 	return nil
+}
+
+// NewManifestFromDirectory builds a manifest for the files under dir: one
+// layer per file with its sha256 digest, size and relative path as title.
+// Files that model-cli writes next to the model (manifest, attestation,
+// SBOM) are skipped. annotations are merged into the manifest; the artifact
+// type annotation is always set from artifactType.
+func NewManifestFromDirectory(artifactType ArtifactType, name, dir string, annotations map[string]string) (*UnifiedOCIManifest, error) {
+	layers, err := layersFromDirectory(dir)
+	if err != nil {
+		return nil, err
+	}
+	manifest := NewUnifiedOCIManifest(artifactType, name, layers)
+	for k, v := range annotations {
+		manifest.Annotations[k] = v
+	}
+	manifest.Annotations[AnnotationArtifactType] = string(artifactType)
+	if err := manifest.refreshConfigDescriptor(); err != nil {
+		return nil, err
+	}
+	return manifest, nil
+}
+
+// layersFromDirectory returns a layer descriptor per regular file under dir,
+// sorted by path for deterministic output. A single file is a single layer.
+func layersFromDirectory(dir string) ([]OCILayer, error) {
+	info, err := os.Stat(dir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read model path %s: %v", dir, err)
+	}
+	if !info.IsDir() {
+		layer, err := layerForFile(dir, filepath.Base(dir))
+		if err != nil {
+			return nil, err
+		}
+		return []OCILayer{layer}, nil
+	}
+
+	var layers []OCILayer
+	err = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() || !info.Mode().IsRegular() {
+			return nil
+		}
+		if isGeneratedArtifact(strings.ToLower(info.Name())) {
+			return nil
+		}
+		rel, err := filepath.Rel(dir, path)
+		if err != nil {
+			return err
+		}
+		layer, err := layerForFile(path, filepath.ToSlash(rel))
+		if err != nil {
+			return err
+		}
+		layers = append(layers, layer)
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan model path %s: %v", dir, err)
+	}
+	sort.Slice(layers, func(i, j int) bool {
+		return layers[i].Annotations["org.opencontainers.image.title"] < layers[j].Annotations["org.opencontainers.image.title"]
+	})
+	return layers, nil
+}
+
+func layerForFile(path, title string) (OCILayer, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return OCILayer{}, fmt.Errorf("failed to open %s: %v", path, err)
+	}
+	defer f.Close()
+
+	h := sha256.New()
+	size, err := io.Copy(h, f)
+	if err != nil {
+		return OCILayer{}, fmt.Errorf("failed to hash %s: %v", path, err)
+	}
+	return OCILayer{
+		MediaType:   OCILayerMediaType,
+		Digest:      fmt.Sprintf("sha256:%x", h.Sum(nil)),
+		Size:        size,
+		Annotations: map[string]string{"org.opencontainers.image.title": title},
+	}, nil
+}
+
+// ComputeManifestDigest returns the sha256 digest of the manifest file at
+// path, or "" if it cannot be read.
+func ComputeManifestDigest(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	return fmt.Sprintf("sha256:%x", sha256.Sum256(data))
 }

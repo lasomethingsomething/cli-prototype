@@ -101,7 +101,7 @@ Standards: [OCI Image Spec](https://specs.opencontainers.org/image-spec/), [OCI 
 Honest list of what is scaffolding today:
 
 - **ModelPack provider is not implemented** - tool detection works, but every registry operation returns a clear `not implemented` error. Use `--registry oras`.
-- **The written `manifest.json` is minimal** - it has annotations and a config media type but no layers or digests, so it is not yet a manifest a registry would accept as-is. On push, ORAS builds the real manifest and the annotations are passed to it.
+- **The local `manifest.json` is a preview** - it has real layer descriptors (digest, size, title per file) and the annotations, but the AI config is inlined (`aiConfig`) rather than stored as a separate blob. On push, ORAS assembles the manifest the registry stores; the annotations are passed to it.
 - **MOF auto-classification is informational** - the class you answer in the prompt (or `--mof-class`) is what lands in the manifest; the classifier's result is printed but not applied.
 - **`package` always needs a TTY** - flags suppress their prompt only when non-empty, and the RAG confirm always asks, so it fails in CI with `huh: could not open a new TTY`. The `MODEL_CLI_NO_INTERACTIVE` variable mentioned in older docs is not implemented.
 - **No published binaries yet**; build from source or tag a release.
