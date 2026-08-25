@@ -371,3 +371,53 @@ func TestPackageWorkflowRunWithSigning(t *testing.T) {
 		t.Errorf("signer = %q, want %q", pf.signer, "fake-sign")
 	}
 }
+
+// TestPackageWorkflowAppliesMOFClassification verifies the detected MOF class
+// and components land in the manifest when the user left them empty, and
+// that an explicit class is kept.
+func TestPackageWorkflowAppliesMOFClassification(t *testing.T) {
+	newModelDir := func(t *testing.T) string {
+		dir := t.TempDir()
+		for name, content := range map[string]string{"model.safetensors": "weights", "README.md": "# model"} {
+			if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return dir
+	}
+
+	t.Run("detected when empty", func(t *testing.T) {
+		pf := &PackageWorkflow{registry: "fake", registryProvider: &fakeRegistryProvider{installed: true}, annotations: NewAnnotationSet(), includeMOF: true}
+		pf.SetPackageInfo("m", newModelDir(t), "m:v1", "", false, "")
+		if err := pf.Run(); err != nil {
+			t.Fatalf("Run() error = %v", err)
+		}
+		m, err := ReadUnifiedOCIManifest(pf.ManifestPath())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := m.Annotations[AnnotationMOFClass]; got != "II" {
+			t.Errorf("MOF class annotation = %q, want detected II", got)
+		}
+		if got := m.Annotations[AnnotationMOFComponents]; got != "weights,documentation" {
+			t.Errorf("MOF components annotation = %q, want weights,documentation", got)
+		}
+	})
+
+	t.Run("explicit class kept", func(t *testing.T) {
+		pf := &PackageWorkflow{registry: "fake", registryProvider: &fakeRegistryProvider{installed: true}, annotations: NewAnnotationSet(), includeMOF: true}
+		pf.annotations.MOFClass = "I"
+		pf.annotations.MOFComponents = "weights,code"
+		pf.SetPackageInfo("m", newModelDir(t), "m:v1", "", false, "")
+		if err := pf.Run(); err != nil {
+			t.Fatalf("Run() error = %v", err)
+		}
+		m, err := ReadUnifiedOCIManifest(pf.ManifestPath())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if m.Annotations[AnnotationMOFClass] != "I" || m.Annotations[AnnotationMOFComponents] != "weights,code" {
+			t.Errorf("explicit MOF annotations were overwritten: class=%q components=%q", m.Annotations[AnnotationMOFClass], m.Annotations[AnnotationMOFComponents])
+		}
+	})
+}

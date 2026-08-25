@@ -3,6 +3,7 @@ package workflow
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -137,6 +138,40 @@ func (w *PackageWorkflow) SetVerifyParity(verify bool) {
 	w.verifyParity = verify
 }
 
+// applyMOFClassification records the detected MOF class and components in
+// the annotations unless the user declared them explicitly. An explicit
+// class that differs from the detected one is kept, with a warning.
+func (w *PackageWorkflow) applyMOFClassification(detectedClass string, result *ClassificationResult) {
+	switch {
+	case w.annotations.MOFClass == "":
+		w.annotations.MOFClass = detectedClass
+		fmt.Printf("  MOF Class: %s (detected)\n", detectedClass)
+	case w.annotations.MOFClass != detectedClass:
+		fmt.Printf("  MOF Class: %s (declared; files suggest %s - %s)\n", w.annotations.MOFClass, detectedClass, result.Explanation)
+	default:
+		fmt.Printf("  MOF Class: %s (declared, matches detection)\n", w.annotations.MOFClass)
+	}
+	if w.annotations.MOFComponents == "" && len(result.Components) > 0 {
+		w.annotations.MOFComponents = strings.Join(canonicalMOFComponents(result.Components), ",")
+		fmt.Printf("  MOF Components: %s (detected)\n", w.annotations.MOFComponents)
+	}
+}
+
+// canonicalMOFComponents orders detected components the way the MOF spec
+// lists them, independent of the order files were encountered on disk.
+func canonicalMOFComponents(components []string) []string {
+	order := []string{"weights", "code", "training-data", "documentation", "license"}
+	var sorted []string
+	for _, want := range order {
+		for _, c := range components {
+			if c == want {
+				sorted = append(sorted, c)
+			}
+		}
+	}
+	return sorted
+}
+
 // Run executes the packaging workflow
 func (w *PackageWorkflow) Run() error {
 	fmt.Printf("Packaging model '%s' from '%s' as '%s'\n", w.modelName, w.modelPath, w.artifactName)
@@ -173,17 +208,16 @@ func (w *PackageWorkflow) Run() error {
 		}
 	}
 
-	// 2. MOF Classification if requested
+	// 2. MOF classification: fill in what the user left empty, and warn when
+	//    the declared class disagrees with what the files suggest.
 	if w.includeMOF {
 		fmt.Println("✓ Applying MOF (Model Openness Framework) classification...")
 
-		mofClassifier := GetMOFClassifier()
-		mofClass, err := mofClassifier.Classify(w.modelPath)
+		detectedClass, result, err := ClassifyModelPath(w.modelPath)
 		if err != nil {
 			fmt.Printf("  Warning: MOF classification failed: %v\n", err)
-		} else {
-			fmt.Printf("  MOF Class: %s\n", mofClass)
-			// In production, this would add the classification to artifact metadata
+		} else if w.annotations != nil {
+			w.applyMOFClassification(detectedClass, result)
 		}
 	}
 
