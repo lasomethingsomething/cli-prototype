@@ -83,3 +83,34 @@ func TestSaveAndLoad(t *testing.T) {
 		t.Errorf("Runtime = %q, want %q", loaded.Runtime, cfg.Runtime)
 	}
 }
+
+func TestSaveSkipsWriteWhenUnchanged(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, ".model-cli.yaml")
+	resetViper()
+	viper.SetConfigFile(cfgPath)
+
+	cfg := &Config{GitOps: "argo", Registry: "oras"}
+	if err := Save(cfg); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+	before, err := os.Stat(cfgPath)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+
+	// Make the file read-only: a second Save with identical content must not
+	// try to write and therefore must not fail.
+	if err := os.Chmod(cfgPath, 0444); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+	t.Cleanup(func() { os.Chmod(cfgPath, 0644) })
+
+	if err := Save(&Config{GitOps: "argo", Registry: "oras"}); err != nil {
+		t.Errorf("Save() with unchanged config should be a no-op, got error: %v", err)
+	}
+	after, _ := os.Stat(cfgPath)
+	if !after.ModTime().Equal(before.ModTime()) {
+		t.Errorf("config file was rewritten although nothing changed")
+	}
+}

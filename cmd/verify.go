@@ -68,7 +68,7 @@ Examples:
 				return err
 			}
 			cfg.Signer = signer
-			config.Save(cfg)
+			warnIfSaveFails(config.Save(cfg))
 		} else {
 			signer = cfg.Signer
 		}

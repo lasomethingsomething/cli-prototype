@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
 )
 
@@ -13,10 +14,11 @@ type RegistryProvider interface {
 	Name() string
 	IsInstalled() bool
 	InstallInstructions() string
-	// Push pushes artifact to registry, attaching annotations (e.g. from
-	// AnnotationSet.ToMap()) to the resulting OCI manifest. annotations may
-	// be nil or empty when no manifest-level annotations should be set.
-	Push(artifact, registry string, annotations map[string]string) error
+	// Push uploads the file or directory at sourcePath to registry as
+	// artifact, attaching annotations (e.g. from AnnotationSet.ToMap()) to
+	// the resulting OCI manifest. annotations may be nil or empty when no
+	// manifest-level annotations should be set.
+	Push(artifact, registry, sourcePath string, annotations map[string]string) error
 	Pull(artifact, registry string) error
 	// GetArtifactDigest returns the digest of an artifact in the registry
 	// This is used for local parity verification to ensure what was pushed matches what's in the registry
@@ -66,11 +68,26 @@ func (o *ORASProvider) InstallInstructions() string {
 	return "brew install oras"
 }
 
-func (o *ORASProvider) Push(artifact, registry string, annotations map[string]string) error {
-	args := append([]string{"push", registry + "/" + artifact}, annotationArgs(annotations)...)
-	args = append(args, artifact)
+func (o *ORASProvider) Push(artifact, registry, sourcePath string, annotations map[string]string) error {
+	absSource, err := filepath.Abs(sourcePath)
+	if err != nil {
+		return fmt.Errorf("failed to resolve source path %q: %v", sourcePath, err)
+	}
+	if _, err := os.Stat(absSource); err != nil {
+		return fmt.Errorf("source path %q is not accessible: %v", sourcePath, err)
+	}
+
+	args := []string{"push", registry + "/" + artifact, "--artifact-type", artifactTypeFor(annotations)}
+	args = append(args, annotationArgs(annotations)...)
+	// Run from the parent directory and push the base name so that the layer
+	// title ORAS records is the model directory (or file) name, not an
+	// absolute path (which ORAS rejects without --disable-path-validation).
+	args = append(args, filepath.Base(absSource))
 
 	cmd := exec.Command("oras", args...)
+	cmd.Dir = filepath.Dir(absSource)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to push with ORAS: %v", err)
 	}
@@ -79,6 +96,16 @@ func (o *ORASProvider) Push(artifact, registry string, annotations map[string]st
 		fmt.Printf("Attached %d CNCF AI annotation(s) to the manifest\n", len(annotations))
 	}
 	return nil
+}
+
+// artifactTypeFor derives the OCI artifactType for a push from the
+// org.cncf.ai.artifact.type annotation, defaulting to a model.
+func artifactTypeFor(annotations map[string]string) string {
+	t := annotations[AnnotationArtifactType]
+	if t == "" {
+		t = "model"
+	}
+	return "application/vnd.cncf.ai." + t
 }
 
 func (o *ORASProvider) Pull(artifact, registry string) error {
@@ -248,7 +275,7 @@ func (m *ModelPackProvider) InstallInstructions() string {
 	return "go install github.com/modelpack/modelpack@latest"
 }
 
-func (m *ModelPackProvider) Push(artifact, registry string, annotations map[string]string) error {
+func (m *ModelPackProvider) Push(artifact, registry, sourcePath string, annotations map[string]string) error {
 	fmt.Printf("Pushed artifact %s to %s using ModelPack\n", artifact, registry)
 	if len(annotations) > 0 {
 		fmt.Printf("Attached %d CNCF AI annotation(s) to the manifest\n", len(annotations))

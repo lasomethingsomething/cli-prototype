@@ -21,7 +21,13 @@ func Load() *Config {
 	return &cfg
 }
 
+// Save persists cfg to the config file. It is a no-op when cfg matches what
+// is already loaded, so commands can call it unconditionally without
+// rewriting ~/.model-cli.yaml on every run.
 func Save(cfg *Config) error {
+	if *cfg == *Load() && viper.ConfigFileUsed() != "" {
+		return nil
+	}
 	viper.Set("gitops", cfg.GitOps)
 	viper.Set("registry", cfg.Registry)
 	viper.Set("runtime", cfg.Runtime)

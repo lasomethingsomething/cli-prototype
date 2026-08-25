@@ -63,11 +63,6 @@ Examples:
 			cfg.Registry = registryFlag
 		}
 
-		// Save config for future use
-		if err := config.Save(cfg); err != nil {
-			return fmt.Errorf("failed to save config: %w", err)
-		}
-
 		// Tour guide: Get model information interactively or via flags
 		var modelName string
 		var hasKubernetes bool
@@ -124,6 +119,9 @@ Examples:
 			fmt.Println("Okay! We'll package the model but skip Kubernetes deployment.")
 			fmt.Println("You can run 'model-cli deploy' again when you have a cluster ready.")
 		}
+
+		// All inputs collected: remember the tool choices for next time.
+		warnIfSaveFails(config.Save(cfg))
 
 		// Delegate to workflow
 		wf, err := workflow.NewDeployWorkflow(cfg.GitOps, cfg.Registry)
