@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/charmbracelet/huh"
 	"github.com/lasomethingsomething/cli-prototype/config"
 	"github.com/lasomethingsomething/cli-prototype/internal/workflow"
 	"github.com/spf13/cobra"
@@ -26,76 +25,31 @@ Examples:
 		cfg := config.Load()
 
 		// Get flags
-		artifactFlag, _ := cmd.Flags().GetString("artifact")
-		signerFlag, _ := cmd.Flags().GetString("signer")
-		keyRefFlag, _ := cmd.Flags().GetString("key")
 		useKeyFlag, _ := cmd.Flags().GetBool("use-key")
 
 		// Interactive prompts
 		var artifact string
-		if artifactFlag != "" {
-			artifact = artifactFlag
-		} else {
-			if err := huh.NewInput().
-				Title("Artifact to sign:").
-				Description("The OCI artifact reference to sign (e.g., my-registry/my-model:latest)").
-				Value(&artifact).
-				Run(); err != nil {
+		if err := askString(cmd, "artifact", &artifact, "Artifact to sign:", "The OCI artifact reference to sign (e.g., my-registry/my-model:latest)"); err != nil {
+			return err
+		}
+
+		if err := askSelectIfEmpty(cmd, "signer", &cfg.Signer, "Select signing tool:", "Choose a signing provider (aligns with OSSF Model Signing Spec)", []string{"sigstore", "notary"}); err != nil {
+			return err
+		}
+		signer := cfg.Signer
+		warnIfSaveFails(config.Save(cfg))
+
+		// A key reference implies a key; otherwise --use-key or a confirmation decides.
+		useKey := cmd.Flags().Changed("key") || useKeyFlag
+		if !useKey {
+			if err := askConfirm(cmd, "use-key", &useKey, "Use a specific key?", "Do you want to specify a signing key? (Otherwise, default key will be used)"); err != nil {
 				return err
 			}
 		}
-
-		var signer string
-		if signerFlag != "" {
-			signer = signerFlag
-		} else if cfg.Signer == "" {
-			if err := huh.NewSelect[string]().
-				Title("Select signing tool:").
-				Description("Choose a signing provider (aligns with OSSF Model Signing Spec)").
-				Options(huh.NewOptions("sigstore", "notary")...).
-				Value(&signer).
-				Run(); err != nil {
-				return err
-			}
-			cfg.Signer = signer
-			warnIfSaveFails(config.Save(cfg))
-		} else {
-			signer = cfg.Signer
-		}
-
 		var keyRef string
-		var useKey bool
-
-		if keyRefFlag != "" {
-			useKey = true
-			keyRef = keyRefFlag
-		} else if useKeyFlag {
-			useKey = true
-			if err := huh.NewInput().
-				Title("Key reference:").
-				Description("The key to use for signing (e.g., cosign-key.pub or notation-key)").
-				Value(&keyRef).
-				Run(); err != nil {
+		if useKey {
+			if err := askString(cmd, "key", &keyRef, "Key reference:", "The key to use for signing (e.g., cosign-key.pub or notation-key)"); err != nil {
 				return err
-			}
-		} else {
-			// Check if user wants to use a key
-			if err := huh.NewConfirm().
-				Title("Use a specific key?").
-				Description("Do you want to specify a signing key? (Otherwise, default key will be used)").
-				Value(&useKey).
-				Run(); err != nil {
-				return err
-			}
-
-			if useKey {
-				if err := huh.NewInput().
-					Title("Key reference:").
-					Description("The key to use for signing (e.g., cosign-key.pub or notation-key)").
-					Value(&keyRef).
-					Run(); err != nil {
-					return err
-				}
 			}
 		}
 
