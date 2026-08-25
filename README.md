@@ -51,23 +51,32 @@ Anything you pass as a flag is not prompted for again. In CI or scripts, prompts
 
 ## Commands
 
-Start with `model-cli wizard` for the guided end-to-end journey. Each step is also its own command:
+Start with `model-cli wizard` - the guided, end-to-end tour. Everything it does is also a standalone command.
 
-| Phase | Command | What it does |
-|-------|---------|--------------|
-| Package | `package` | Package a model or agentic skill as an OCI artifact, inject annotations, generate SBOM + provenance |
-| Package | `harden` | Apply local hardening (SBOM, MOF classification) to an existing artifact |
-| Package | `validate local` | Local compliance check of the model directory before pushing |
-| Sign | `sign` / `verify` | Sign and verify with Sigstore (cosign) or Notary v2 (notation) |
-| Registry | `push` | Push an artifact to an OCI registry |
-| Registry | `validate manifest` / `enforce` | Validate a manifest against the metadata contract (JSON Schema); `enforce` can run as an admission webhook |
-| Registry | `map` / `search` | Embed and query model → skill → pipeline relationships |
-| Deploy | `validate gitops` | Pre-sync validation of trust-profile and infrastructure annotations for Argo CD / Flux |
-| Deploy | `validate admission` | Admission evaluation for a target environment (air-gapped, hybrid-cloud) |
-| Deploy | `validate nodes` / `validate runtime` / `schedule` | Check cluster nodes and runtime operators against artifact requirements |
-| Deploy | `deploy` / `serve` | Hand off to Argo CD / Flux and vLLM / KServe |
+**Build the artifact**
 
-Every command takes flags and falls back to prompts for anything you leave out (never without a terminal - see the non-interactive note above). Tool choices are remembered in `~/.model-cli.yaml`. The wizard is the one command that is prompt-only.
+- `package` - package a model or agentic skill as an OCI artifact: annotations, SBOM, provenance
+- `harden` - add SBOM and MOF classification to an existing artifact
+- `sign`, `verify` - Sigstore (cosign) or Notary v2 (notation)
+- `push` - push to an OCI registry, with the provenance attestation attached as a referrer
+
+**Validate** - one command family, one report format (text, `--quiet`, or `--json-output` for CI)
+
+- `validate local` - the model directory, before pushing
+- `validate manifest` - a manifest against the metadata contract (JSON Schema)
+- `validate gitops` - trust-profile and infrastructure annotations, as an Argo CD / Flux pre-sync hook
+- `validate admission` - admission to a target environment (air-gapped, hybrid-cloud, ...)
+- `validate nodes`, `validate runtime` - cluster nodes and runtime operators against the artifact's requirements
+
+**Deploy and serve**
+
+- `deploy` - hand off to Argo CD or Flux
+- `serve` - hand off to vLLM or KServe
+- `schedule` - pick a node that satisfies the artifact's hardware requirements
+- `enforce` - run the metadata contract as an admission webhook
+- `map`, `search` - embed and query model → skill → pipeline relationships
+
+Every command takes flags and prompts for anything you leave out - never without a terminal, see the non-interactive note above. Tool choices are remembered in `~/.model-cli.yaml`. The wizard is the one command that is prompt-only.
 
 ## Key Concepts
 
