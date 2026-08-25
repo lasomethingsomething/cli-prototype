@@ -37,6 +37,10 @@ Examples:
 			return err
 		}
 
+		if err := requireValues("artifact", artifact); err != nil {
+			return err
+		}
+
 		listNodes := listNodesFlag
 		dryRun := dryRunFlag
 

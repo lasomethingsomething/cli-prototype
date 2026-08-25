@@ -51,6 +51,10 @@ Examples:
 			return err
 		}
 
+		if err := requireValues("manifest", manifestPath); err != nil {
+			return err
+		}
+
 		// Read the manifest
 		manifest, err := workflow.ReadUnifiedOCIManifest(manifestPath)
 		if err != nil {
@@ -86,7 +90,9 @@ Examples:
 
 			// Prompt to add one
 			var addContract bool
-			if err := huh.NewConfirm().
+			if !interactive() {
+				fmt.Println("  (prompts disabled; not adding a sample contract)")
+			} else if err := huh.NewConfirm().
 				Title("Add sample metadata contract?").
 				Description("Add a sample ai.assets metadata contract for testing").
 				Value(&addContract).

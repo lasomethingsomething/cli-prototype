@@ -300,6 +300,7 @@ model-cli deploy --gitops argo --registry oras
 ```
 
 ### For CI/CD: Non-Interactive Mode
+Prompts are disabled automatically when stdin is not a terminal, or explicitly with `--non-interactive` / `MODEL_CLI_NO_INTERACTIVE=true`. Saved config and defaults fill gaps; a missing required value fails naming the flag. The `wizard` command always needs a terminal.
 ```bash
 # All commands support flags for automation
 export MODEL_CLI_NO_INTERACTIVE=true

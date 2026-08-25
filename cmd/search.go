@@ -61,6 +61,9 @@ Examples:
 				return err
 			}
 		}
+		if err := requireValues("destination", destination); err != nil {
+			return err
+		}
 		query.Registry = destination
 
 		// Get artifact type

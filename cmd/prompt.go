@@ -1,6 +1,9 @@
 package cmd
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
 )
@@ -9,6 +12,11 @@ import (
 // a value given on the command line wins, otherwise the user is prompted.
 // "Given" means the flag was present (cmd.Flags().Changed), so an explicit
 // empty value such as --cuda-min "" is respected and not prompted for again.
+//
+// When prompting is disabled (see detectInteractivity) the helpers keep the
+// current value of dest: free-text inputs fall back to their defaults and
+// commands check required ones with requireValues; selects fail immediately
+// unless the current value is one of the options.
 
 // askString sets *dest from the flag if it was given, otherwise prompts for
 // it. The prompt is prefilled with the current value of *dest.
@@ -19,6 +27,9 @@ func askString(cmd *cobra.Command, flag string, dest *string, title, description
 			return err
 		}
 		*dest = v
+		return nil
+	}
+	if !interactive() {
 		return nil
 	}
 	in := huh.NewInput().Title(title).Value(dest)
@@ -45,6 +56,16 @@ func askSelectLabeled(cmd *cobra.Command, flag string, dest *string, title, desc
 		*dest = v
 		return nil
 	}
+	if !interactive() {
+		var values []string
+		for _, o := range options {
+			if o.Value == *dest {
+				return nil
+			}
+			values = append(values, fmt.Sprintf("%q", o.Value))
+		}
+		return fmt.Errorf("--%s is required (prompts are disabled: %s); choose one of %s", flag, nonInteractiveReason(), strings.Join(values, ", "))
+	}
 	sel := huh.NewSelect[string]().Title(title).Options(options...).Value(dest)
 	if description != "" {
 		sel = sel.Description(description)
@@ -70,6 +91,9 @@ func askConfirm(cmd *cobra.Command, flag string, dest *bool, title, description 
 			return err
 		}
 		*dest = v
+		return nil
+	}
+	if !interactive() {
 		return nil
 	}
 	c := huh.NewConfirm().Title(title).Value(dest)
