@@ -404,29 +404,31 @@ This is **not a failure** - it's the "orchestrate and hand off" design:
 
 ### Directory Structure
 ```
-cmd/
-  deploy.go    # Deploy command
-  package.go   # Package command
-  sign.go      # Sign command
-  verify.go    # Verify command
-  wizard.go    # Unified TUI workflow
-  root.go      # CLI root
+cmd/                      # One cobra command per file (package, sign, verify, deploy,
+                          # wizard, check, validate*, admit, enforce, harden, search, map, ...)
+  root.go                 # CLI root + config loading
 
-internal/workflow/
-  deploy.go    # Deploy workflow
-  package.go   # Package workflow
-  providers.go # Pluggable provider interfaces + implementations
+internal/workflow/        # Orchestration logic and provider interfaces
+  package.go              # Package workflow
+  deploy.go, harden.go, check.go, search.go, ...
+  registry.go             # RegistryProvider: ORAS, ModelPack
+  signing.go              # SigningProvider: Sigstore, Notary v2
+  sbom.go                 # SBOMGenerator: Syft, Trivy, cdxgen
+  gitops.go               # GitOpsProvider: Argo CD, Flux
+  runtime.go              # RuntimeProvider: vLLM, KServe
+  mof.go                  # MOF classifier
+  annotations.go          # CNCF AI Interoperability Profile annotation keys
+  manifest.go             # OCI manifest read/write
+  metadata_contract.go    # JSON-Schema metadata contract
 
-config/
-  config.go    # Configuration management
-
-skills/model-cli/
-  SKILL.md     # This file - AI agent guidance
+internal/tui/             # bubbletea / huh / lipgloss models and context panels
+config/                   # ~/.model-cli.yaml handling
+skills/model-cli/SKILL.md # This file - AI agent guidance
 ```
 
 ### Provider Pattern
 All external tool integrations follow the same pattern:
-1. Define interface in `providers.go`
+1. Define the interface in the matching `internal/workflow/*.go` file (see Directory Structure)
 2. Implement concrete provider
 3. Register in factory function (`Get*Provider`)
 4. Use via dependency injection in workflows
