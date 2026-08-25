@@ -216,11 +216,15 @@ Examples:
 		fullArtifact := destination + "/" + artifact
 
 		// Push the artifact with unified OCI manifest annotations
-		if err := provider.Push(artifact, destination, modelPath, mergedAnnotations); err != nil {
+		pushedDigest, err := provider.Push(artifact, destination, modelPath, mergedAnnotations)
+		if err != nil {
 			return err
 		}
 
 		fmt.Printf("\n✓ Pushed artifact: %s\n", fullArtifact)
+		if pushedDigest != "" {
+			fmt.Printf("  Digest: %s\n", pushedDigest)
+		}
 		fmt.Println("✓ OCI layers stored in registry")
 		fmt.Println("✓ Unified OCI manifest with standardized metadata attached")
 		if len(mergedAnnotations) > 0 {

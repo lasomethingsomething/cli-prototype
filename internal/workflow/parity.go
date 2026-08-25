@@ -22,7 +22,8 @@ func (r *LocalParityResult) String() string {
 		r.Artifact, r.Registry, r.LocalDigest, r.RegistryDigest)
 }
 
-// LocalParityVerifier checks that a local artifact matches what's in the registry
+// LocalParityVerifier checks that the manifest stored in the registry has the
+// digest the registry tool reported when the artifact was pushed.
 type LocalParityVerifier struct {
 	registryProvider RegistryProvider
 	localDigest      string

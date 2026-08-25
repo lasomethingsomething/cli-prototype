@@ -23,17 +23,25 @@ func (f *fakeRegistryProvider) Name() string                         { return "f
 func (f *fakeRegistryProvider) IsInstalled() bool                    { return f.installed }
 func (f *fakeRegistryProvider) InstallInstructions() string          { return "n/a" }
 func (f *fakeRegistryProvider) Pull(artifact, registry string) error { return nil }
-func (f *fakeRegistryProvider) Push(artifact, registry, sourcePath string, annotations map[string]string) error {
+func (f *fakeRegistryProvider) Push(artifact, registry, sourcePath string, annotations map[string]string) (string, error) {
 	f.pushCalled = true
 	f.pushedAnnotations = annotations
 	f.pushedSource = sourcePath
-	// For local parity testing: store the artifact with a deterministic digest
 	if f.artifactDigest == nil {
 		f.artifactDigest = make(map[string]string)
 	}
-	// Use a deterministic digest based on artifact name (matches what GetArtifactDigest returns)
-	f.artifactDigest[artifact] = fmt.Sprintf("sha256:%x", []byte(artifact)[:8])
-	return nil
+	// Simulate a registry: the digest reported on push is what a later
+	// GetArtifactDigest returns, unless a test overrides it.
+	digest := fakeDigest(artifact)
+	if _, overridden := f.artifactDigest[artifact]; !overridden {
+		f.artifactDigest[artifact] = digest
+	}
+	return digest, nil
+}
+
+// fakeDigest returns a well-formed, deterministic digest for an artifact name.
+func fakeDigest(artifact string) string {
+	return fmt.Sprintf("sha256:%064x", len(artifact))
 }
 func (f *fakeRegistryProvider) PushReferrer(artifact, registry, referrerType string, data []byte, annotations map[string]string) error {
 	// For testing, we don't need to do anything with referrers
@@ -44,14 +52,10 @@ func (f *fakeRegistryProvider) GetReferrers(artifact, registry, referrerType str
 	return nil, nil
 }
 func (f *fakeRegistryProvider) GetArtifactDigest(artifact, registry string) (string, error) {
-	// Return the stored digest for this artifact
-	if f.artifactDigest != nil {
-		if digest, ok := f.artifactDigest[artifact]; ok {
-			return digest, nil
-		}
+	if digest, ok := f.artifactDigest[artifact]; ok {
+		return digest, nil
 	}
-	// Fallback: return a deterministic digest based on artifact name
-	return fmt.Sprintf("sha256:%x", []byte(artifact)[:8]), nil
+	return "", fmt.Errorf("artifact %s not found in fake registry", artifact)
 }
 func (f *fakeRegistryProvider) Search(registry, filters string) ([][]byte, error) {
 	// Fake implementation for testing - returns empty results
@@ -221,46 +225,60 @@ func TestPackageWorkflowRunWritesManifestWithAnnotations(t *testing.T) {
 	}
 }
 
-// TestPackageWorkflowRunVerifiesLocalParity verifies that Run() performs
-// local parity verification when pushing to a registry.
+// TestPackageWorkflowRunVerifiesLocalParity verifies that Run() compares the
+// digest reported by Push with the digest stored in the registry.
 func TestPackageWorkflowRunVerifiesLocalParity(t *testing.T) {
-	modelPath := t.TempDir()
-
-	// Create a fake provider
-	fake := &fakeRegistryProvider{
-		installed:      true,
-		artifactDigest: make(map[string]string),
-	}
-
 	artifactName := "my-model:v1"
 	registryURL := "ghcr.io/my-org"
 
-	pf := &PackageWorkflow{
-		registry:         "fake",
-		registryProvider: fake,
-		registryURL:      registryURL,
-		annotations:      NewAnnotationSet(),
-		verifyParity:     true, // Enable local parity verification for this test
-	}
-	pf.SetPackageInfo("phi-4-mini", modelPath, artifactName, registryURL, false, "")
+	t.Run("match", func(t *testing.T) {
+		fake := &fakeRegistryProvider{installed: true}
+		pf := &PackageWorkflow{registry: "fake", registryProvider: fake, annotations: NewAnnotationSet(), verifyParity: true}
+		pf.SetPackageInfo("phi-4-mini", t.TempDir(), artifactName, registryURL, false, "")
 
-	// Run the workflow - it will fail due to digest mismatch with the fake provider
-	// (the fake provider returns a digest based on artifact name, not manifest content)
-	err := pf.Run()
-	if err == nil {
-		t.Error("expected Run() to fail due to local parity mismatch with fake provider")
-	}
+		if err := pf.Run(); err != nil {
+			t.Fatalf("Run() error = %v, want parity to pass when the registry holds the pushed digest", err)
+		}
+		if pf.PushedDigest() != fakeDigest(artifactName) {
+			t.Errorf("PushedDigest() = %q, want %q", pf.PushedDigest(), fakeDigest(artifactName))
+		}
+		if pf.LocalDigest() == "" {
+			t.Error("expected local manifest digest to be computed")
+		}
+	})
 
-	// Verify the error message mentions local parity
-	errStr := err.Error()
-	if !strings.Contains(errStr, "local parity") {
-		t.Errorf("expected error to mention 'local parity', got: %s", errStr)
-	}
+	t.Run("mismatch", func(t *testing.T) {
+		fake := &fakeRegistryProvider{
+			installed:      true,
+			artifactDigest: map[string]string{artifactName: "sha256:" + strings.Repeat("f", 64)},
+		}
+		pf := &PackageWorkflow{registry: "fake", registryProvider: fake, annotations: NewAnnotationSet(), verifyParity: true}
+		pf.SetPackageInfo("phi-4-mini", t.TempDir(), artifactName, registryURL, false, "")
 
-	// Verify local digest was computed
-	if pf.LocalDigest() == "" {
-		t.Error("expected local digest to be computed")
-	}
+		err := pf.Run()
+		if err == nil || !strings.Contains(err.Error(), "local parity") {
+			t.Fatalf("Run() error = %v, want a local parity failure when the registry digest differs", err)
+		}
+	})
+
+	t.Run("skipped when tool reports no digest", func(t *testing.T) {
+		fake := &noDigestProvider{fakeRegistryProvider{installed: true}}
+		pf := &PackageWorkflow{registry: "fake", registryProvider: fake, annotations: NewAnnotationSet(), verifyParity: true}
+		pf.SetPackageInfo("phi-4-mini", t.TempDir(), artifactName, registryURL, false, "")
+
+		if err := pf.Run(); err != nil {
+			t.Fatalf("Run() error = %v, want parity to be skipped (not failed) without a pushed digest", err)
+		}
+	})
+}
+
+// noDigestProvider behaves like fakeRegistryProvider but never reports a
+// digest on push, like a tool without --format json support.
+type noDigestProvider struct{ fakeRegistryProvider }
+
+func (n *noDigestProvider) Push(artifact, registry, sourcePath string, annotations map[string]string) (string, error) {
+	_, err := n.fakeRegistryProvider.Push(artifact, registry, sourcePath, annotations)
+	return "", err
 }
 
 // TestPackageWorkflowRunNotInstalled verifies Run() fails fast (without

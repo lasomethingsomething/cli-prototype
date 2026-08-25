@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 )
 
@@ -17,11 +18,13 @@ type RegistryProvider interface {
 	// Push uploads the file or directory at sourcePath to registry as
 	// artifact, attaching annotations (e.g. from AnnotationSet.ToMap()) to
 	// the resulting OCI manifest. annotations may be nil or empty when no
-	// manifest-level annotations should be set.
-	Push(artifact, registry, sourcePath string, annotations map[string]string) error
+	// manifest-level annotations should be set. It returns the digest of
+	// the pushed manifest, or "" if the tool did not report one.
+	Push(artifact, registry, sourcePath string, annotations map[string]string) (string, error)
 	Pull(artifact, registry string) error
-	// GetArtifactDigest returns the digest of an artifact in the registry
-	// This is used for local parity verification to ensure what was pushed matches what's in the registry
+	// GetArtifactDigest returns the manifest digest of an artifact as stored
+	// in the registry. Parity verification compares it with the digest
+	// reported by Push.
 	GetArtifactDigest(artifact, registry string) (string, error)
 	// PushReferrer pushes a referrer (like provenance attestation) to the registry
 	// The referrer is associated with the artifact and can be fetched later
@@ -68,16 +71,16 @@ func (o *ORASProvider) InstallInstructions() string {
 	return "brew install oras"
 }
 
-func (o *ORASProvider) Push(artifact, registry, sourcePath string, annotations map[string]string) error {
+func (o *ORASProvider) Push(artifact, registry, sourcePath string, annotations map[string]string) (string, error) {
 	absSource, err := filepath.Abs(sourcePath)
 	if err != nil {
-		return fmt.Errorf("failed to resolve source path %q: %v", sourcePath, err)
+		return "", fmt.Errorf("failed to resolve source path %q: %v", sourcePath, err)
 	}
 	if _, err := os.Stat(absSource); err != nil {
-		return fmt.Errorf("source path %q is not accessible: %v", sourcePath, err)
+		return "", fmt.Errorf("source path %q is not accessible: %v", sourcePath, err)
 	}
 
-	args := []string{"push", registry + "/" + artifact, "--artifact-type", artifactTypeFor(annotations)}
+	args := []string{"push", registry + "/" + artifact, "--artifact-type", artifactTypeFor(annotations), "--format", "json"}
 	args = append(args, annotationArgs(annotations)...)
 	// Run from the parent directory and push the base name so that the layer
 	// title ORAS records is the model directory (or file) name, not an
@@ -86,17 +89,32 @@ func (o *ORASProvider) Push(artifact, registry, sourcePath string, annotations m
 
 	cmd := exec.Command("oras", args...)
 	cmd.Dir = filepath.Dir(absSource)
-	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to push with ORAS: %v", err)
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to push with ORAS: %v", err)
 	}
 	fmt.Printf("Pushed artifact %s to %s using ORAS\n", artifact, registry)
 	if len(annotations) > 0 {
 		fmt.Printf("Attached %d CNCF AI annotation(s) to the manifest\n", len(annotations))
 	}
-	return nil
+	return digestFromORASOutput(output), nil
 }
+
+// digestFromORASOutput extracts the manifest digest from `oras ... --format
+// json` output. Older ORAS versions ignore --format and print a
+// "Digest: sha256:..." line instead, which is handled by the fallback scan.
+func digestFromORASOutput(output []byte) string {
+	var parsed struct {
+		Digest string `json:"digest"`
+	}
+	if err := json.Unmarshal(output, &parsed); err == nil && parsed.Digest != "" {
+		return parsed.Digest
+	}
+	return digestPattern.FindString(string(output))
+}
+
+var digestPattern = regexp.MustCompile(`sha256:[0-9a-f]{64}`)
 
 // artifactTypeFor derives the OCI artifactType for a push from the
 // org.cncf.ai.artifact.type annotation, defaulting to a model.
@@ -118,20 +136,24 @@ func (o *ORASProvider) Pull(artifact, registry string) error {
 }
 
 func (o *ORASProvider) GetArtifactDigest(artifact, registry string) (string, error) {
-	// Use oras manifest fetch to get the manifest, then extract the digest
-	fullRef := registry + "/" + artifact
-	cmd := exec.Command("oras", "manifest", "fetch", fullRef)
+	// `oras manifest fetch --descriptor` prints the OCI descriptor of the
+	// manifest as stored in the registry, including its content digest.
+	cmd := exec.Command("oras", "manifest", "fetch", "--descriptor", registry+"/"+artifact)
+	cmd.Stderr = os.Stderr
 	output, err := cmd.Output()
 	if err != nil {
-		return "", fmt.Errorf("failed to fetch manifest with ORAS: %v", err)
+		return "", fmt.Errorf("failed to fetch manifest descriptor with ORAS: %v", err)
 	}
-
-	// The digest is typically in the manifest's config or layers
-	// For simplicity, we'll return a computed digest of the manifest itself
-	// In production, this would parse the OCI manifest and extract the actual digest
-	// For now, we'll use a simple hash of the manifest content as a stand-in
-	hash := fmt.Sprintf("sha256:%x", output[:8])
-	return hash, nil
+	var descriptor struct {
+		Digest string `json:"digest"`
+	}
+	if err := json.Unmarshal(output, &descriptor); err != nil {
+		return "", fmt.Errorf("failed to parse manifest descriptor from ORAS: %v", err)
+	}
+	if descriptor.Digest == "" {
+		return "", fmt.Errorf("ORAS manifest descriptor for %s/%s has no digest", registry, artifact)
+	}
+	return descriptor.Digest, nil
 }
 
 func (o *ORASProvider) PushReferrer(artifact, registry, referrerType string, data []byte, annotations map[string]string) error {
@@ -275,12 +297,12 @@ func (m *ModelPackProvider) InstallInstructions() string {
 	return "go install github.com/modelpack/modelpack@latest"
 }
 
-func (m *ModelPackProvider) Push(artifact, registry, sourcePath string, annotations map[string]string) error {
+func (m *ModelPackProvider) Push(artifact, registry, sourcePath string, annotations map[string]string) (string, error) {
 	fmt.Printf("Pushed artifact %s to %s using ModelPack\n", artifact, registry)
 	if len(annotations) > 0 {
 		fmt.Printf("Attached %d CNCF AI annotation(s) to the manifest\n", len(annotations))
 	}
-	return nil
+	return "", nil
 }
 
 func (m *ModelPackProvider) Pull(artifact, registry string) error {
