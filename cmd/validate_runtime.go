@@ -1,289 +1,92 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"os/exec"
 	"strings"
 
-	"github.com/lasomethingsomething/cli-prototype/config"
 	"github.com/lasomethingsomething/cli-prototype/internal/workflow"
 	"github.com/spf13/cobra"
 )
 
-var validateRuntimeCmd = &cobra.Command{
-	Use:   "validate-runtime",
-	Short: "Validate runtime availability for artifact deployment",
-	Long: `Validate that the required serving runtime is available in the cluster.
-
-This command handles Phase 3, Step 7: Runtime Execution & Optimization (Story #69).
-It fetches the artifact manifest from the registry, reads runtime requirement
-annotations (runtime type, layer deduplication), and checks if the required
-runtime operators (KServe, vLLM) are installed in the cluster.
-
-Features:
-- Fetches artifact manifest from registry (ORAS, ModelPack)
-- Extracts runtime requirement annotations (ai.runtime.type, ai.runtime.optimization.layer-dedup)
-- Checks for runtime operator CRDs in the cluster
-- Validates Reference Skill DLC endpoint accessibility
-- Returns exit code 0 for pass, non-zero for fail
-- Outputs structured results for CI/CD integration
-
-Note: This command performs validation only. Actual model serving is delegated to
-the runtime operators (KServe, vLLM). The CLI orchestrates and hands off to external tools.
+func newValidateRuntimeCmd() *cobra.Command {
+	c := &cobra.Command{
+		Use:   "runtime",
+		Short: "Validate runtime availability for artifact deployment",
+		Long: `Check that the runtime the artifact declares (ai.runtime.type, layer deduplication,
+Reference Skill DLC endpoint, skill references) is available in the cluster. Operators
+are detected with kubectl; serving itself is left to KServe / vLLM.
 
 Examples:
-  model-cli validate-runtime
-  model-cli validate-runtime --artifact my-registry/my-model:latest
-  model-cli validate-runtime --artifact my-registry/my-model:latest --registry oras
-  model-cli validate-runtime --artifact my-registry/my-model:latest --namespace production
-  model-cli validate-runtime --artifact my-registry/my-model:latest --quiet
-  model-cli validate-runtime --artifact my-registry/my-model:latest --json-output`,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		// Get flags
-		namespaceFlag, _ := cmd.Flags().GetString("namespace")
-		quietFlag, _ := cmd.Flags().GetBool("quiet")
-		jsonOutputFlag, _ := cmd.Flags().GetBool("json-output")
+  model-cli validate runtime --artifact ghcr.io/my-org/my-model:v1
+  model-cli validate runtime --artifact my-model:v1 --namespace production --json-output`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			out := outputOptionsFrom(cmd)
+			namespace, _ := cmd.Flags().GetString("namespace")
 
-		// Interactive prompts if not provided via flags
-		var artifact string
-		if err := askString(cmd, "artifact", &artifact, "Artifact to validate:", "The OCI artifact reference (e.g., ghcr.io/my-org/my-model:latest)"); err != nil {
-			return err
-		}
-
-		cfg := config.Load()
-		if err := askSelectIfEmpty(cmd, "registry", &cfg.Registry, "Registry tool:", "Choose how to fetch the artifact manifest", []string{"oras", "modelpack"}); err != nil {
-			return err
-		}
-		registry := cfg.Registry
-		warnIfSaveFails(config.Save(cfg))
-
-		var namespace string
-		if namespaceFlag != "" {
-			namespace = namespaceFlag
-		} else {
-			namespace = "default"
-		}
-
-		if err := requireValues("artifact", artifact); err != nil {
-			return err
-		}
-
-		// Get registry provider
-		registryProvider, err := workflow.GetRegistryProvider(registry)
-		if err != nil {
-			return fmt.Errorf("failed to get registry provider: %v", err)
-		}
-
-		if !quietFlag {
-			fmt.Printf("\nValidating runtime requirements for: %s\n\n", artifact)
-		}
-
-		// Fetch manifest annotations from registry
-		if !quietFlag {
-			fmt.Println("→ Fetching artifact manifest...")
-		}
-
-		fullArtifact := artifact
-
-		annotations, err := registryProvider.FetchManifestAnnotations(fullArtifact)
-		if err != nil {
-			if !quietFlag {
-				fmt.Printf("⚠ Warning: Could not fetch manifest from registry: %v\n", err)
-				fmt.Println("  This might be because the artifact hasn't been pushed yet.")
-				fmt.Println("  For local validation, use a local registry or push first.")
+			artifact, annotations, err := fetchAnnotations(cmd, out)
+			if err != nil {
+				return err
 			}
-			return fmt.Errorf("failed to fetch manifest: %v. Hint: Push artifact first or use a local registry", err)
-		}
-
-		if !quietFlag {
-			fmt.Println("✓ Fetched artifact manifest")
-		}
-
-		// Extract runtime requirement annotations
-		runtimeType := annotations[workflow.AnnotationRuntimeType]
-		layerDedup := annotations[workflow.AnnotationLayerDeduplication]
-		dlcEndpoint := annotations[workflow.AnnotationReferenceSkillDLC]
-		skillRefs := annotations[workflow.AnnotationSkillReferences]
-
-		if !quietFlag {
-			fmt.Println("\n=== Runtime Requirements from Manifest ===")
-			if runtimeType != "" {
-				fmt.Printf("  Runtime Type: %s\n", runtimeType)
-			} else {
-				fmt.Println("  Runtime Type: (not specified, will use default)")
-			}
-			if layerDedup != "" {
-				fmt.Printf("  Layer Deduplication: %s\n", layerDedup)
-			} else {
-				fmt.Println("  Layer Deduplication: (not specified)")
-			}
-			if dlcEndpoint != "" {
-				fmt.Printf("  Reference Skill DLC Endpoint: %s\n", dlcEndpoint)
-			} else {
-				fmt.Println("  Reference Skill DLC Endpoint: (not specified)")
-			}
-			if skillRefs != "" {
-				fmt.Printf("  Skill References: %s\n", skillRefs)
-			} else {
-				fmt.Println("  Skill References: (not specified)")
-			}
-		}
-
-		// If no runtime requirements are specified, consider it a pass
-		if runtimeType == "" && layerDedup == "" && dlcEndpoint == "" && skillRefs == "" {
-			if !quietFlag {
-				fmt.Println("\n✓ PASS: No specific runtime requirements declared")
-				fmt.Println("  Default runtime will be used for deployment")
-			}
-			return nil
-		}
-
-		// Validate runtime availability
-		if !quietFlag {
-			fmt.Println("\n=== Checking Runtime Availability ===")
-		}
-
-		allPass := true
-		var validationErrors []string
-
-		// Check runtime operator
-		if runtimeType != "" {
-			if !quietFlag {
-				fmt.Printf("\n  Checking runtime operator: %s\n", runtimeType)
+			report := workflow.NewValidationReport("runtime", artifact)
+			const section = "Runtime Availability"
+			hints := reportHints{
+				pass: "Runtime operators can proceed with model serving.",
+				fail: "Hint: install the required runtime operators or adjust the artifact's runtime requirements.",
 			}
 
-			runtimePass := false
+			runtimeType := annotations[workflow.AnnotationRuntimeType]
+			layerDedup := annotations[workflow.AnnotationLayerDeduplication]
+			dlcEndpoint := annotations[workflow.AnnotationReferenceSkillDLC]
+			skillRefs := annotations[workflow.AnnotationSkillReferences]
+			if runtimeType == "" && layerDedup == "" && dlcEndpoint == "" && skillRefs == "" {
+				report.Info(section, "requirements", "none declared; the default runtime will be used")
+				return printReport(report, out, hints)
+			}
+
 			switch runtimeType {
+			case "":
 			case "kserve":
-				// Check if KServe is installed
-				if err := checkKServeInstalled(namespace); err == nil {
-					runtimePass = true
-					if !quietFlag {
-						fmt.Println("    ✓ KServe operator is installed")
-					}
+				if err := checkKServeInstalled(namespace); err != nil {
+					report.Fail(section, workflow.AnnotationRuntimeType, "KServe operator not found: "+err.Error(), "kserve operator")
 				} else {
-					validationErrors = append(validationErrors, fmt.Sprintf("KServe operator not found: %v", err))
-					if !quietFlag {
-						fmt.Printf("    ✗ KServe operator not found: %v\n", err)
-					}
+					report.Pass(section, workflow.AnnotationRuntimeType, "kserve operator is installed")
 				}
 			case "vllm":
-				// Check if vLLM is installed
-				if err := checkVLLMInstalled(namespace); err == nil {
-					runtimePass = true
-					if !quietFlag {
-						fmt.Println("    ✓ vLLM runtime is available")
-					}
+				if err := checkVLLMInstalled(namespace); err != nil {
+					report.Fail(section, workflow.AnnotationRuntimeType, "vLLM runtime not found: "+err.Error(), "vllm runtime")
 				} else {
-					validationErrors = append(validationErrors, fmt.Sprintf("vLLM runtime not found: %v", err))
-					if !quietFlag {
-						fmt.Printf("    ✗ vLLM runtime not found: %v\n", err)
-					}
+					report.Pass(section, workflow.AnnotationRuntimeType, "vllm runtime is available")
 				}
 			default:
-				// For unknown runtimes, just acknowledge
-				runtimePass = true
-				if !quietFlag {
-					fmt.Printf("    ⚠ Runtime %s: unknown runtime, assuming available\n", runtimeType)
+				report.Warn(section, workflow.AnnotationRuntimeType, runtimeType+" is not a known runtime; assuming it is available")
+			}
+
+			if layerDedup == "true" {
+				if err := checkLayerDeduplicationSupport(runtimeType); err != nil {
+					report.Fail(section, workflow.AnnotationLayerDeduplication, err.Error(), "layer deduplication")
+				} else {
+					report.Pass(section, workflow.AnnotationLayerDeduplication, "supported by "+runtimeType)
 				}
 			}
-
-			if !runtimePass {
-				allPass = false
-			}
-		}
-
-		// Check layer deduplication support
-		if layerDedup == "true" {
-			if !quietFlag {
-				fmt.Println("\n  Checking layer deduplication support")
-			}
-			// Layer deduplication is typically supported by the registry or runtime
-			// For now, we'll check if the registry supports it
-			if err := checkLayerDeduplicationSupport(runtimeType); err == nil {
-				if !quietFlag {
-					fmt.Println("    ✓ Layer deduplication is supported")
+			if dlcEndpoint != "" {
+				if err := checkEndpointReachable(dlcEndpoint); err != nil {
+					report.Fail(section, workflow.AnnotationReferenceSkillDLC, err.Error(), "dlc endpoint "+dlcEndpoint)
+				} else {
+					report.Pass(section, workflow.AnnotationReferenceSkillDLC, dlcEndpoint+" is reachable")
 				}
-			} else {
-				validationErrors = append(validationErrors, fmt.Sprintf("layer deduplication not supported: %v", err))
-				if !quietFlag {
-					fmt.Printf("    ✗ Layer deduplication not supported: %v\n", err)
-				}
-				allPass = false
 			}
-		}
-
-		// Check Reference Skill DLC endpoint
-		if dlcEndpoint != "" {
-			if !quietFlag {
-				fmt.Println("\n  Checking Reference Skill DLC endpoint")
+			if skillRefs != "" {
+				report.Warn(section, workflow.AnnotationSkillReferences, skillRefs+" declared; skill validation needs registry access (not implemented)")
 			}
-			// For now, just check if the endpoint is reachable via ping/curl
-			// In production, this would be a more sophisticated check
-			if err := checkEndpointReachable(dlcEndpoint); err == nil {
-				if !quietFlag {
-					fmt.Printf("    ✓ DLC endpoint %s is reachable\n", dlcEndpoint)
-				}
-			} else {
-				validationErrors = append(validationErrors, fmt.Sprintf("DLC endpoint unreachable: %v", err))
-				if !quietFlag {
-					fmt.Printf("    ✗ DLC endpoint unreachable: %v\n", err)
-				}
-				allPass = false
-			}
-		}
-
-		// Check skill references
-		if skillRefs != "" {
-			if !quietFlag {
-				fmt.Println("\n  Checking skill references")
-			}
-			// Parse skill references and check if they exist in the registry
-			// For now, just acknowledge that they were specified
-			if !quietFlag {
-				fmt.Printf("    ✓ Skill references declared: %s\n", skillRefs)
-				fmt.Println("    ⚠ Skill validation requires registry access (not implemented)")
-			}
-		}
-
-		// Output results
-		if jsonOutputFlag {
-			result := map[string]interface{}{
-				"artifact": artifact,
-				"requirements": map[string]string{
-					"runtime_type": runtimeType,
-					"layer_dedup":  layerDedup,
-					"dlc_endpoint": dlcEndpoint,
-					"skill_refs":   skillRefs,
-				},
-				"pass": allPass,
-			}
-			if !allPass {
-				result["errors"] = validationErrors
-			}
-			jsonOutput, _ := json.MarshalIndent(result, "", "  ")
-			fmt.Println(string(jsonOutput))
-		} else if !quietFlag {
-			fmt.Println("\n=== Result ===")
-			if allPass {
-				fmt.Println("✓ PASS: All runtime requirements can be satisfied")
-				fmt.Println("  Runtime operators can proceed with model serving")
-			} else {
-				fmt.Println("✗ FAIL: Runtime requirements cannot be satisfied")
-				for _, err := range validationErrors {
-					fmt.Printf("  - %s\n", err)
-				}
-				fmt.Println("\nHint: Install required runtime operators or adjust artifact requirements")
-			}
-		}
-
-		if !allPass {
-			return fmt.Errorf("runtime validation failed: %v", validationErrors)
-		}
-
-		return nil
-	},
+			return printReport(report, out, hints)
+		},
+	}
+	addArtifactFlags(c)
+	addOutputFlags(c)
+	c.Flags().String("namespace", "default", "Kubernetes namespace to check")
+	return c
 }
 
 // checkKServeInstalled checks if KServe operator is installed in the cluster
@@ -345,13 +148,4 @@ func checkEndpointReachable(endpoint string) error {
 		return fmt.Errorf("endpoint %s is not reachable: %v", endpoint, err)
 	}
 	return nil
-}
-
-func init() {
-	rootCmd.AddCommand(validateRuntimeCmd)
-	validateRuntimeCmd.Flags().String("artifact", "", "OCI artifact reference to validate")
-	validateRuntimeCmd.Flags().String("registry", "", "Registry tool: oras or modelpack")
-	validateRuntimeCmd.Flags().String("namespace", "default", "Kubernetes namespace to check")
-	validateRuntimeCmd.Flags().Bool("quiet", false, "Quiet mode: only output pass/fail status")
-	validateRuntimeCmd.Flags().Bool("json-output", false, "Output results as JSON for CI/CD integration")
 }
