@@ -233,7 +233,7 @@ func (w *PackageWorkflow) Run() error {
 	// Push to registry if URL is provided
 	if w.registryURL != "" {
 		fmt.Printf("→ Pushing to registry '%s'...\n", w.registryURL)
-		if err := w.registryProvider.Push(w.artifactName, w.registryURL, manifestAnnotations); err != nil {
+		if err := w.registryProvider.Push(w.artifactName, w.registryURL, w.modelPath, manifestAnnotations); err != nil {
 			return fmt.Errorf("failed to push artifact: %v", err)
 		}
 		fmt.Printf("✓ Successfully pushed %s to %s\n", fullArtifact, w.registryURL)

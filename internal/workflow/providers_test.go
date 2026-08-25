@@ -355,7 +355,7 @@ func TestModelPackProviderPushWithAnnotations(t *testing.T) {
 	}
 
 	annotations := NewAnnotationSet().ToMap()
-	if err := p.Push("my-model:v1", "ghcr.io/my-org", annotations); err != nil {
+	if err := p.Push("my-model:v1", "ghcr.io/my-org", t.TempDir(), annotations); err != nil {
 		t.Errorf("Push() with annotations error = %v, want nil", err)
 	}
 }

@@ -13,6 +13,7 @@ import (
 type fakeRegistryProvider struct {
 	installed         bool
 	pushedAnnotations map[string]string
+	pushedSource      string
 	pushCalled        bool
 	// For local parity testing: store the artifact digest
 	artifactDigest map[string]string // maps artifact name to its digest
@@ -22,9 +23,10 @@ func (f *fakeRegistryProvider) Name() string                         { return "f
 func (f *fakeRegistryProvider) IsInstalled() bool                    { return f.installed }
 func (f *fakeRegistryProvider) InstallInstructions() string          { return "n/a" }
 func (f *fakeRegistryProvider) Pull(artifact, registry string) error { return nil }
-func (f *fakeRegistryProvider) Push(artifact, registry string, annotations map[string]string) error {
+func (f *fakeRegistryProvider) Push(artifact, registry, sourcePath string, annotations map[string]string) error {
 	f.pushCalled = true
 	f.pushedAnnotations = annotations
+	f.pushedSource = sourcePath
 	// For local parity testing: store the artifact with a deterministic digest
 	if f.artifactDigest == nil {
 		f.artifactDigest = make(map[string]string)
