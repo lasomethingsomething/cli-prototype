@@ -100,7 +100,7 @@ Examples:
 			cfg := config.Load()
 			if cfg.Registry == "" {
 				cfg.Registry = registry
-				config.Save(cfg)
+				warnIfSaveFails(config.Save(cfg))
 			}
 		}
 

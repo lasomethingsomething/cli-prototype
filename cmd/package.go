@@ -83,11 +83,6 @@ Examples:
 			cfg.Registry = registryFlag
 		}
 
-		// Save config for future use
-		if err := config.Save(cfg); err != nil {
-			return fmt.Errorf("failed to save config: %w", err)
-		}
-
 		// Get packaging information
 		var modelName string
 		if modelNameFlag != "" {
@@ -336,6 +331,9 @@ Examples:
 				return err
 			}
 		}
+
+		// All inputs collected: remember the tool choice for next time.
+		warnIfSaveFails(config.Save(cfg))
 
 		// Create packaging workflow
 		pf, err := workflow.NewPackageWorkflow(cfg.Registry)

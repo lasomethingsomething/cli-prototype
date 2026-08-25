@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -48,5 +49,13 @@ func initConfig() {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
 			initConfigErr = err
 		}
+	}
+}
+
+// warnIfSaveFails reports a failed preference save without aborting the
+// command: the user's answers are still valid for this run.
+func warnIfSaveFails(err error) {
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: could not save preferences: %v\n", err)
 	}
 }
