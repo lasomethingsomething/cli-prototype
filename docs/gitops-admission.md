@@ -13,14 +13,14 @@ Model CLI ensures that AI artifacts pushed to registries include annotations in 
 ### How It Works
 
 1. **Package & Push (Phase 2):** Model CLI attaches Trust Profile and Infrastructure Requirement annotations to OCI manifests (Stories #63, #64)
-2. **Pre-Flight Validation (Phase 3):** Model CLI provides `validate-gitops` command to check annotations and environment policies before deployment (Stories #65, #66)
+2. **Pre-Flight Validation (Phase 3):** Model CLI provides `validate gitops` command to check annotations and environment policies before deployment (Stories #65, #66)
 3. **Admission Evaluation (Phase 3):** Model CLI provides `admit` command for comprehensive admission evaluation (Story #67)
 4. **GitOps Deployment:** Argo CD or Flux deploys artifacts, triggering admission webhooks
 5. **Policy Enforcement:** External policy engines validate annotations and enforce admission policies
 
 ## Pre-Sync Validation (Story #65)
 
-The `model-cli validate-gitops` command provides pre-flight validation of artifact annotations before GitOps tools attempt deployment. This allows you to catch missing metadata or compliance issues early in your CI/CD pipeline.
+The `model-cli validate gitops` command provides pre-flight validation of artifact annotations before GitOps tools attempt deployment. This allows you to catch missing metadata or compliance issues early in your CI/CD pipeline.
 
 ### When to Use
 
@@ -33,16 +33,16 @@ The `model-cli validate-gitops` command provides pre-flight validation of artifa
 
 ```bash
 # Basic validation
-model-cli validate-gitops --artifact ghcr.io/my-org/my-model:v1.0.0
+model-cli validate gitops --artifact ghcr.io/my-org/my-model:v1.0.0
 
 # With specific registry tool
-model-cli validate-gitops --artifact ghcr.io/my-org/my-model:v1.0.0 --registry oras
+model-cli validate gitops --artifact ghcr.io/my-org/my-model:v1.0.0 --registry oras
 
 # Quiet mode (just pass/fail exit code)
-model-cli validate-gitops --artifact ghcr.io/my-org/my-model:v1.0.0 --quiet
+model-cli validate gitops --artifact ghcr.io/my-org/my-model:v1.0.0 --quiet
 
 # JSON output for CI/CD integration
-model-cli validate-gitops --artifact ghcr.io/my-org/my-model:v1.0.0 --json-output
+model-cli validate gitops --artifact ghcr.io/my-org/my-model:v1.0.0 --json-output
 ```
 
 ### Exit Codes
@@ -54,7 +54,7 @@ model-cli validate-gitops --artifact ghcr.io/my-org/my-model:v1.0.0 --json-outpu
 
 ## Admission Evaluation (Story #67)
 
-The `model-cli admit` command provides comprehensive admission evaluation by fetching real artifact manifests from registries and validating all required annotations and environment policies.
+The `model-cli validate admission` command provides comprehensive admission evaluation by fetching real artifact manifests from registries and validating all required annotations and environment policies.
 
 ### When to Use
 
@@ -67,22 +67,22 @@ The `model-cli admit` command provides comprehensive admission evaluation by fet
 
 ```bash
 # Basic admission evaluation
-model-cli admit --artifact ghcr.io/my-org/my-model:v1.0.0
+model-cli validate admission --artifact ghcr.io/my-org/my-model:v1.0.0
 
 # With specific registry tool
-model-cli admit --artifact ghcr.io/my-org/my-model:v1.0.0 --registry oras
+model-cli validate admission --artifact ghcr.io/my-org/my-model:v1.0.0 --registry oras
 
 # With environment specification
-model-cli admit --artifact ghcr.io/my-org/my-model:v1.0.0 --env production
+model-cli validate admission --artifact ghcr.io/my-org/my-model:v1.0.0 --env production
 
 # With hybrid-cloud region
-model-cli admit --artifact ghcr.io/my-org/my-model:v1.0.0 --env hybrid-cloud --region us-east-1
+model-cli validate admission --artifact ghcr.io/my-org/my-model:v1.0.0 --env hybrid-cloud --region us-east-1
 
 # Strict mode (block on warnings)
-model-cli admit --artifact ghcr.io/my-org/my-model:v1.0.0 --strict
+model-cli validate admission --artifact ghcr.io/my-org/my-model:v1.0.0 --strict
 
 # JSON output for CI/CD
-model-cli admit --artifact ghcr.io/my-org/my-model:v1.0.0 --json-output
+model-cli validate admission --artifact ghcr.io/my-org/my-model:v1.0.0 --json-output
 ```
 
 ### What It Validates
@@ -107,9 +107,9 @@ The `admit` command validates:
    - Hybrid-cloud: data residency, network access
    - Standard environments: acknowledgment
 
-### Key Differences from validate-gitops
+### Key Differences from validate gitops
 
-| Feature | `validate-gitops` | `admit` |
+| Feature | `validate gitops` | `validate admission` |
 |---------|-------------------|---------|
 | Manifest fetching |  |  |
 | Annotation validation |  |  |
@@ -120,11 +120,11 @@ The `admit` command validates:
 | Final decision |  |  |
 | Simulated evaluation |  |  (now real) |
 
-Both commands now fetch real manifests and validate annotations. Use `validate-gitops` for quick pre-flight checks and `admit` for comprehensive admission evaluation.
+Both commands now fetch real manifests and validate annotations. Use `validate gitops` for quick pre-flight checks and `admit` for comprehensive admission evaluation.
 
 ### Environment-Specific Validation (Story #66)
 
-The `validate-gitops` command supports environment-specific safety policy validation:
+The `validate gitops` command supports environment-specific safety policy validation:
 
 #### Air-Gapped Environments
 
@@ -134,7 +134,7 @@ Validates that artifacts are suitable for air-gapped deployment:
 - Reminds to pre-load dependencies
 
 ```bash
-model-cli validate-gitops --artifact my-registry/my-model:v1 --env air-gapped
+model-cli validate gitops --artifact my-registry/my-model:v1 --env air-gapped
 ```
 
 #### Hybrid-Cloud Environments
@@ -144,7 +144,7 @@ Validates data residency and network requirements for hybrid-cloud:
 - Validates network access requirements (internal/private/public)
 
 ```bash
-model-cli validate-gitops --artifact my-registry/my-model:v1 --env hybrid-cloud --region us-east-1
+model-cli validate gitops --artifact my-registry/my-model:v1 --env hybrid-cloud --region us-east-1
 ```
 
 #### Standard Environments
@@ -152,7 +152,7 @@ model-cli validate-gitops --artifact my-registry/my-model:v1 --env hybrid-cloud 
 For development, staging, and production environments, the command simply acknowledges the validation:
 
 ```bash
-model-cli validate-gitops --artifact my-registry/my-model:v1 --env production
+model-cli validate gitops --artifact my-registry/my-model:v1 --env production
 ```
 
 ### Example Output
@@ -185,7 +185,7 @@ will perform the actual admission control based on these annotations.
 
 ### Using with Argo CD PreSync Hooks
 
-Create a ConfigMap with a validation script that uses `model-cli validate-gitops`:
+Create a ConfigMap with a validation script that uses `model-cli validate gitops`:
 
 ```yaml
 # gitops-validation-hook.yaml
@@ -205,7 +205,7 @@ data:
     ARTIFACT=$1
     
     echo "Validating GitOps annotations for $ARTIFACT..."
-    model-cli validate-gitops --artifact $ARTIFACT --registry oras --quiet
+    model-cli validate gitops --artifact $ARTIFACT --registry oras --quiet
     
     if [ $? -ne 0 ]; then
       echo "FAIL: Artifact $ARTIFACT is missing required annotations"
@@ -236,7 +236,7 @@ spec:
 
 ### Using with Flux Image Automation
 
-Use `model-cli validate-gitops` in your Flux image policy:
+Use `model-cli validate gitops` in your Flux image policy:
 
 ```yaml
 # image-policy.yaml
@@ -259,7 +259,7 @@ For full validation with Flux, combine with a Kustomization that runs the valida
 
 ```bash
 # In your CI/CD pipeline
-model-cli validate-gitops --artifact $ARTIFACT --json-output
+model-cli validate gitops --artifact $ARTIFACT --json-output
 # Parse JSON output and only proceed if status is "pass"
 
 # Or use a Flux ImageRepository with custom health checks

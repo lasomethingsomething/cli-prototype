@@ -57,14 +57,14 @@ Start with `model-cli wizard` for the guided end-to-end journey. Each step is al
 |-------|---------|--------------|
 | Package | `package` | Package a model or agentic skill as an OCI artifact, inject annotations, generate SBOM + provenance |
 | Package | `harden` | Apply local hardening (SBOM, MOF classification) to an existing artifact |
-| Package | `check` | Local compliance check against the metadata contract before pushing |
+| Package | `validate local` | Local compliance check of the model directory before pushing |
 | Sign | `sign` / `verify` | Sign and verify with Sigstore (cosign) or Notary v2 (notation) |
 | Registry | `push` | Push an artifact to an OCI registry |
-| Registry | `validate` / `enforce` | Validate a manifest against the metadata contract (JSON Schema); `enforce` can run as an admission webhook |
+| Registry | `validate manifest` / `enforce` | Validate a manifest against the metadata contract (JSON Schema); `enforce` can run as an admission webhook |
 | Registry | `map` / `search` | Embed and query model → skill → pipeline relationships |
-| Deploy | `validate-gitops` | Pre-sync validation of trust-profile and infrastructure annotations for Argo CD / Flux |
-| Deploy | `admit` | Evaluate an artifact for GitOps admission (fetches the real manifest) |
-| Deploy | `validate-nodes` / `validate-runtime` / `schedule` | Check cluster nodes and runtime operators against artifact requirements |
+| Deploy | `validate gitops` | Pre-sync validation of trust-profile and infrastructure annotations for Argo CD / Flux |
+| Deploy | `validate admission` | Admission evaluation for a target environment (air-gapped, hybrid-cloud) |
+| Deploy | `validate nodes` / `validate runtime` / `schedule` | Check cluster nodes and runtime operators against artifact requirements |
 | Deploy | `deploy` / `serve` | Hand off to Argo CD / Flux and vLLM / KServe |
 
 Every command takes flags and falls back to prompts for anything you leave out (never without a terminal - see the non-interactive note above). Tool choices are remembered in `~/.model-cli.yaml`. The wizard is the one command that is prompt-only.
@@ -84,7 +84,7 @@ Every command takes flags and falls back to prompts for anything you leave out (
 
 Policy engines, GitOps tools, and registries can act on these without downloading the model.
 
-**Metadata contract.** `check`, `validate`, `enforce`, and `admit` all evaluate the same JSON-Schema-backed contract, so a model that passes locally passes at the registry and at admission.
+**Metadata contract.** Every `validate` target and `enforce` evaluate the same annotations with one shared engine and report format (text, `--quiet`, or `--json-output`), so a model that passes locally passes at the registry and at admission. The old top-level spellings (`check`, `validate-gitops`, `admit`, `validate-nodes`, `validate-runtime`) still work as hidden, deprecated aliases.
 
 ## Tool Integration
 

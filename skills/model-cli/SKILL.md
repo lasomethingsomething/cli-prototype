@@ -51,13 +51,13 @@ This single command guides users through the **complete workflow** for Phase 1 (
 | `sign` | Sign artifact | After packaging, before deployment |
 | `verify` | Verify signature | Before deploying to production |
 | `deploy` | Deploy to Kubernetes | After signing/verification |
-| `check` | Local compliance check | Before pushing to registry |
+| `validate local` | Local compliance check | Before pushing to registry |
 | `validate` | Validate metadata contract | Before pushing to registry |
 | `enforce` | Enforce metadata contract | At registry/admission proxy level |
-| `validate-gitops` | Pre-flight validation for GitOps | Before GitOps deployment |
-| `validate-nodes` | Validate node hardware requirements | Before scheduling to cluster |
-| `validate-runtime` | Validate runtime operator availability | Before deployment |
-| `admit` | Evaluate artifact for admission | For GitOps admission control |
+| `validate gitops` | Pre-flight validation for GitOps | Before GitOps deployment |
+| `validate nodes` | Validate node hardware requirements | Before scheduling to cluster |
+| `validate runtime` | Validate runtime operator availability | Before deployment |
+| `validate admission` | Evaluate artifact for admission | For GitOps admission control |
 | `search` | Cross-reference assets | Discover assets in registry |
 | `map` | Map relationships | Define model→skill→pipeline relationships |
 
@@ -82,7 +82,7 @@ model-cli package
 
 #### 2. Local Compliance Check
 ```bash
-model-cli check
+model-cli validate local
 ```
 - Validates local artifact against metadata contract
 - Checks required annotations present
@@ -164,7 +164,7 @@ model-cli validate --manifest my-manifest.json --json-schema --strict
 
 #### 10. Pass Trust Profile to GitOps
 ```bash
-model-cli validate-gitops --artifact my-model:v1
+model-cli validate gitops --artifact my-model:v1
 ```
 - Attaches Trust Profile annotations to OCI manifests for GitOps admission
 - Passes artifact reference with annotations to GitOps tools (Argo CD, Flux)
@@ -173,7 +173,7 @@ model-cli validate-gitops --artifact my-model:v1
 
 #### 11. Pass Infrastructure Requirements to GitOps
 ```bash
-model-cli validate-gitops --artifact my-model:v1
+model-cli validate gitops --artifact my-model:v1
 ```
 - Validates infrastructure requirement annotations
 - Annotations: runtime, accelerator, accelerator.cuda.min, resource.memory.min
@@ -183,7 +183,7 @@ model-cli validate-gitops --artifact my-model:v1
 
 #### 12. GitOps Pre-Sync Validation Hook
 ```bash
-model-cli validate-gitops --artifact my-model:v1 --quiet --json-output
+model-cli validate gitops --artifact my-model:v1 --quiet --json-output
 ```
 - Pre-flight validation for GitOps deployment
 - Fetches artifact manifest from registry and validates annotations
@@ -194,8 +194,8 @@ model-cli validate-gitops --artifact my-model:v1 --quiet --json-output
 
 #### 13. Implement Real Admission Evaluation
 ```bash
-model-cli admit --artifact my-model:v1 --registry ghcr.io
-model-cli admit --artifact my-model:v1 --json-output
+model-cli validate admission --artifact my-model:v1 --registry ghcr.io
+model-cli validate admission --artifact my-model:v1 --json-output
 ```
 - Enhances admit command to fetch real manifests from registries
 - Validates Trust Profile annotations
@@ -206,9 +206,9 @@ model-cli admit --artifact my-model:v1 --json-output
 
 #### 14. Support Air-Gapped and Hybrid-Cloud Safety Policies
 ```bash
-model-cli validate-gitops --artifact my-model:v1 --env air-gapped --region us-east-1
+model-cli validate gitops --artifact my-model:v1 --env air-gapped --region us-east-1
 ```
-- Extends validate-gitops with environment-specific validation
+- Extends validate gitops with environment-specific validation
 - Air-gapped: validates packaging format and SBOM presence
 - Hybrid-cloud: validates data residency and network access requirements
 - Supports --env and --region flags for environment targeting
@@ -217,7 +217,7 @@ model-cli validate-gitops --artifact my-model:v1 --env air-gapped --region us-ea
 #### 15. Infrastructure & Resource Orchestration
 ```bash
 ./model-cli package --gpu-type nvidia-h100 --vram-min 80GiB --gpu-topology 8xH100
-./model-cli validate-nodes --artifact my-model:v1 --namespace production
+./model-cli validate nodes --artifact my-model:v1 --namespace production
 ```
 - Attaches node requirement annotations (GPU type, vRAM minimum, GPU topology) to OCI manifests during packaging
 - Validates cluster nodes against artifact requirements
@@ -227,7 +227,7 @@ model-cli validate-gitops --artifact my-model:v1 --env air-gapped --region us-ea
 #### 16. Runtime Execution & Optimization
 ```bash
 ./model-cli package --runtime-type vllm --layer-dedup true --dlc-endpoint https://skills.example.com
-./model-cli validate-runtime --artifact my-model:v1 --namespace production
+./model-cli validate runtime --artifact my-model:v1 --namespace production
 ```
 - Attaches runtime-specific annotations (runtime type, layer deduplication) to OCI manifests during packaging
 - Supports Reference Skill DLC with endpoint and skill reference annotations
