@@ -46,6 +46,21 @@ gofmt -l .      # CI fails if this prints anything
 go vet ./...
 ```
 
+### End-to-end tests
+
+`test/e2e` drives the built binary against a real OCI registry ([zot](https://zotregistry.dev)) with
+real `oras`: package → push → fetch the manifest back → `validate gitops` / `validate admission`,
+and `push` with a provenance referrer. CI runs it on every PR. Locally:
+
+```bash
+docker run -d --name zot -p 5000:5000 \
+  -v "$PWD/test/e2e/zot-config.json:/etc/zot/config.json:ro" \
+  ghcr.io/project-zot/zot-linux-amd64:latest
+MODEL_CLI_E2E_REGISTRY=localhost:5000 go test -tags e2e -v ./test/e2e/
+```
+
+Without `MODEL_CLI_E2E_REGISTRY` the e2e package is skipped, so plain `go test ./...` stays fast.
+
 ## Pull Requests
 
 - Follow the pluggable provider pattern for new tools

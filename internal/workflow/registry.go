@@ -158,36 +158,34 @@ func (o *ORASProvider) GetArtifactDigest(artifact, registry string) (string, err
 	return descriptor.Digest, nil
 }
 
+// PushReferrer attaches data to artifact as an OCI referrer of the given
+// artifact type with `oras attach`, leaving the subject manifest untouched.
 func (o *ORASProvider) PushReferrer(artifact, registry, referrerType string, data []byte, annotations map[string]string) error {
-	// ORAS supports pushing referrers (manifests that reference other manifests)
-	// For provenance attestations, we use the in-toto attestation type
-	fullArtifact := registry + "/" + artifact
+	subject := registry + "/" + artifact
 
-	// Create a temporary file for the referrer
-	tmpFile, err := os.CreateTemp("", "referrer-*.json")
+	tmpDir, err := os.MkdirTemp("", "referrer-*")
 	if err != nil {
-		return fmt.Errorf("failed to create temp file for referrer: %v", err)
+		return fmt.Errorf("failed to create temp dir for referrer: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
-
-	if _, err := tmpFile.Write(data); err != nil {
+	defer os.RemoveAll(tmpDir)
+	const fileName = "referrer.json"
+	if err := os.WriteFile(filepath.Join(tmpDir, fileName), data, 0644); err != nil {
 		return fmt.Errorf("failed to write referrer data: %v", err)
 	}
-	if err := tmpFile.Close(); err != nil {
-		return fmt.Errorf("failed to close temp file: %v", err)
-	}
 
-	// Build ORAS command to push the referrer
-	args := []string{"push", fullArtifact, tmpFile.Name()}
-	args = append(args, "--artifact-type", referrerType)
+	args := []string{"attach", subject, "--artifact-type", referrerType}
 	args = append(args, annotationArgs(annotations)...)
+	// <file>:<layer media type>; run from the temp dir so ORAS records a plain title.
+	args = append(args, fileName+":"+referrerType)
 
 	cmd := exec.Command("oras", args...)
+	cmd.Dir = tmpDir
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to push referrer with ORAS: %v", err)
+		return fmt.Errorf("failed to attach referrer with ORAS: %v", err)
 	}
-
-	fmt.Printf("Pushed %s referrer for %s to %s\n", referrerType, artifact, registry)
+	fmt.Printf("Attached %s referrer to %s\n", referrerType, subject)
 	return nil
 }
 

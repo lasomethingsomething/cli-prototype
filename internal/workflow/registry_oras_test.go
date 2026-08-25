@@ -182,3 +182,24 @@ func TestORASGetReferrersNoneFound(t *testing.T) {
 		t.Errorf("expected only the discover call, got %v", calls())
 	}
 }
+
+func TestORASPushReferrerUsesAttach(t *testing.T) {
+	calls := installFakeOras(t, "", 0)
+
+	err := (&ORASProvider{}).PushReferrer("my-model:v1", "ghcr.io/my-org", AttestationTypeProvenance,
+		[]byte(`{"_type":"https://in-toto.io/Statement/v1"}`),
+		map[string]string{"org.opencontainers.image.title": "provenance-attestation"})
+	if err != nil {
+		t.Fatalf("PushReferrer() error = %v", err)
+	}
+	got := calls()
+	if len(got) != 1 {
+		t.Fatalf("expected one oras invocation, got %v", got)
+	}
+	_, args, _ := strings.Cut(got[0], "\t")
+	want := "attach ghcr.io/my-org/my-model:v1 --artifact-type " + AttestationTypeProvenance +
+		" --annotation org.opencontainers.image.title=provenance-attestation referrer.json:" + AttestationTypeProvenance
+	if args != want {
+		t.Errorf("oras args =\n  %s\nwant\n  %s", args, want)
+	}
+}
