@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/charmbracelet/huh"
 	"github.com/lasomethingsomething/cli-prototype/config"
 	"github.com/lasomethingsomething/cli-prototype/internal/workflow"
 	"github.com/spf13/cobra"
@@ -68,52 +67,23 @@ Examples:
 		opts.region = regionFlag
 
 		// Interactive prompts if not provided via flags
-		if opts.artifact == "" {
-			if err := huh.NewInput().
-				Title("Artifact to evaluate:").
-				Description("The OCI artifact reference to check (e.g., ghcr.io/my-org/my-model:latest)").
-				Value(&opts.artifact).
-				Run(); err != nil {
-				return err
-			}
+		if err := askString(cmd, "artifact", &opts.artifact, "Artifact to evaluate:", "The OCI artifact reference to check (e.g., ghcr.io/my-org/my-model:latest)"); err != nil {
+			return err
 		}
 
-		if opts.registry == "" {
-			cfg := config.Load()
-			if cfg.Registry != "" {
-				opts.registry = cfg.Registry
-			} else {
-				if err := huh.NewSelect[string]().
-					Title("Registry tool:").
-					Description("Choose how to fetch the artifact manifest").
-					Options(huh.NewOptions("oras", "modelpack")...).
-					Value(&opts.registry).
-					Run(); err != nil {
-					return err
-				}
-				// Save config for future use
-				cfg.Registry = opts.registry
-				warnIfSaveFails(config.Save(cfg))
-			}
+		cfg := config.Load()
+		if err := askSelectIfEmpty(cmd, "registry", &cfg.Registry, "Registry tool:", "Choose how to fetch the artifact manifest", []string{"oras", "modelpack"}); err != nil {
+			return err
+		}
+		opts.registry = cfg.Registry
+		warnIfSaveFails(config.Save(cfg))
+
+		if err := askSelect(cmd, "env", &opts.environment, "Target environment:", "Destination environment for deployment", []string{"development", "staging", "production", "air-gapped", "hybrid-cloud"}); err != nil {
+			return err
 		}
 
-		if opts.environment == "" {
-			if err := huh.NewSelect[string]().
-				Title("Target environment:").
-				Description("Destination environment for deployment").
-				Options(huh.NewOptions("development", "staging", "production", "air-gapped", "hybrid-cloud")...).
-				Value(&opts.environment).
-				Run(); err != nil {
-				return err
-			}
-		}
-
-		if opts.region == "" && opts.environment == "hybrid-cloud" {
-			if err := huh.NewInput().
-				Title("Target region:").
-				Description("Target region for hybrid-cloud validation (e.g., us-east-1, eu-west-1)").
-				Value(&opts.region).
-				Run(); err != nil {
+		if opts.environment == "hybrid-cloud" {
+			if err := askString(cmd, "region", &opts.region, "Target region:", "Target region for hybrid-cloud validation (e.g., us-east-1, eu-west-1)"); err != nil {
 				return err
 			}
 		}

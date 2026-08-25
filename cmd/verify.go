@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/charmbracelet/huh"
 	"github.com/lasomethingsomething/cli-prototype/config"
 	"github.com/lasomethingsomething/cli-prototype/internal/workflow"
 	"github.com/spf13/cobra"
@@ -31,8 +30,6 @@ Examples:
 		cfg := config.Load()
 
 		// Get flags
-		artifactFlag, _ := cmd.Flags().GetString("artifact")
-		signerFlag, _ := cmd.Flags().GetString("signer")
 		attestationFlag, _ := cmd.Flags().GetString("attestation")
 		registryFlag, _ := cmd.Flags().GetString("registry")
 		localManifestFlag, _ := cmd.Flags().GetString("local-manifest")
@@ -43,35 +40,15 @@ Examples:
 
 		// Interactive prompts
 		var artifact string
-		if artifactFlag != "" {
-			artifact = artifactFlag
-		} else {
-			if err := huh.NewInput().
-				Title("Artifact to verify:").
-				Description("The OCI artifact reference to verify (e.g., my-registry/my-model:latest)").
-				Value(&artifact).
-				Run(); err != nil {
-				return err
-			}
+		if err := askString(cmd, "artifact", &artifact, "Artifact to verify:", "The OCI artifact reference to verify (e.g., my-registry/my-model:latest)"); err != nil {
+			return err
 		}
 
-		var signer string
-		if signerFlag != "" {
-			signer = signerFlag
-		} else if cfg.Signer == "" {
-			if err := huh.NewSelect[string]().
-				Title("Select signing tool:").
-				Description("Which signing tool was used?").
-				Options(huh.NewOptions("sigstore", "notary")...).
-				Value(&signer).
-				Run(); err != nil {
-				return err
-			}
-			cfg.Signer = signer
-			warnIfSaveFails(config.Save(cfg))
-		} else {
-			signer = cfg.Signer
+		if err := askSelectIfEmpty(cmd, "signer", &cfg.Signer, "Select signing tool:", "Which signing tool was used?", []string{"sigstore", "notary"}); err != nil {
+			return err
 		}
+		signer := cfg.Signer
+		warnIfSaveFails(config.Save(cfg))
 
 		// Get signing provider
 		sp, err := workflow.GetSigningProvider(signer)

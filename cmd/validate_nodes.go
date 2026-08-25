@@ -6,7 +6,6 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/charmbracelet/huh"
 	"github.com/lasomethingsomething/cli-prototype/config"
 	"github.com/lasomethingsomething/cli-prototype/internal/workflow"
 	"github.com/spf13/cobra"
@@ -41,50 +40,22 @@ Examples:
   model-cli validate-nodes --artifact my-registry/my-model:latest --json-output`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Get flags
-		artifactFlag, _ := cmd.Flags().GetString("artifact")
-		registryFlag, _ := cmd.Flags().GetString("registry")
 		namespaceFlag, _ := cmd.Flags().GetString("namespace")
 		quietFlag, _ := cmd.Flags().GetBool("quiet")
 		jsonOutputFlag, _ := cmd.Flags().GetBool("json-output")
 
 		// Interactive prompts if not provided via flags
 		var artifact string
-		if artifactFlag != "" {
-			artifact = artifactFlag
-		} else {
-			if err := huh.NewInput().
-				Title("Artifact to validate:").
-				Description("The OCI artifact reference (e.g., ghcr.io/my-org/my-model:latest)").
-				Value(&artifact).
-				Run(); err != nil {
-				return err
-			}
+		if err := askString(cmd, "artifact", &artifact, "Artifact to validate:", "The OCI artifact reference (e.g., ghcr.io/my-org/my-model:latest)"); err != nil {
+			return err
 		}
 
-		var registry string
-		if registryFlag != "" {
-			registry = registryFlag
-		} else {
-			cfg := config.Load()
-			if cfg.Registry != "" {
-				registry = cfg.Registry
-			} else {
-				if err := huh.NewSelect[string]().
-					Title("Registry tool:").
-					Description("Choose how to fetch the artifact manifest").
-					Options(huh.NewOptions("oras", "modelpack")...).
-					Value(&registry).
-					Run(); err != nil {
-					return err
-				}
-			}
+		cfg := config.Load()
+		if err := askSelectIfEmpty(cmd, "registry", &cfg.Registry, "Registry tool:", "Choose how to fetch the artifact manifest", []string{"oras", "modelpack"}); err != nil {
+			return err
 		}
-		// Save config for future use
-		if registry != "" {
-			cfg := config.Load()
-			cfg.Registry = registry
-			warnIfSaveFails(config.Save(cfg))
-		}
+		registry := cfg.Registry
+		warnIfSaveFails(config.Save(cfg))
 
 		var namespace string
 		if namespaceFlag != "" {

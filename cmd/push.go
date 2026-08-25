@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/charmbracelet/huh"
 	"github.com/lasomethingsomething/cli-prototype/config"
 	"github.com/lasomethingsomething/cli-prototype/internal/workflow"
 	"github.com/spf13/cobra"
@@ -36,10 +35,7 @@ Examples:
 		cfg := config.Load()
 
 		// Get flags
-		artifactFlag, _ := cmd.Flags().GetString("artifact")
 		targetFlag, _ := cmd.Flags().GetString("target")
-		registryFlag, _ := cmd.Flags().GetString("registry")
-		destinationFlag, _ := cmd.Flags().GetString("destination")
 		manifestFlag, _ := cmd.Flags().GetString("manifest")
 		signFlag, _ := cmd.Flags().GetBool("sign")
 		signerFlag, _ := cmd.Flags().GetString("signer")
@@ -85,45 +81,19 @@ Examples:
 				artifact = targetFlag
 			}
 		} else {
-			if artifactFlag != "" {
-				artifact = artifactFlag
-			} else {
-				if err := huh.NewInput().
-					Title("Artifact to push:").
-					Description("The OCI artifact reference to push (e.g., my-model:latest)").
-					Value(&artifact).
-					Run(); err != nil {
-					return err
-				}
-			}
-		}
-
-		var registry string
-		if registryFlag != "" {
-			registry = registryFlag
-		} else if cfg.Registry == "" {
-			if err := huh.NewSelect[string]().
-				Title("Select Registry tool:").
-				Description("Choose how to push your artifact").
-				Options(huh.NewOptions("oras", "modelpack")...).
-				Value(&registry).
-				Run(); err != nil {
+			if err := askString(cmd, "artifact", &artifact, "Artifact to push:", "The OCI artifact reference to push (e.g., my-model:latest)"); err != nil {
 				return err
 			}
-			cfg.Registry = registry
-			warnIfSaveFails(config.Save(cfg))
-		} else {
-			registry = cfg.Registry
 		}
 
-		if destinationFlag != "" {
-			destination = destinationFlag
-		} else if destination == "" {
-			if err := huh.NewInput().
-				Title("Destination registry:").
-				Description("Where to push (e.g., ghcr.io/my-org, docker.io/myuser)").
-				Value(&destination).
-				Run(); err != nil {
+		if err := askSelectIfEmpty(cmd, "registry", &cfg.Registry, "Select Registry tool:", "Choose how to push your artifact", []string{"oras", "modelpack"}); err != nil {
+			return err
+		}
+		registry := cfg.Registry
+		warnIfSaveFails(config.Save(cfg))
+
+		if cmd.Flags().Changed("destination") || destination == "" {
+			if err := askString(cmd, "destination", &destination, "Destination registry:", "Where to push (e.g., ghcr.io/my-org, docker.io/myuser)"); err != nil {
 				return err
 			}
 		}
