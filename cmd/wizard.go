@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/lasomethingsomething/cli-prototype/config"
 	"github.com/lasomethingsomething/cli-prototype/internal/tui"
 	"github.com/lasomethingsomething/cli-prototype/internal/workflow"
@@ -69,27 +69,27 @@ func buildSummaryLines(r wizardResult) []string {
 // Styling for clean, uncluttered TUI
 var (
 	titleStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#FAFAFA")).
-		Bold(true).
-		Padding(1, 2)
+			Foreground(lipgloss.Color("#FAFAFA")).
+			Bold(true).
+			Padding(1, 2)
 
 	subtitleStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#999999")).
-		Padding(0, 2)
+			Foreground(lipgloss.Color("#999999")).
+			Padding(0, 2)
 
 	stepStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#55AAFF")).
-		Bold(true)
+			Foreground(lipgloss.Color("#55AAFF")).
+			Bold(true)
 
 	successStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#00FF88")).
-		Bold(true)
+			Foreground(lipgloss.Color("#00FF88")).
+			Bold(true)
 
 	infoStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#8888FF"))
+			Foreground(lipgloss.Color("#8888FF"))
 
 	warningStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#FFAA00"))
+			Foreground(lipgloss.Color("#FFAA00"))
 )
 
 var wizardCmd = &cobra.Command{
@@ -117,7 +117,7 @@ Examples:
 		skipCheck, _ := cmd.Flags().GetBool("skip-check")
 
 		cfg := config.Load()
-		
+
 		// Initialize context model for interactive TUI
 		ctxModel := tui.NewContextModel()
 		ctxModel.SetStep(1)
@@ -181,7 +181,7 @@ Examples:
 			fmt.Println(successStyle.Render("✓ Preferences saved"))
 		}
 		fmt.Println()
-		
+
 		// Update context model with config
 		ctxModel.SetConfig(cfg.Registry, cfg.GitOps, cfg.Signer, "")
 		ctxModel.SetStep(1)
@@ -208,7 +208,7 @@ Examples:
 			Value(&modelPath).
 			Run(); err != nil {
 			return err
-			}
+		}
 
 		var artifactName string
 		if err := huh.NewInput().
@@ -217,7 +217,7 @@ Examples:
 			Value(&artifactName).
 			Run(); err != nil {
 			return err
-			}
+		}
 
 		var includeRAG bool
 		if err := huh.NewConfirm().
@@ -240,7 +240,7 @@ Examples:
 
 		fmt.Println(successStyle.Render("✓ Model details collected"))
 		fmt.Println()
-		
+
 		// Show interactive context panel with current progress
 		ctxModel.SetStep(2)
 		ctxModel.SetModelInfo(modelName, modelPath, artifactName)
@@ -290,7 +290,7 @@ Examples:
 		if err != nil {
 			return err
 		}
-		
+
 		packageSucceeded := false
 		signSucceeded := false
 		verifySucceeded := false
@@ -304,7 +304,7 @@ Examples:
 				return err
 			}
 			pf.SetPackageInfo(modelName, modelPath, artifactName, "", includeRAG, ragPath)
-			
+
 			if err := pf.Run(); err != nil {
 				return err
 			}
@@ -430,22 +430,22 @@ Examples:
 			if err != nil {
 				return err
 			}
-			
+
 			registryProvider, err := workflow.GetRegistryProvider(cfg.Registry)
 			if err != nil {
 				return err
 			}
-			
+
 			if !gitOpsProvider.IsInstalled() {
 				fmt.Println(warningStyle.Render("Warning: GitOps tool not installed"))
 				fmt.Printf("   Install with: %s\n", gitOpsProvider.InstallInstructions())
 			}
-			
+
 			if !registryProvider.IsInstalled() {
 				fmt.Println(warningStyle.Render("Warning: Registry tool not installed"))
 				fmt.Printf("   Install with: %s\n", registryProvider.InstallInstructions())
 			}
-			
+
 			if gitOpsProvider.IsInstalled() && registryProvider.IsInstalled() {
 				wf, err := workflow.NewDeployWorkflow(cfg.GitOps, cfg.Registry)
 				if err != nil {
@@ -473,7 +473,7 @@ Examples:
 		fmt.Println("You've successfully:")
 		result := wizardResult{
 			packageSucceeded: packageSucceeded,
-			checkSucceeded:    checkSucceeded,
+			checkSucceeded:   checkSucceeded,
 			signSucceeded:    signSucceeded,
 			verifySucceeded:  verifySucceeded,
 			deploySucceeded:  deploySucceeded,
@@ -504,23 +504,23 @@ func displayInteractiveContext(ctxModel *tui.ContextModel) {
 		fmt.Println(ctxModel.View())
 		return
 	}
-	
+
 	fmt.Println()
 	fmt.Println("Press Tab/Shift+Tab to switch views, 1-6 to select tab, Enter to continue, Esc to go back")
 	fmt.Println()
-	
+
 	// Run the interactive context model
 	p := tea.NewProgram(ctxModel)
 	_, err := p.Run()
 	fmt.Println()
-	
+
 	// If there was an error (user pressed ctrl+c), check if they cancelled
 	if err != nil {
 		// tea.Program returns an error on ctrl+c, but we handle Esc gracefully
 		// For now, just continue execution
 		return
 	}
-	
+
 	// Check if user cancelled (pressed Esc)
 	if ctxModel.IsCancelled() {
 		// User wants to go back - we need a way to signal this
@@ -528,7 +528,7 @@ func displayInteractiveContext(ctxModel *tui.ContextModel) {
 		fmt.Println(warningStyle.Render("Cancelled by user"))
 		os.Exit(0)
 	}
-	
+
 	// User pressed Enter - reset for next use and continue
 	ctxModel.ResetControlFlags()
 }

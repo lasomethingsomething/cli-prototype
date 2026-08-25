@@ -209,10 +209,10 @@ func TestSBOMFormatMappingUnit(t *testing.T) {
 
 // stringContains is a helper function for string contains
 func stringContains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && 
-		(s[0:len(substr)] == substr || 
-		 s[len(s)-len(substr):] == substr ||
-		 stringContainsHelper(s, substr)))
+	return len(s) >= len(substr) && (s == substr || len(s) > 0 &&
+		(s[0:len(substr)] == substr ||
+			s[len(s)-len(substr):] == substr ||
+			stringContainsHelper(s, substr)))
 }
 
 func stringContainsHelper(s, substr string) bool {
@@ -238,7 +238,7 @@ func TestSBOMGeneratorInterfaceUnit(t *testing.T) {
 		_ = gen.IsInstalled()
 		_ = gen.InstallInstructions()
 		_ = gen.DefaultFormat()
-		
+
 		// We can't easily test Generate without the actual tools installed
 		// but we can verify the interface is satisfied
 	}
@@ -247,20 +247,20 @@ func TestSBOMGeneratorInterfaceUnit(t *testing.T) {
 // TestSyftCommandLineUnit tests that we can build a valid syft command
 func TestSyftCommandLineUnit(t *testing.T) {
 	gen := &SyftGenerator{}
-	
+
 	// This is a basic test to verify the command structure
 	// We can't actually run syft without it being installed
 	if gen.Name() != "syft" {
 		t.Errorf("Expected name syft, got %s", gen.Name())
 	}
-	
+
 	if gen.DefaultFormat() != SPDXJSON {
 		t.Errorf("Expected default format %s, got %s", SPDXJSON, gen.DefaultFormat())
 	}
-	
+
 	// Test that IsInstalled doesn't panic
 	_ = gen.IsInstalled()
-	
+
 	// Test that InstallInstructions returns a non-empty string
 	if gen.InstallInstructions() == "" {
 		t.Error("Expected non-empty install instructions")
@@ -275,7 +275,7 @@ func TestAllSBOMFormatsUnit(t *testing.T) {
 		CycloneDXJSON,
 		CycloneDXXML,
 	}
-	
+
 	for _, format := range formats {
 		// Just verify they're non-empty
 		if format == "" {

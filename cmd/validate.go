@@ -77,7 +77,7 @@ Examples:
 
 		var manifestAnnotations map[string]string
 		var artifactType workflow.ArtifactType
-		
+
 		if manifestFlag != "" {
 			// Read the real OCI manifest written by 'model-cli package' and
 			// validate the Standardized Metadata Contract.
@@ -89,7 +89,7 @@ Examples:
 			fmt.Println("✓ Reading Standardized Metadata Contract...")
 
 			manifestAnnotations = manifest.Annotations
-			
+
 			// Determine artifact type
 			if artifactTypeFlag != "" {
 				artifactType = workflow.ArtifactType(artifactTypeFlag)
@@ -99,7 +99,7 @@ Examples:
 				// Try to infer from the manifest structure
 				artifactType = workflow.ArtifactTypeModel // Default
 			}
-			
+
 			if len(manifestAnnotations) == 0 {
 				return fmt.Errorf("manifest at %s has no CNCF AI annotations", manifestFlag)
 			}
@@ -125,7 +125,7 @@ Examples:
 			annotations.MOFComponents = "weights,training-data"
 			manifestAnnotations = annotations.ToMap()
 			artifactType = workflow.ArtifactTypeModel
-			
+
 			// Add artifact type annotation if not present
 			if _, ok := manifestAnnotations[workflow.AnnotationArtifactType]; !ok {
 				manifestAnnotations[workflow.AnnotationArtifactType] = string(artifactType)
@@ -140,9 +140,9 @@ Examples:
 
 		// Validate the Standardized Metadata Contract
 		fmt.Println("\n✓ Validating Standardized Metadata Contract...")
-		
+
 		var contractResult *workflow.ContractValidationResult
-		
+
 		// Use JSON Schema validation if requested or if artifact type is known
 		if jsonSchemaFlag || manifestFlag != "" {
 			// Try to get the contract JSON from annotations
@@ -155,11 +155,11 @@ Examples:
 		} else {
 			contractResult = workflow.ValidateManifestMetadata(manifestAnnotations, artifactType)
 		}
-		
+
 		if !contractResult.Valid {
 			fmt.Printf("\n✗ Metadata contract validation FAILED\n")
 			fmt.Println(contractResult.String())
-			
+
 			// In strict mode, also fail on warnings
 			if strictFlag && len(contractResult.Warnings) > 0 {
 				fmt.Printf("\n✗ Strict mode: validation failed due to %d warning(s)\n", len(contractResult.Warnings))
@@ -168,17 +168,17 @@ Examples:
 				}
 				return fmt.Errorf("strict validation failed: %d warning(s)", len(contractResult.Warnings))
 			}
-			
+
 			return fmt.Errorf("manifest validation failed: %v", strings.Join(contractResult.Errors, "; "))
 		}
-		
+
 		fmt.Println("  ✓ All required fields present")
 		if len(contractResult.Warnings) > 0 {
 			fmt.Printf("  ⚠ %d warning(s):\n", len(contractResult.Warnings))
 			for _, warn := range contractResult.Warnings {
 				fmt.Printf("    - %s\n", warn)
 			}
-			
+
 			if strictFlag {
 				fmt.Printf("\n⚠ Strict mode: validation passed with warnings\n")
 			}
@@ -191,7 +191,7 @@ Examples:
 
 		if checkRelationships {
 			fmt.Println("\n✓ Mapping relationships...")
-			
+
 			// If we have a manifest with contract, parse and display relationships
 			if manifestFlag != "" {
 				contract, err := workflow.ParseMetadataContractFromAnnotations(manifestAnnotations)

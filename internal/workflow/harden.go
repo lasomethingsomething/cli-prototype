@@ -12,7 +12,7 @@ type HardenWorkflow struct {
 	modelName    string
 	modelPath    string
 	artifactName string
-	registry    string
+	registry     string
 
 	// Options
 	generateSBOM      bool
@@ -20,7 +20,7 @@ type HardenWorkflow struct {
 	generateMOFConfig bool
 	sbomTool          string
 	sbomFormat        SBOMFormat
-	license          string
+	license           string
 
 	// Results
 	sbomPath      string
@@ -35,14 +35,14 @@ type HardenWorkflow struct {
 // NewHardenWorkflow creates a new hardening workflow
 func NewHardenWorkflow(registry string) *HardenWorkflow {
 	return &HardenWorkflow{
-		registry:         registry,
+		registry:          registry,
 		generateSBOM:      true,
 		includeMOF:        true,
 		generateMOFConfig: true,
-		sbomTool:         "syft",
-		sbomFormat:       SPDXJSON,
-		license:         "CC-BY-4.0", // Default license
-		annotations:      NewAnnotationSet(),
+		sbomTool:          "syft",
+		sbomFormat:        SPDXJSON,
+		license:           "CC-BY-4.0", // Default license
+		annotations:       NewAnnotationSet(),
 	}
 }
 
@@ -89,7 +89,7 @@ func (w *HardenWorkflow) Run() error {
 	// Step 1: Generate SBOM if requested
 	if w.generateSBOM {
 		fmt.Println("→ Generating SBOM (Software Bill of Materials)...")
-		
+
 		sbomGen, err := GetSBOMGenerator(w.sbomTool)
 		if err != nil {
 			fmt.Printf("  Warning: SBOM generator not available: %v\n", err)
@@ -104,7 +104,7 @@ func (w *HardenWorkflow) Run() error {
 				if w.annotations != nil {
 					w.annotations.SBOMFormat = string(w.sbomFormat)
 				}
-				
+
 				// Attach SBOM as OCI layer (simulated - in real implementation would use OCI tools)
 				fmt.Printf("  ✓ SBOM attached as OCI layer with format: %s\n", w.sbomFormat)
 			}
@@ -115,7 +115,7 @@ func (w *HardenWorkflow) Run() error {
 	// Step 2: Apply MOF classification if requested
 	if w.includeMOF {
 		fmt.Println("→ Applying MOF (Model Openness Framework) classification...")
-		
+
 		mofClassifier := GetMOFClassifier()
 		var err error
 		w.mofClass, err = mofClassifier.Classify(w.modelPath)
@@ -136,7 +136,7 @@ func (w *HardenWorkflow) Run() error {
 	// Step 2.5: Generate MOF metadata config file if requested
 	if w.generateMOFConfig && w.includeMOF {
 		fmt.Println("→ Generating MOF metadata config file...")
-		
+
 		// Get detailed classification result for metadata
 		classStr, result, err := ClassifyModelPath(w.modelPath)
 		if err != nil {
@@ -145,7 +145,7 @@ func (w *HardenWorkflow) Run() error {
 			// Create the MOF metadata
 			generator := NewMOFMetadataGenerator()
 			generator.SetModelInfo(w.modelName, w.modelPath, w.artifactName)
-			
+
 			// Build components list from result
 			components := []string{}
 			if result.HasWeights {
@@ -163,11 +163,11 @@ func (w *HardenWorkflow) Run() error {
 			if result.HasLicense {
 				components = append(components, "license")
 			}
-			
+
 			generator.SetMOFClassification(classStr, components, result.Explanation)
 			generator.SetReleaseInfo(w.modelName, "1.0.0", "", "model")
 			generator.SetReleaseLicense(w.license)
-			
+
 			// Write to file
 			w.mofConfigPath = filepath.Join(w.modelPath, "mof.json")
 			if err := generator.WriteToFile(w.mofConfigPath, "json"); err != nil {

@@ -146,9 +146,9 @@ func TestGetSBOMGenerator(t *testing.T) {
 // Test provider Name() methods
 func TestProviderNames(t *testing.T) {
 	providers := []struct {
-		name          string
-		getProvider   func() (interface{}, error)
-		expectedName  string
+		name         string
+		getProvider  func() (interface{}, error)
+		expectedName string
 	}{
 		{"ArgoCD", func() (interface{}, error) { return GetGitOpsProvider("argo") }, "argocd"},
 		{"Flux", func() (interface{}, error) { return GetGitOpsProvider("flux") }, "flux"},
@@ -193,9 +193,9 @@ func TestProviderNames(t *testing.T) {
 // Test provider InstallInstructions() methods
 func TestInstallInstructions(t *testing.T) {
 	providers := []struct {
-		name          string
-		getProvider   func() (interface{}, error)
-		expectedPart  string // Partial string to check in instructions
+		name         string
+		getProvider  func() (interface{}, error)
+		expectedPart string // Partial string to check in instructions
 	}{
 		{"ArgoCD", func() (interface{}, error) { return GetGitOpsProvider("argo") }, "brew install argoproj"},
 		{"Flux", func() (interface{}, error) { return GetGitOpsProvider("flux") }, "brew install fluxcd"},

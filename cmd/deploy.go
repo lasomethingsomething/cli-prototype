@@ -130,10 +130,10 @@ Examples:
 		if err != nil {
 			return err
 		}
-		
+
 		if hasKubernetes && repoURL != "" {
 			wf.SetModelInfo(modelName, repoURL, manifestPath)
-			
+
 			// Set artifact reference if provided (contains Trust Profile annotations)
 			// This allows GitOps tools to access the annotations for admission (Story #63)
 			if artifactFlag != "" {
@@ -143,7 +143,7 @@ Examples:
 				wf.SetArtifactRef(modelName)
 			}
 		}
-		
+
 		return wf.Run()
 	},
 }

@@ -347,7 +347,7 @@ Examples:
 		pf.SetPackageInfo(modelName, modelPath, artifactName, registryURL, includeRAG, ragPath)
 		pf.SetAnnotations(annotations)
 		pf.SetIsSkill(isSkillFlag)
-		
+
 		// Set signing options
 		// Determine signer: use flag, then config, then default to empty (will default to sigstore in workflow)
 		signerToUse := signerFlag
@@ -355,7 +355,7 @@ Examples:
 			signerToUse = cfg.Signer
 		}
 		pf.SetSigningOptions(signFlag, signerToUse)
-		
+
 		// Set provenance options (enabled by default, can be disabled with --generate-provenance=false)
 		pf.SetProvenanceOptions(provenanceFlag)
 

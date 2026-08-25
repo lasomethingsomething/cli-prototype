@@ -91,21 +91,21 @@ func TestDeployWorkflowMissingTools(t *testing.T) {
 	tests := []struct {
 		name        string
 		gitOps      string
-		registry   string
+		registry    string
 		expectError bool
 		errorSubstr string
 	}{
 		{
 			name:        "flux not installed",
 			gitOps:      "flux",
-			registry:   "modelpack",
+			registry:    "modelpack",
 			expectError: true,
 			errorSubstr: "flux not installed",
 		},
 		{
 			name:        "argo not installed",
 			gitOps:      "argo",
-			registry:   "modelpack",
+			registry:    "modelpack",
 			expectError: true,
 			errorSubstr: "argocd not installed",
 		},

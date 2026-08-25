@@ -265,10 +265,10 @@ Examples:
 		// Output results
 		if jsonOutputFlag {
 			result := map[string]interface{}{
-				"artifact":       artifact,
-				"requirements":   map[string]string{"gpu_type": gpuType, "vram_min": vramMin, "gpu_topology": gpuTopology},
-				"nodes_checked":  len(nodes),
-				"pass":           allPass,
+				"artifact":      artifact,
+				"requirements":  map[string]string{"gpu_type": gpuType, "vram_min": vramMin, "gpu_topology": gpuTopology},
+				"nodes_checked": len(nodes),
+				"pass":          allPass,
 			}
 			if !allPass {
 				result["errors"] = validationErrors
@@ -299,7 +299,7 @@ Examples:
 
 // ClusterNode represents a Kubernetes node with GPU information
 type ClusterNode struct {
-	Name         string
+	Name        string
 	GPUType     string
 	VRAM        string
 	GPUTopology string

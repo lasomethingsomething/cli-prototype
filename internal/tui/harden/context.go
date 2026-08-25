@@ -49,8 +49,8 @@ type ContextModel struct {
 	TotalSteps  int
 
 	// Status
-	SBOMGenerated    bool
-	MOFApplied        bool
+	SBOMGenerated      bool
+	MOFApplied         bool
 	AnnotationsApplied bool
 
 	// Logs
@@ -70,9 +70,9 @@ func NewHardenContextModel() *ContextModel {
 		CurrentStep:  1,
 		TotalSteps:   5,
 		ActiveTab:    TabProgress,
-		Logs:        make([]string, 0),
-		width:       40,
-		height:      15,
+		Logs:         make([]string, 0),
+		width:        40,
+		height:       15,
 		GenerateSBOM: true,
 		IncludeMOF:   true,
 	}

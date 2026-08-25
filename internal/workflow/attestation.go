@@ -41,34 +41,34 @@ func NewAttestationManager(signer SigningProvider, registryProvider RegistryProv
 func (am *AttestationManager) AttestAndPush(artifactName string, pg *ProvenanceGenerator, sign bool) error {
 	// Generate the provenance attestation with real data
 	attestation := pg.Generate()
-	
+
 	// Serialize to JSON
 	attestationData, err := json.MarshalIndent(attestation, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal provenance attestation: %v", err)
 	}
-	
+
 	// Create annotations for the attestation referrer
 	// These annotations make the provenance discoverable and identify it as SLSA
 	attestationAnnotations := map[string]string{
-		AnnotationProvenanceType: "slsa-v1.0",
+		AnnotationProvenanceType:               "slsa-v1.0",
 		"org.opencontainers.image.title":       "provenance-attestation",
 		"org.opencontainers.image.description": "SLSA provenance attestation for " + artifactName,
 	}
-	
+
 	// If we have a signer, add signing framework annotation
 	if am.signer != nil {
 		attestationAnnotations[AnnotationSigningFramework] = am.signer.Name()
 	}
-	
+
 	// Push the attestation as a referrer to the registry
 	fullArtifact := artifactName
 	if am.registry != "" {
 		fullArtifact = am.registry + "/" + artifactName
 	}
-	
+
 	fmt.Printf("→ Pushing provenance attestation as referrer to registry...\n")
-	
+
 	if err := am.registryProvider.PushReferrer(
 		artifactName,
 		am.registry,
@@ -78,30 +78,30 @@ func (am *AttestationManager) AttestAndPush(artifactName string, pg *ProvenanceG
 	); err != nil {
 		return fmt.Errorf("failed to push provenance attestation referrer: %v", err)
 	}
-	
+
 	// If signing is requested and we have a signer, sign the attestation
 	// Per OSSF Model Signing Spec, the attestation itself should be signed
 	if sign && am.signer != nil {
 		fmt.Printf("→ Signing provenance attestation with %s...\n", am.signer.Name())
-		
+
 		// Create a temporary file for the attestation to sign it
 		// In production, this would use the signer's native support for attestations
 		// For now, we'll use a simple approach: sign the attestation JSON
-		
+
 		// Write attestation to temp file
 		tmpFile, err := os.CreateTemp("", "attestation-*.json")
 		if err != nil {
 			return fmt.Errorf("failed to create temp file for attestation: %v", err)
 		}
 		defer os.Remove(tmpFile.Name())
-		
+
 		if _, err := tmpFile.Write(attestationData); err != nil {
 			return fmt.Errorf("failed to write attestation to temp file: %v", err)
 		}
 		if err := tmpFile.Close(); err != nil {
 			return fmt.Errorf("failed to close temp file: %v", err)
 		}
-		
+
 		// Sign the attestation file
 		// The signature will be stored as a separate referrer
 		if err := am.signer.Sign(tmpFile.Name(), ""); err != nil {
@@ -134,12 +134,12 @@ func (am *AttestationManager) AttestAndPush(artifactName string, pg *ProvenanceG
 			}
 		}
 	}
-	
+
 	fmt.Printf("✓ Provenance attestation frozen and attached to artifact as immutable referrer\n")
 	fmt.Printf("  Referrer type: %s\n", AttestationTypeProvenance)
 	fmt.Printf("  Artifact: %s\n", fullArtifact)
 	fmt.Println("  The hardened provenance metadata is frozen, establishing the immutable record of origin.")
-	
+
 	return nil
 }
 
@@ -149,23 +149,23 @@ func (am *AttestationManager) GetAttestation(artifactName string) (*ProvenanceAt
 	if am.registry != "" {
 		fullArtifact = am.registry + "/" + artifactName
 	}
-	
+
 	// Fetch referrers of type provenance
 	referrers, err := am.registryProvider.GetReferrers(artifactName, am.registry, AttestationTypeProvenance)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get provenance referrers: %v", err)
 	}
-	
+
 	if len(referrers) == 0 {
 		return nil, fmt.Errorf("no provenance attestation found for %s", fullArtifact)
 	}
-	
+
 	// Parse the first referrer as a provenance attestation
 	var attestation ProvenanceAttestation
 	if err := json.Unmarshal(referrers[0], &attestation); err != nil {
 		return nil, fmt.Errorf("failed to parse provenance attestation: %v", err)
 	}
-	
+
 	return &attestation, nil
 }
 
@@ -175,7 +175,7 @@ func (am *AttestationManager) ValidateAndVerify(attestation *ProvenanceAttestati
 	if err := ValidateAttestation(attestation); err != nil {
 		return fmt.Errorf("attestation validation failed: %v", err)
 	}
-	
+
 	// If we have a signer, attempt to verify the signature
 	// In a real implementation, this would verify the attestation's signature
 	// which should be stored as a separate referrer alongside the attestation
@@ -187,6 +187,6 @@ func (am *AttestationManager) ValidateAndVerify(attestation *ProvenanceAttestati
 	} else {
 		fmt.Printf("  ⚠ No signer configured, skipping signature verification\n")
 	}
-	
+
 	return nil
 }
