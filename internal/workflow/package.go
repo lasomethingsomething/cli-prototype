@@ -211,19 +211,23 @@ func (w *PackageWorkflow) Run() error {
 		manifestAnnotations = make(map[string]string)
 	}
 
-	// Set artifact type based on whether this is a skill or model
+	artifactType := ArtifactTypeModel
 	if w.isSkill {
-		manifestAnnotations[AnnotationArtifactType] = "skill"
-	} else if manifestAnnotations[AnnotationArtifactType] == "" {
-		manifestAnnotations[AnnotationArtifactType] = "model"
+		artifactType = ArtifactTypeSkill
+	} else if t := manifestAnnotations[AnnotationArtifactType]; t != "" {
+		artifactType = ArtifactType(t)
 	}
 
-	manifest := NewManifest(manifestAnnotations)
+	manifest, err := NewManifestFromDirectory(artifactType, w.artifactName, w.modelPath, manifestAnnotations)
+	if err != nil {
+		return fmt.Errorf("failed to build OCI manifest: %v", err)
+	}
+	manifestAnnotations = manifest.Annotations
 	w.manifestPath = filepath.Join(w.modelPath, "manifest.json")
-	if err := WriteManifest(manifest, w.manifestPath); err != nil {
+	if err := WriteUnifiedOCIManifest(manifest, w.manifestPath); err != nil {
 		return fmt.Errorf("failed to write OCI manifest: %v", err)
 	}
-	fmt.Printf("  Manifest written to: %s\n", w.manifestPath)
+	fmt.Printf("  Manifest written to: %s (%d layer(s))\n", w.manifestPath, len(manifest.Layers))
 
 	w.localDigest = ComputeManifestDigest(w.manifestPath)
 

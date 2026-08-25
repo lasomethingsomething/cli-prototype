@@ -194,7 +194,7 @@ Examples:
 		// CNCF AI annotations so they're attached to the manifest on push.
 		var existingAnnotations map[string]string
 		if manifestFlag != "" {
-			existingManifest, err := workflow.ReadManifest(manifestFlag)
+			existingManifest, err := workflow.ReadUnifiedOCIManifest(manifestFlag)
 			if err != nil {
 				return err
 			}
