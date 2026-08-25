@@ -13,15 +13,30 @@ import (
 // It returns a function that reads back the recorded invocations.
 func installFakeOras(t *testing.T, stdout string, exitCode int) func() []string {
 	t.Helper()
+	return installFakeOrasSequence(t, []string{stdout}, exitCode)
+}
+
+// installFakeOrasSequence is like installFakeOras but answers the n-th
+// invocation with responses[n]. Invocations beyond the slice reuse the last
+// response, so a single-element slice answers every call the same way.
+func installFakeOrasSequence(t *testing.T, responses []string, exitCode int) func() []string {
+	t.Helper()
 	dir := t.TempDir()
 	logFile := filepath.Join(dir, "calls.log")
-	stdoutFile := filepath.Join(dir, "stdout")
-	if err := os.WriteFile(stdoutFile, []byte(stdout), 0644); err != nil {
-		t.Fatal(err)
+	counterFile := filepath.Join(dir, "counter")
+	for i, r := range responses {
+		if err := os.WriteFile(filepath.Join(dir, "stdout."+itoa(i)), []byte(r), 0644); err != nil {
+			t.Fatal(err)
+		}
 	}
+	last := itoa(len(responses) - 1)
 	script := "#!/bin/sh\n" +
 		"printf '%s\\t%s\\n' \"$(pwd)\" \"$*\" >> \"" + logFile + "\"\n" +
-		"cat \"" + stdoutFile + "\"\n" +
+		"n=$(cat \"" + counterFile + "\" 2>/dev/null || echo 0)\n" +
+		"echo $((n+1)) > \"" + counterFile + "\"\n" +
+		"f=\"" + dir + "/stdout.$n\"\n" +
+		"[ -f \"$f\" ] || f=\"" + dir + "/stdout." + last + "\"\n" +
+		"cat \"$f\"\n" +
 		"exit " + itoa(exitCode) + "\n"
 	if err := os.WriteFile(filepath.Join(dir, "oras"), []byte(script), 0755); err != nil {
 		t.Fatal(err)
