@@ -35,3 +35,29 @@ jobs:
         run: |
           go install honnef.co/go/tools/cmd/staticcheck@v0.8.1
           staticcheck ./...
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: oras-project/setup-oras@v1
+      - name: Start zot registry
+        run: |
+          docker run -d --name zot -p 5000:5000 \
+            -v "$PWD/test/e2e/zot-config.json:/etc/zot/config.json:ro" \
+            ghcr.io/project-zot/zot-linux-amd64:latest
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:5000/v2/ >/dev/null && break
+            sleep 1
+          done
+          curl -sf http://localhost:5000/v2/ >/dev/null || { docker logs zot; exit 1; }
+      - name: Run e2e tests
+        env:
+          MODEL_CLI_E2E_REGISTRY: localhost:5000
+        run: go test -tags e2e -v ./test/e2e/
+      - name: Registry logs
+        if: failure()
+        run: docker logs zot

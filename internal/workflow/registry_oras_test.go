@@ -182,3 +182,39 @@ func TestORASGetReferrersNoneFound(t *testing.T) {
 		t.Errorf("expected only the discover call, got %v", calls())
 	}
 }
+
+func TestORASPushReferrerUsesAttach(t *testing.T) {
+	calls := installFakeOras(t, "", 0)
+
+	err := (&ORASProvider{}).PushReferrer("my-model:v1", "ghcr.io/my-org", AttestationTypeProvenance,
+		[]byte(`{"_type":"https://in-toto.io/Statement/v1"}`),
+		map[string]string{"org.opencontainers.image.title": "provenance-attestation"})
+	if err != nil {
+		t.Fatalf("PushReferrer() error = %v", err)
+	}
+	got := calls()
+	if len(got) != 1 {
+		t.Fatalf("expected one oras invocation, got %v", got)
+	}
+	_, args, _ := strings.Cut(got[0], "\t")
+	want := "attach ghcr.io/my-org/my-model:v1 --artifact-type " + AttestationTypeProvenance +
+		" --annotation org.opencontainers.image.title=provenance-attestation referrer.json:" + AttestationTypeProvenance
+	if args != want {
+		t.Errorf("oras args =\n  %s\nwant\n  %s", args, want)
+	}
+}
+
+func TestParseDiscoverOutputAcceptsBothKeys(t *testing.T) {
+	for name, in := range map[string]string{
+		"oras 1.2 manifests": `{"manifests":[{"digest":"sha256:aa","artifactType":"t"}]}`,
+		"oras 1.3 referrers": `{"reference":"r","referrers":[{"digest":"sha256:aa","artifactType":"t"}]}`,
+	} {
+		refs, err := parseDiscoverOutput([]byte(in))
+		if err != nil || len(refs) != 1 || refs[0].Digest != "sha256:aa" {
+			t.Errorf("%s: refs=%v err=%v", name, refs, err)
+		}
+	}
+	if refs, err := parseDiscoverOutput([]byte(`{"referrers":[]}`)); err != nil || len(refs) != 0 {
+		t.Errorf("empty: refs=%v err=%v", refs, err)
+	}
+}

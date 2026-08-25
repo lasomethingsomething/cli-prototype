@@ -158,36 +158,34 @@ func (o *ORASProvider) GetArtifactDigest(artifact, registry string) (string, err
 	return descriptor.Digest, nil
 }
 
+// PushReferrer attaches data to artifact as an OCI referrer of the given
+// artifact type with `oras attach`, leaving the subject manifest untouched.
 func (o *ORASProvider) PushReferrer(artifact, registry, referrerType string, data []byte, annotations map[string]string) error {
-	// ORAS supports pushing referrers (manifests that reference other manifests)
-	// For provenance attestations, we use the in-toto attestation type
-	fullArtifact := registry + "/" + artifact
+	subject := registry + "/" + artifact
 
-	// Create a temporary file for the referrer
-	tmpFile, err := os.CreateTemp("", "referrer-*.json")
+	tmpDir, err := os.MkdirTemp("", "referrer-*")
 	if err != nil {
-		return fmt.Errorf("failed to create temp file for referrer: %v", err)
+		return fmt.Errorf("failed to create temp dir for referrer: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
-
-	if _, err := tmpFile.Write(data); err != nil {
+	defer os.RemoveAll(tmpDir)
+	const fileName = "referrer.json"
+	if err := os.WriteFile(filepath.Join(tmpDir, fileName), data, 0644); err != nil {
 		return fmt.Errorf("failed to write referrer data: %v", err)
 	}
-	if err := tmpFile.Close(); err != nil {
-		return fmt.Errorf("failed to close temp file: %v", err)
-	}
 
-	// Build ORAS command to push the referrer
-	args := []string{"push", fullArtifact, tmpFile.Name()}
-	args = append(args, "--artifact-type", referrerType)
+	args := []string{"attach", subject, "--artifact-type", referrerType}
 	args = append(args, annotationArgs(annotations)...)
+	// <file>:<layer media type>; run from the temp dir so ORAS records a plain title.
+	args = append(args, fileName+":"+referrerType)
 
 	cmd := exec.Command("oras", args...)
+	cmd.Dir = tmpDir
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to push referrer with ORAS: %v", err)
+		return fmt.Errorf("failed to attach referrer with ORAS: %v", err)
 	}
-
-	fmt.Printf("Pushed %s referrer for %s to %s\n", referrerType, artifact, registry)
+	fmt.Printf("Attached %s referrer to %s\n", referrerType, subject)
 	return nil
 }
 
@@ -205,17 +203,13 @@ func (o *ORASProvider) GetReferrers(artifact, registry, referrerType string) ([]
 		return nil, fmt.Errorf("failed to discover referrers with ORAS: %v", err)
 	}
 
-	var discovered struct {
-		Manifests []struct {
-			Digest string `json:"digest"`
-		} `json:"manifests"`
-	}
-	if err := json.Unmarshal(output, &discovered); err != nil {
-		return nil, fmt.Errorf("failed to parse ORAS discover output: %v", err)
+	refs, err := parseDiscoverOutput(output)
+	if err != nil {
+		return nil, err
 	}
 
 	var blobs [][]byte
-	for _, ref := range discovered.Manifests {
+	for _, ref := range refs {
 		if ref.Digest == "" {
 			continue
 		}
@@ -244,6 +238,26 @@ func (o *ORASProvider) GetReferrers(artifact, registry, referrerType string) ([]
 		}
 	}
 	return blobs, nil
+}
+
+// discoveredReferrer is one entry of `oras discover --format json`.
+type discoveredReferrer struct {
+	Digest       string `json:"digest"`
+	ArtifactType string `json:"artifactType"`
+}
+
+// parseDiscoverOutput reads the referrer list from `oras discover --format
+// json`. ORAS 1.2 lists them under "manifests", ORAS 1.3+ under "referrers";
+// both are accepted.
+func parseDiscoverOutput(output []byte) ([]discoveredReferrer, error) {
+	var discovered struct {
+		Manifests []discoveredReferrer `json:"manifests"`
+		Referrers []discoveredReferrer `json:"referrers"`
+	}
+	if err := json.Unmarshal(output, &discovered); err != nil {
+		return nil, fmt.Errorf("failed to parse ORAS discover output: %v", err)
+	}
+	return append(discovered.Manifests, discovered.Referrers...), nil
 }
 
 // repositoryOf strips the tag or digest from an artifact reference such as
