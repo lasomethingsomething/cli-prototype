@@ -203,3 +203,18 @@ func TestORASPushReferrerUsesAttach(t *testing.T) {
 		t.Errorf("oras args =\n  %s\nwant\n  %s", args, want)
 	}
 }
+
+func TestParseDiscoverOutputAcceptsBothKeys(t *testing.T) {
+	for name, in := range map[string]string{
+		"oras 1.2 manifests": `{"manifests":[{"digest":"sha256:aa","artifactType":"t"}]}`,
+		"oras 1.3 referrers": `{"reference":"r","referrers":[{"digest":"sha256:aa","artifactType":"t"}]}`,
+	} {
+		refs, err := parseDiscoverOutput([]byte(in))
+		if err != nil || len(refs) != 1 || refs[0].Digest != "sha256:aa" {
+			t.Errorf("%s: refs=%v err=%v", name, refs, err)
+		}
+	}
+	if refs, err := parseDiscoverOutput([]byte(`{"referrers":[]}`)); err != nil || len(refs) != 0 {
+		t.Errorf("empty: refs=%v err=%v", refs, err)
+	}
+}

@@ -213,14 +213,20 @@ func TestPushAttachesProvenanceReferrer(t *testing.T) {
 	}
 
 	// The attestation is discoverable as a referrer of the in-toto type...
-	var discovered struct {
-		Manifests []struct {
-			ArtifactType string `json:"artifactType"`
-		} `json:"manifests"`
+	// (ORAS 1.2 lists referrers under "manifests", 1.3+ under "referrers".)
+	raw, err := exec.Command("oras", "discover", "--format", "json", "--artifact-type", workflow.AttestationTypeProvenance, ref).Output()
+	if err != nil {
+		t.Fatalf("oras discover: %v", err)
 	}
-	orasJSON(t, &discovered, "discover", "--format", "json", "--artifact-type", workflow.AttestationTypeProvenance, ref)
-	if len(discovered.Manifests) != 1 {
-		t.Fatalf("want exactly one provenance referrer, got %+v", discovered.Manifests)
+	var discovered struct {
+		Manifests []struct{ ArtifactType string } `json:"manifests"`
+		Referrers []struct{ ArtifactType string } `json:"referrers"`
+	}
+	if err := json.Unmarshal(raw, &discovered); err != nil {
+		t.Fatalf("oras discover: invalid JSON: %v\n%s", err, raw)
+	}
+	if n := len(discovered.Manifests) + len(discovered.Referrers); n != 1 {
+		t.Fatalf("want exactly one provenance referrer, got %d; raw discover output:\n%s", n, raw)
 	}
 
 	// ...and the CLI's own referrer path reads it back as a valid attestation.

@@ -203,17 +203,13 @@ func (o *ORASProvider) GetReferrers(artifact, registry, referrerType string) ([]
 		return nil, fmt.Errorf("failed to discover referrers with ORAS: %v", err)
 	}
 
-	var discovered struct {
-		Manifests []struct {
-			Digest string `json:"digest"`
-		} `json:"manifests"`
-	}
-	if err := json.Unmarshal(output, &discovered); err != nil {
-		return nil, fmt.Errorf("failed to parse ORAS discover output: %v", err)
+	refs, err := parseDiscoverOutput(output)
+	if err != nil {
+		return nil, err
 	}
 
 	var blobs [][]byte
-	for _, ref := range discovered.Manifests {
+	for _, ref := range refs {
 		if ref.Digest == "" {
 			continue
 		}
@@ -242,6 +238,26 @@ func (o *ORASProvider) GetReferrers(artifact, registry, referrerType string) ([]
 		}
 	}
 	return blobs, nil
+}
+
+// discoveredReferrer is one entry of `oras discover --format json`.
+type discoveredReferrer struct {
+	Digest       string `json:"digest"`
+	ArtifactType string `json:"artifactType"`
+}
+
+// parseDiscoverOutput reads the referrer list from `oras discover --format
+// json`. ORAS 1.2 lists them under "manifests", ORAS 1.3+ under "referrers";
+// both are accepted.
+func parseDiscoverOutput(output []byte) ([]discoveredReferrer, error) {
+	var discovered struct {
+		Manifests []discoveredReferrer `json:"manifests"`
+		Referrers []discoveredReferrer `json:"referrers"`
+	}
+	if err := json.Unmarshal(output, &discovered); err != nil {
+		return nil, fmt.Errorf("failed to parse ORAS discover output: %v", err)
+	}
+	return append(discovered.Manifests, discovered.Referrers...), nil
 }
 
 // repositoryOf strips the tag or digest from an artifact reference such as
