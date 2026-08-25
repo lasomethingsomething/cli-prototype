@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strings"
 )
 
 // RegistryProvider defines the interface for registry tools like ORAS and ModelPack
@@ -190,22 +191,73 @@ func (o *ORASProvider) PushReferrer(artifact, registry, referrerType string, dat
 	return nil
 }
 
+// GetReferrers lists the referrers of the given artifact type with
+// `oras discover` and returns the content of each referrer's layer blobs
+// (e.g. the attestation JSON pushed by PushReferrer).
 func (o *ORASProvider) GetReferrers(artifact, registry, referrerType string) ([][]byte, error) {
 	fullArtifact := registry + "/" + artifact
+	repo := registry + "/" + repositoryOf(artifact)
 
-	// ORAS can fetch referrers by artifact type
-	cmd := exec.Command("oras", "manifest", "fetch", fullArtifact, "--artifact-type", referrerType)
-	output, err := cmd.Output()
+	discover := exec.Command("oras", "discover", "--artifact-type", referrerType, "--format", "json", fullArtifact)
+	discover.Stderr = os.Stderr
+	output, err := discover.Output()
 	if err != nil {
-		// It's okay if no referrers exist
-		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("failed to fetch referrers with ORAS: %v", err)
+		return nil, fmt.Errorf("failed to discover referrers with ORAS: %v", err)
 	}
 
-	// Return the referrer data
-	return [][]byte{output}, nil
+	var discovered struct {
+		Manifests []struct {
+			Digest string `json:"digest"`
+		} `json:"manifests"`
+	}
+	if err := json.Unmarshal(output, &discovered); err != nil {
+		return nil, fmt.Errorf("failed to parse ORAS discover output: %v", err)
+	}
+
+	var blobs [][]byte
+	for _, ref := range discovered.Manifests {
+		if ref.Digest == "" {
+			continue
+		}
+		fetch := exec.Command("oras", "manifest", "fetch", repo+"@"+ref.Digest)
+		fetch.Stderr = os.Stderr
+		manifestJSON, err := fetch.Output()
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch referrer manifest %s with ORAS: %v", ref.Digest, err)
+		}
+		var manifest struct {
+			Layers []struct {
+				Digest string `json:"digest"`
+			} `json:"layers"`
+		}
+		if err := json.Unmarshal(manifestJSON, &manifest); err != nil {
+			return nil, fmt.Errorf("failed to parse referrer manifest %s: %v", ref.Digest, err)
+		}
+		for _, layer := range manifest.Layers {
+			blob := exec.Command("oras", "blob", "fetch", "--output", "-", repo+"@"+layer.Digest)
+			blob.Stderr = os.Stderr
+			data, err := blob.Output()
+			if err != nil {
+				return nil, fmt.Errorf("failed to fetch referrer blob %s with ORAS: %v", layer.Digest, err)
+			}
+			blobs = append(blobs, data)
+		}
+	}
+	return blobs, nil
+}
+
+// repositoryOf strips the tag or digest from an artifact reference such as
+// "my-model:v1" or "my-model@sha256:...", leaving the repository path.
+func repositoryOf(artifact string) string {
+	if i := strings.Index(artifact, "@"); i >= 0 {
+		return artifact[:i]
+	}
+	// A colon after the last slash separates the tag; earlier colons could be a port.
+	lastSlash := strings.LastIndex(artifact, "/")
+	if i := strings.LastIndex(artifact, ":"); i > lastSlash {
+		return artifact[:i]
+	}
+	return artifact
 }
 
 func (o *ORASProvider) Search(registry, filters string) ([][]byte, error) {
