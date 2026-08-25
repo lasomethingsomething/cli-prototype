@@ -89,31 +89,31 @@ func (m *MOFClassifierImpl) classifyModelPath(modelPath string) (*Classification
 		lowerName := strings.ToLower(filename)
 
 		// Check for weights
-		if result.HasWeights == false && isWeightFile(lowerName) {
+		if !result.HasWeights && isWeightFile(lowerName) {
 			result.HasWeights = true
 			result.Components = appendUnique(result.Components, "weights")
 		}
 
 		// Check for code
-		if result.HasCode == false && isCodeFile(lowerName) {
+		if !result.HasCode && isCodeFile(lowerName) {
 			result.HasCode = true
 			result.Components = appendUnique(result.Components, "code")
 		}
 
 		// Check for training data
-		if result.HasTrainingData == false && isTrainingDataFile(lowerName, path) {
+		if !result.HasTrainingData && isTrainingDataFile(lowerName, path) {
 			result.HasTrainingData = true
 			result.Components = appendUnique(result.Components, "training-data")
 		}
 
 		// Check for documentation
-		if result.HasDocs == false && isDocFile(lowerName) {
+		if !result.HasDocs && isDocFile(lowerName) {
 			result.HasDocs = true
 			result.Components = appendUnique(result.Components, "documentation")
 		}
 
 		// Check for license
-		if result.HasLicense == false && isLicenseFile(lowerName) {
+		if !result.HasLicense && isLicenseFile(lowerName) {
 			result.HasLicense = true
 			result.Components = appendUnique(result.Components, "license")
 		}
