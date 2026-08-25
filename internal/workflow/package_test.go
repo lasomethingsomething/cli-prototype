@@ -309,26 +309,6 @@ func TestSetSigningOptions(t *testing.T) {
 	}
 }
 
-// fakeSigningProvider is a test double for SigningProvider
-// that records whether Sign() was called instead of shelling out to a real tool.
-type fakeSigningProvider struct {
-	name         string
-	installed    bool
-	signCalled   bool
-	lastArtifact string
-}
-
-func (f *fakeSigningProvider) Name() string                { return f.name }
-func (f *fakeSigningProvider) IsInstalled() bool           { return f.installed }
-func (f *fakeSigningProvider) InstallInstructions() string { return "n/a" }
-func (f *fakeSigningProvider) Sign(artifact, keyRef string) error {
-	f.signCalled = true
-	f.lastArtifact = artifact
-	return nil
-}
-func (f *fakeSigningProvider) Verify(artifact string) error            { return nil }
-func (f *fakeSigningProvider) GetSignaturePath(artifact string) string { return artifact + ".sig" }
-
 // TestPackageWorkflowRunWithSigning verifies that when sign=true, the workflow
 // attempts to sign the artifact after packaging using the configured signer.
 func TestPackageWorkflowRunWithSigning(t *testing.T) {

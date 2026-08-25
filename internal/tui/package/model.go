@@ -56,7 +56,6 @@ type Model struct {
 	completed bool
 	err       error
 	logs      []string
-	cursor    int // for navigating lists
 
 	// Steps for the checklist
 	steps       []Step
