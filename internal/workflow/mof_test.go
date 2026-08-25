@@ -9,7 +9,7 @@ import (
 // TestMOFClassifier tests the MOF classifier interface
 func TestMOFClassifier(t *testing.T) {
 	classifier := GetMOFClassifier()
-	
+
 	if classifier.Name() != "mof" {
 		t.Errorf("Expected name 'mof', got '%s'", classifier.Name())
 	}
@@ -216,13 +216,13 @@ func TestClassifyModelPathEmptyDirectory(t *testing.T) {
 // TestClassificationResult tests the ClassificationResult struct
 func TestClassificationResult(t *testing.T) {
 	result := &ClassificationResult{
-		Class:       MOFClassI,
-		HasWeights: true,
-		HasCode:    true,
+		Class:           MOFClassI,
+		HasWeights:      true,
+		HasCode:         true,
 		HasTrainingData: true,
-		HasDocs:    true,
-		HasLicense: true,
-		Components: []string{"weights", "code", "training-data", "documentation", "license"},
+		HasDocs:         true,
+		HasLicense:      true,
+		Components:      []string{"weights", "code", "training-data", "documentation", "license"},
 	}
 
 	if result.Class != "I" {
@@ -236,11 +236,11 @@ func TestDetermineMOFClass(t *testing.T) {
 
 	// Test Class I
 	resultI := &ClassificationResult{
-		HasWeights:  true,
-		HasCode:     true,
+		HasWeights:      true,
+		HasCode:         true,
 		HasTrainingData: true,
-		HasDocs:     true,
-		HasLicense:  true,
+		HasDocs:         true,
+		HasLicense:      true,
 	}
 	if classifier.determineMOFClass(resultI) != MOFClassI {
 		t.Error("Expected Class I for all components")
@@ -248,11 +248,11 @@ func TestDetermineMOFClass(t *testing.T) {
 
 	// Test Class II
 	resultII := &ClassificationResult{
-		HasWeights:  true,
-		HasCode:     true,
+		HasWeights:      true,
+		HasCode:         true,
 		HasTrainingData: false,
-		HasDocs:     false,
-		HasLicense:  false,
+		HasDocs:         false,
+		HasLicense:      false,
 	}
 	if classifier.determineMOFClass(resultII) != MOFClassII {
 		t.Error("Expected Class II for partial components")
@@ -260,11 +260,11 @@ func TestDetermineMOFClass(t *testing.T) {
 
 	// Test Class III
 	resultIII := &ClassificationResult{
-		HasWeights:  true,
-		HasCode:     false,
+		HasWeights:      true,
+		HasCode:         false,
 		HasTrainingData: false,
-		HasDocs:     false,
-		HasLicense:  false,
+		HasDocs:         false,
+		HasLicense:      false,
 	}
 	if classifier.determineMOFClass(resultIII) != MOFClassIII {
 		t.Error("Expected Class III for weights only")
@@ -272,11 +272,11 @@ func TestDetermineMOFClass(t *testing.T) {
 
 	// Test Class III with no weights
 	resultEmpty := &ClassificationResult{
-		HasWeights:  false,
-		HasCode:     false,
+		HasWeights:      false,
+		HasCode:         false,
 		HasTrainingData: false,
-		HasDocs:     false,
-		HasLicense:  false,
+		HasDocs:         false,
+		HasLicense:      false,
 	}
 	if classifier.determineMOFClass(resultEmpty) != MOFClassIII {
 		t.Error("Expected Class III for no components")
@@ -425,13 +425,13 @@ func TestGenerateExplanation(t *testing.T) {
 
 	// Test Class II explanation
 	resultII := &ClassificationResult{
-		Class:       MOFClassII,
-		HasWeights:  true,
-		HasCode:     false,
+		Class:           MOFClassII,
+		HasWeights:      true,
+		HasCode:         false,
 		HasTrainingData: false,
-		HasDocs:     true,
-		HasLicense:  false,
-		Components:  []string{"weights", "documentation"},
+		HasDocs:         true,
+		HasLicense:      false,
+		Components:      []string{"weights", "documentation"},
 	}
 	explanation = classifier.generateExplanation(resultII)
 	if !mofStringContains(explanation, "Partially open") {
@@ -440,12 +440,12 @@ func TestGenerateExplanation(t *testing.T) {
 
 	// Test Class III explanation
 	resultIII := &ClassificationResult{
-		Class:       MOFClassIII,
-		HasWeights:  true,
-		HasCode:     false,
+		Class:           MOFClassIII,
+		HasWeights:      true,
+		HasCode:         false,
 		HasTrainingData: false,
-		HasDocs:     false,
-		HasLicense:  false,
+		HasDocs:         false,
+		HasLicense:      false,
 	}
 	explanation = classifier.generateExplanation(resultIII)
 	if !mofStringContains(explanation, "Closed") {
@@ -455,10 +455,10 @@ func TestGenerateExplanation(t *testing.T) {
 
 // mofStringContains is a helper function for string contains
 func mofStringContains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && 
-		(s[0:len(substr)] == substr || 
-		 s[len(s)-len(substr):] == substr ||
-		 mofStringContainsHelper(s, substr)))
+	return len(s) >= len(substr) && (s == substr || len(s) > 0 &&
+		(s[0:len(substr)] == substr ||
+			s[len(s)-len(substr):] == substr ||
+			mofStringContainsHelper(s, substr)))
 }
 
 func mofStringContainsHelper(s, substr string) bool {

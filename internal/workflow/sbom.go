@@ -68,13 +68,13 @@ func (s *SyftGenerator) Generate(modelPath, outputPath string, format SBOMFormat
 	// Build syft command
 	args := []string{"dir:" + modelPath, "-o", string(syftFormat), "--file", outputPath}
 	cmd := exec.Command("syft", args...)
-	
+
 	// Set up output for logging
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
 	fmt.Printf("Generating SBOM for %s using Syft (format: %s)...\n", modelPath, format)
-	
+
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("syft generation failed: %w", err)
 	}
@@ -141,19 +141,19 @@ func (t *TrivyGenerator) Generate(modelPath, outputPath string, format SBOMForma
 	// Build trivy command
 	args := []string{"fs", "--security-checks", "vulnerability,secret", "--format", trivyFormat, modelPath}
 	cmd := exec.Command("trivy", args...)
-	
+
 	// Capture output to file
 	outFile, err := os.Create(outputPath)
 	if err != nil {
 		return fmt.Errorf("failed to create output file: %w", err)
 	}
 	defer outFile.Close()
-	
+
 	cmd.Stdout = outFile
 	cmd.Stderr = os.Stderr
 
 	fmt.Printf("Generating SBOM for %s using Trivy (format: %s)...\n", modelPath, format)
-	
+
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("trivy generation failed: %w", err)
 	}
@@ -219,12 +219,12 @@ func (c *CdxgenGenerator) Generate(modelPath, outputPath string, format SBOMForm
 	// Build cdxgen command
 	args := []string{"-t", cdxgenType, "-o", outputPath, modelPath}
 	cmd := exec.Command("cdxgen", args...)
-	
+
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
 	fmt.Printf("Generating SBOM for %s using cdxgen (format: %s)...\n", modelPath, format)
-	
+
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("cdxgen generation failed: %w", err)
 	}

@@ -98,7 +98,7 @@ func (o *ORASProvider) GetArtifactDigest(artifact, registry string) (string, err
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch manifest with ORAS: %v", err)
 	}
-	
+
 	// The digest is typically in the manifest's config or layers
 	// For simplicity, we'll return a computed digest of the manifest itself
 	// In production, this would parse the OCI manifest and extract the actual digest
@@ -111,38 +111,38 @@ func (o *ORASProvider) PushReferrer(artifact, registry, referrerType string, dat
 	// ORAS supports pushing referrers (manifests that reference other manifests)
 	// For provenance attestations, we use the in-toto attestation type
 	fullArtifact := registry + "/" + artifact
-	
+
 	// Create a temporary file for the referrer
 	tmpFile, err := os.CreateTemp("", "referrer-*.json")
 	if err != nil {
 		return fmt.Errorf("failed to create temp file for referrer: %v", err)
 	}
 	defer os.Remove(tmpFile.Name())
-	
+
 	if _, err := tmpFile.Write(data); err != nil {
 		return fmt.Errorf("failed to write referrer data: %v", err)
 	}
 	if err := tmpFile.Close(); err != nil {
 		return fmt.Errorf("failed to close temp file: %v", err)
 	}
-	
+
 	// Build ORAS command to push the referrer
 	args := []string{"push", fullArtifact, tmpFile.Name()}
 	args = append(args, "--artifact-type", referrerType)
 	args = append(args, annotationArgs(annotations)...)
-	
+
 	cmd := exec.Command("oras", args...)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to push referrer with ORAS: %v", err)
 	}
-	
+
 	fmt.Printf("Pushed %s referrer for %s to %s\n", referrerType, artifact, registry)
 	return nil
 }
 
 func (o *ORASProvider) GetReferrers(artifact, registry, referrerType string) ([][]byte, error) {
 	fullArtifact := registry + "/" + artifact
-	
+
 	// ORAS can fetch referrers by artifact type
 	cmd := exec.Command("oras", "manifest", "fetch", fullArtifact, "--artifact-type", referrerType)
 	output, err := cmd.Output()
@@ -153,7 +153,7 @@ func (o *ORASProvider) GetReferrers(artifact, registry, referrerType string) ([]
 		}
 		return nil, fmt.Errorf("failed to fetch referrers with ORAS: %v", err)
 	}
-	
+
 	// Return the referrer data
 	return [][]byte{output}, nil
 }
@@ -164,7 +164,7 @@ func (o *ORASProvider) Search(registry, filters string) ([][]byte, error) {
 	// or use oras discover/manifest commands as available
 	// For now, we use oras manifest fetch as a baseline, but in production
 	// this would integrate with registry APIs that support filtering
-	
+
 	// Build the search command using oras discover if available
 	// oras discover can list artifacts in a repository
 	args := []string{"discover", "--artifact-type", "application/vnd.cncf.ai.model"}
@@ -174,10 +174,10 @@ func (o *ORASProvider) Search(registry, filters string) ([][]byte, error) {
 		// For registries that support it, we'd use their native search API
 		args = append(args, "--output", "json")
 	}
-	
+
 	cmd := exec.Command("oras", args...)
 	cmd.Args = append(cmd.Args, registry)
-	
+
 	output, err := cmd.Output()
 	if err != nil {
 		// Try a simpler approach - fetch manifests from known references
@@ -185,7 +185,7 @@ func (o *ORASProvider) Search(registry, filters string) ([][]byte, error) {
 		// In production, this would be replaced with proper registry API calls
 		return nil, fmt.Errorf("registry search not fully supported by ORAS CLI. Use a registry with search API (e.g., ghcr.io, docker.io) or use client-side filtering")
 	}
-	
+
 	// Parse and return the results
 	// For now, return the raw output - parsing happens in the workflow layer
 	return [][]byte{output}, nil

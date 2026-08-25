@@ -89,29 +89,29 @@ func TestLogTruncation(t *testing.T) {
 // Tests for the interactive ContextModel (TUI)
 func TestContextModelHandleKey(t *testing.T) {
 	model := NewContextModel()
-	
+
 	// Test tab switching
 	model.HandleKey("tab")
 	if model.ActiveTab != TabConfig {
 		t.Errorf("Expected ActiveTab to be TabConfig after 'tab', got %d", model.ActiveTab)
 	}
-	
+
 	model.HandleKey("shift+tab")
 	if model.ActiveTab != TabProgress {
 		t.Errorf("Expected ActiveTab to be TabProgress after 'shift+tab', got %d", model.ActiveTab)
 	}
-	
+
 	// Test number keys
 	model.HandleKey("2")
 	if model.ActiveTab != TabConfig {
 		t.Errorf("Expected ActiveTab to be TabConfig after '2', got %d", model.ActiveTab)
 	}
-	
+
 	model.HandleKey("1")
 	if model.ActiveTab != TabProgress {
 		t.Errorf("Expected ActiveTab to be TabProgress after '1', got %d", model.ActiveTab)
 	}
-	
+
 	// Test Enter key sets Done flag
 	model.HandleKey("enter")
 	if !model.Done {
@@ -120,7 +120,7 @@ func TestContextModelHandleKey(t *testing.T) {
 	if model.Cancelled {
 		t.Error("Expected Cancelled to be false after 'enter', got true")
 	}
-	
+
 	// Reset and test Esc key
 	model.ResetControlFlags()
 	model.HandleKey("esc")
@@ -130,7 +130,7 @@ func TestContextModelHandleKey(t *testing.T) {
 	if !model.Cancelled {
 		t.Error("Expected Cancelled to be true after 'esc', got false")
 	}
-	
+
 	// Reset and test ctrl+c
 	model.ResetControlFlags()
 	model.HandleKey("ctrl+c")
@@ -140,7 +140,7 @@ func TestContextModelHandleKey(t *testing.T) {
 	if !model.Cancelled {
 		t.Error("Expected Cancelled to be true after 'ctrl+c', got false")
 	}
-	
+
 	// Test IsDone and IsCancelled
 	if !model.IsDone() {
 		t.Error("Expected IsDone() to be true")

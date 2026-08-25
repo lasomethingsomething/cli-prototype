@@ -9,9 +9,9 @@ import (
 // OCI Image Spec media types
 const (
 	// Media types for manifests
-	OCIManifestMediaType      = "application/vnd.oci.image.manifest.v1+json"
-	OCIIndexMediaType         = "application/vnd.oci.image.index.v1+json"
-	
+	OCIManifestMediaType = "application/vnd.oci.image.manifest.v1+json"
+	OCIIndexMediaType    = "application/vnd.oci.image.index.v1+json"
+
 	// Media types for AI-specific config
 	AIModelConfigMediaType    = "application/vnd.cncf.ai.model.config.v1+json"
 	AISkillConfigMediaType    = "application/vnd.cncf.ai.skill.config.v1+json"
@@ -20,19 +20,19 @@ const (
 
 // OCIDescriptor is the full OCI descriptor as per OCI Image Spec
 type OCIDescriptor struct {
-	MediaType    string `json:"mediaType"`
-	Digest      string `json:"digest"`
-	Size        int64  `json:"size"`
+	MediaType   string            `json:"mediaType"`
+	Digest      string            `json:"digest"`
+	Size        int64             `json:"size"`
 	Annotations map[string]string `json:"annotations,omitempty"`
-	Data        []byte `json:"data,omitempty"` // For inlining small blobs
-	URLs        []string `json:"urls,omitempty"` // For referencing external blobs
+	Data        []byte            `json:"data,omitempty"` // For inlining small blobs
+	URLs        []string          `json:"urls,omitempty"` // For referencing external blobs
 }
 
 // OCILayer represents a layer in an OCI manifest
 type OCILayer struct {
-	MediaType string            `json:"mediaType"`
-	Digest    string            `json:"digest"`
-	Size      int64             `json:"size"`
+	MediaType   string            `json:"mediaType"`
+	Digest      string            `json:"digest"`
+	Size        int64             `json:"size"`
 	Annotations map[string]string `json:"annotations,omitempty"`
 }
 
@@ -41,25 +41,25 @@ type AIModelConfig struct {
 	// Standard OCI config fields
 	Architecture string `json:"architecture,omitempty"`
 	OS           string `json:"os,omitempty"`
-	
+
 	// AI-specific fields
-	ModelType    string `json:"ai.model.type"`            // e.g., "text-generation", "embedding", "classification"
-	ModelFormat  string `json:"ai.model.format"`          // e.g., "pytorch", "tensorflow", "onnx"
-	InputFormat  string `json:"ai.model.input.format"`    // e.g., "text", "image", "audio"
-	OutputFormat string `json:"ai.model.output.format"`   // e.g., "text", "embedding", "json"
-	
+	ModelType    string `json:"ai.model.type"`          // e.g., "text-generation", "embedding", "classification"
+	ModelFormat  string `json:"ai.model.format"`        // e.g., "pytorch", "tensorflow", "onnx"
+	InputFormat  string `json:"ai.model.input.format"`  // e.g., "text", "image", "audio"
+	OutputFormat string `json:"ai.model.output.format"` // e.g., "text", "embedding", "json"
+
 	// Model capabilities
 	Capabilities []string `json:"ai.model.capabilities,omitempty"` // e.g., ["chat", "completion", "embeddings"]
-	
+
 	// Runtime requirements
-	Runtime      string `json:"ai.runtime,omitempty"`      // e.g., "vllm", "tensorrt-llm"
-	Accelerator  string `json:"ai.accelerator,omitempty"`  // e.g., "nvidia-gpu", "cpu"
-	CUDAMin      string `json:"ai.accelerator.cuda.min,omitempty"` // e.g., "12.1", "11.8"
-	MemoryMin    string `json:"ai.resource.memory.min,omitempty"` // e.g., "24GiB", "16Gi"
-	
+	Runtime     string `json:"ai.runtime,omitempty"`              // e.g., "vllm", "tensorrt-llm"
+	Accelerator string `json:"ai.accelerator,omitempty"`          // e.g., "nvidia-gpu", "cpu"
+	CUDAMin     string `json:"ai.accelerator.cuda.min,omitempty"` // e.g., "12.1", "11.8"
+	MemoryMin   string `json:"ai.resource.memory.min,omitempty"`  // e.g., "24GiB", "16Gi"
+
 	// Relationships to other assets
 	Relationships map[string][]string `json:"ai.model.relationships,omitempty"` // e.g., {"skills": ["skill:v1"], "pipelines": ["pipeline:v1"]}
-	
+
 	// Metadata
 	Description string `json:"ai.model.description,omitempty"`
 	Version     string `json:"ai.model.version,omitempty"`
@@ -72,19 +72,19 @@ type AISkillConfig struct {
 	// Standard OCI config fields
 	Architecture string `json:"architecture,omitempty"`
 	OS           string `json:"os,omitempty"`
-	
+
 	// AI-specific fields
 	SkillType string `json:"ai.skill.type"` // e.g., "rag", "classification", "summarization"
-	
+
 	// Dependencies on other assets
 	Dependencies map[string][]string `json:"ai.skill.dependencies,omitempty"` // e.g., {"models": ["model:v1"], "pipelines": ["pipeline:v1"]}
-	
+
 	// Execution requirements
 	Runtime     string `json:"ai.runtime,omitempty"`
 	Accelerator string `json:"ai.accelerator,omitempty"`
 	CUDAMin     string `json:"ai.accelerator.cuda.min,omitempty"`
 	MemoryMin   string `json:"ai.resource.memory.min,omitempty"`
-	
+
 	// Metadata
 	Description string `json:"ai.skill.description,omitempty"`
 	Version     string `json:"ai.skill.version,omitempty"`
@@ -96,22 +96,22 @@ type AIPipelineConfig struct {
 	// Standard OCI config fields
 	Architecture string `json:"architecture,omitempty"`
 	OS           string `json:"os,omitempty"`
-	
+
 	// AI-specific fields
 	PipelineType string `json:"ai.pipeline.type"` // e.g., "inference", "training", "fine-tuning"
-	
+
 	// Pipeline components (nodes)
 	Components []PipelineComponent `json:"ai.pipeline.components,omitempty"`
-	
+
 	// Dependencies
 	Dependencies map[string][]string `json:"ai.pipeline.dependencies,omitempty"` // e.g., {"models": ["model:v1"], "skills": ["skill:v1"]}
-	
+
 	// Runtime requirements
 	Runtime     string `json:"ai.runtime,omitempty"`
 	Accelerator string `json:"ai.accelerator,omitempty"`
 	CUDAMin     string `json:"ai.accelerator.cuda.min,omitempty"`
 	MemoryMin   string `json:"ai.resource.memory.min,omitempty"`
-	
+
 	// Metadata
 	Description string `json:"ai.pipeline.description,omitempty"`
 	Version     string `json:"ai.pipeline.version,omitempty"`
@@ -120,23 +120,23 @@ type AIPipelineConfig struct {
 
 // PipelineComponent represents a component in a pipeline
 type PipelineComponent struct {
-	Name        string `json:"name"`
-	Type        string `json:"type"` // "model", "skill", "preprocessor", "postprocessor"
-	Reference   string `json:"reference"` // e.g., "model:v1", "skill:v1"
-	Input      string `json:"input,omitempty"`
-	Output     string `json:"output,omitempty"`
+	Name       string            `json:"name"`
+	Type       string            `json:"type"`      // "model", "skill", "preprocessor", "postprocessor"
+	Reference  string            `json:"reference"` // e.g., "model:v1", "skill:v1"
+	Input      string            `json:"input,omitempty"`
+	Output     string            `json:"output,omitempty"`
 	Parameters map[string]string `json:"parameters,omitempty"`
 }
 
 // UnifiedOCIManifest represents an OCI-compliant manifest with AI-specific extensions
 type UnifiedOCIManifest struct {
 	// OCI Image Spec v1.1 fields
-	SchemaVersion int    `json:"schemaVersion"` // Must be 2
-	MediaType     string `json:"mediaType"`      // application/vnd.oci.image.manifest.v1+json
-	Config        OCIDescriptor `json:"config"`
-	Layers        []OCILayer    `json:"layers,omitempty"`
+	SchemaVersion int               `json:"schemaVersion"` // Must be 2
+	MediaType     string            `json:"mediaType"`     // application/vnd.oci.image.manifest.v1+json
+	Config        OCIDescriptor     `json:"config"`
+	Layers        []OCILayer        `json:"layers,omitempty"`
 	Annotations   map[string]string `json:"annotations,omitempty"`
-	
+
 	// AI-specific: the actual config data (can be inlined for small configs)
 	// In production, this would typically be a separate blob referenced by Config.Digest
 	AIConfig interface{} `json:"aiConfig,omitempty"` // AIModelConfig, AISkillConfig, or AIPipelineConfig
@@ -159,10 +159,10 @@ func NewUnifiedOCIManifest(artifactType ArtifactType, name string, layers []OCIL
 		Layers:        layers,
 		Annotations:   make(map[string]string),
 	}
-	
+
 	// Set artifact type annotation
 	manifest.Annotations[AnnotationArtifactType] = string(artifactType)
-	
+
 	// Set the config based on artifact type
 	switch artifactType {
 	case ArtifactTypeModel:
@@ -190,10 +190,10 @@ func NewUnifiedOCIManifest(artifactType ArtifactType, name string, layers []OCIL
 		manifest.AIConfig = config
 		manifest.Config.MediaType = AIPipelineConfigMediaType
 	}
-	
+
 	// Set the name annotation
 	manifest.Annotations["org.opencontainers.image.title"] = name
-	
+
 	return manifest
 }
 
@@ -277,13 +277,13 @@ func ValidateOCIManifest(m *UnifiedOCIManifest) error {
 	if m.Config.MediaType == "" {
 		return fmt.Errorf("config media type is required")
 	}
-	
+
 	// Validate artifact type
 	artifactType := m.Annotations[AnnotationArtifactType]
 	if artifactType == "" {
 		return fmt.Errorf("artifact type annotation is required: %s", AnnotationArtifactType)
 	}
-	
+
 	// Validate based on artifact type
 	switch artifactType {
 	case string(ArtifactTypeModel):
@@ -301,6 +301,6 @@ func ValidateOCIManifest(m *UnifiedOCIManifest) error {
 	default:
 		return fmt.Errorf("unknown artifact type: %s", artifactType)
 	}
-	
+
 	return nil
 }

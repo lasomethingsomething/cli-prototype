@@ -27,14 +27,14 @@ const (
 
 // ClassificationResult contains detailed MOF classification information
 type ClassificationResult struct {
-	Class        MOFClass
-	HasWeights  bool
-	HasCode     bool
+	Class           MOFClass
+	HasWeights      bool
+	HasCode         bool
 	HasTrainingData bool
-	HasDocs     bool
-	HasLicense  bool
-	Components  []string
-	Explanation string
+	HasDocs         bool
+	HasLicense      bool
+	Components      []string
+	Explanation     string
 }
 
 // --- MOF Classifier (Model Openness Framework) ---
@@ -197,7 +197,7 @@ func (m *MOFClassifierImpl) generateExplanation(result *ClassificationResult) st
 			missing = append(missing, "license")
 		}
 		if len(missing) > 0 {
-			return fmt.Sprintf("Partially open: has %s but missing %s", 
+			return fmt.Sprintf("Partially open: has %s but missing %s",
 				strings.Join(result.Components, ", "),
 				strings.Join(missing, ", "))
 		}
@@ -263,7 +263,7 @@ func isTrainingDataFile(filename string, fullPath string) bool {
 			return true
 		}
 	}
-	
+
 	// Check by name patterns
 	trainingPatterns := []string{
 		"train", "training", "dataset", "data", "corpus",
@@ -274,7 +274,7 @@ func isTrainingDataFile(filename string, fullPath string) bool {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -335,7 +335,7 @@ func isLicenseFile(filename string) bool {
 			return true
 		}
 	}
-	
+
 	// Check common license file patterns
 	if strings.EqualFold(filename, "license") ||
 		strings.EqualFold(filename, "license.md") ||
@@ -345,7 +345,7 @@ func isLicenseFile(filename string) bool {
 		strings.EqualFold(filename, "copying.md") {
 		return true
 	}
-	
+
 	return false
 }
 

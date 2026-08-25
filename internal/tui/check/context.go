@@ -38,10 +38,10 @@ type ContextModel struct {
 	ArtifactPath string
 
 	// Results
-	Passed          bool
-	SBOMCheck       bool
-	MOFCheck        bool
-	Missing         []string
+	Passed           bool
+	SBOMCheck        bool
+	MOFCheck         bool
+	Missing          []string
 	AnnotationsCheck []string
 
 	// Step progress
@@ -62,9 +62,9 @@ type ContextModel struct {
 // NewCheckContextModel creates a new interactive context model for compliance checking
 func NewCheckContextModel() *ContextModel {
 	return &ContextModel{
-		CurrentStep:  1,
-		TotalSteps:   4,
-		ActiveTab:    TabProgress,
+		CurrentStep: 1,
+		TotalSteps:  4,
+		ActiveTab:   TabProgress,
 		Logs:        make([]string, 0),
 		width:       40,
 		height:      15,

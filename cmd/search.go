@@ -139,7 +139,7 @@ Examples:
 			// If search fails, try without filters (get all manifests) and filter client-side
 			fmt.Printf("Note: Registry search with filters failed: %v\n", err)
 			fmt.Println("Falling back to client-side filtering...")
-			
+
 			// Try to get all artifacts from the registry
 			// This is a fallback - in production, registries would support filtering natively
 			manifestBytes, err = provider.Search(destination, "")
@@ -225,7 +225,7 @@ func printResultTable(results *workflow.SearchResults) {
 	// Simple table formatting for terminal output
 	fmt.Printf("\nResults from %s:\n", results.Registry)
 	fmt.Println("==============================================================================")
-	
+
 	for i, result := range results.Results {
 		fmt.Printf("%d. %s\n", i+1, result.Reference)
 		if result.ArtifactType != "" {
@@ -234,7 +234,7 @@ func printResultTable(results *workflow.SearchResults) {
 		if result.Digest != "" {
 			fmt.Printf("   Digest: %s\n", result.Digest)
 		}
-		
+
 		// Show key metadata
 		if result.Metadata != nil {
 			if meta, ok := result.Metadata["model"].(map[string]interface{}); ok {
@@ -256,7 +256,7 @@ func printResultTable(results *workflow.SearchResults) {
 				}
 			}
 		}
-		
+
 		// Show relationships
 		if result.RelationshipGraph != nil {
 			if len(result.RelationshipGraph.Models) > 0 {
@@ -269,7 +269,7 @@ func printResultTable(results *workflow.SearchResults) {
 				fmt.Printf("   Relationships - Pipelines: %d\n", len(result.RelationshipGraph.Pipelines))
 			}
 		}
-		
+
 		if i < len(results.Results)-1 {
 			fmt.Println()
 		}
@@ -301,27 +301,27 @@ func exportResults(results *workflow.SearchResults, path string) error {
 
 func init() {
 	rootCmd.AddCommand(searchCmd)
-	
+
 	// Registry and query flags
 	searchCmd.Flags().String("destination", "", "Registry to search (e.g., ghcr.io/my-org, docker.io/myuser)")
 	searchCmd.Flags().String("registry-tool", "", "Registry tool to use: oras or modelpack (default: oras)")
 	searchCmd.Flags().String("type", "", "Filter by artifact type: model, skill, pipeline, dataset")
-	
+
 	// Direct reference filters
 	searchCmd.Flags().String("model", "", "Filter by model reference")
 	searchCmd.Flags().String("skill", "", "Filter by skill reference")
 	searchCmd.Flags().String("pipeline", "", "Filter by pipeline reference")
 	searchCmd.Flags().String("dataset", "", "Filter by dataset reference")
-	
+
 	// Relationship filters
 	searchCmd.Flags().String("uses-model", "", "Find artifacts that use this model (e.g., model:sha256:abc123)")
 	searchCmd.Flags().String("uses-skill", "", "Find artifacts that use this skill")
 	searchCmd.Flags().String("requires-model", "", "Find skills that require this model")
 	searchCmd.Flags().String("used-by", "", "Find artifacts used by this reference")
-	
+
 	// Metadata filters (can be specified multiple times)
 	searchCmd.Flags().StringSlice("metadata", []string{}, "Metadata filter in format key=value (e.g., ai.model.type=llm)")
-	
+
 	// Output flags
 	searchCmd.Flags().String("output", "table", "Output format: table, json, yaml")
 	searchCmd.Flags().Int("limit", 100, "Maximum number of results to return")

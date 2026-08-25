@@ -44,19 +44,19 @@ type Model struct {
 	ragPath      string
 
 	// Annotation conventions (CNCF AI Interoperability Profile)
-	runtime      string
-	accelerator  string
-	cudaMin      string
-	memoryMin    string
-	mofClass     string
+	runtime       string
+	accelerator   string
+	cudaMin       string
+	memoryMin     string
+	mofClass      string
 	mofComponents string
 
 	// State
-	loading     bool
-	completed   bool
-	err          error
-	logs        []string
-	cursor      int // for navigating lists
+	loading   bool
+	completed bool
+	err       error
+	logs      []string
+	cursor    int // for navigating lists
 
 	// Steps for the checklist
 	steps       []Step
@@ -65,9 +65,9 @@ type Model struct {
 
 // Step represents a step in the packaging workflow
 type Step struct {
-	Label   string
-	State   StepState
-	Detail  string
+	Label  string
+	State  StepState
+	Detail string
 }
 
 // StepState represents the state of a step
@@ -83,13 +83,13 @@ const (
 // New creates a new package TUI model
 func New(registry string) *Model {
 	m := &Model{
-		panel:        PanelIntro,
-		registry:     registry,
-		width:        80,
-		height:       24,
-		logs:         make([]string, 0),
-		includeRAG:   false,
-		currentStep:  0,
+		panel:       PanelIntro,
+		registry:    registry,
+		width:       80,
+		height:      24,
+		logs:        make([]string, 0),
+		includeRAG:  false,
+		currentStep: 0,
 		steps: []Step{
 			{Label: "Collect model information", State: StepPending},
 			{Label: "Configure annotation conventions", State: StepPending},
@@ -318,7 +318,7 @@ func (m *Model) startPackaging() tea.Cmd {
 func (m *Model) renderHeader() string {
 	title := "Step 1: Develop & Package"
 	titleStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FAFAFA")).Bold(true)
-	
+
 	context := fmt.Sprintf("Registry: %s", m.registry)
 	contextStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#8888FF"))
 
@@ -509,7 +509,7 @@ func (m *Model) renderStepList() string {
 		sb.WriteString(cursor + symbol + " " + labelStyle.Render(step.Label) + "\n")
 		if step.Detail != "" {
 			detailStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#888888"))
-			sb.WriteString(detailStyle.Render("   " + step.Detail) + "\n")
+			sb.WriteString(detailStyle.Render("   "+step.Detail) + "\n")
 		}
 	}
 
@@ -605,7 +605,7 @@ func (m *Model) renderPackagingProgress() string {
 		sb.WriteString("→ Generating SBOM...\n")
 		sb.WriteString("→ Applying MOF classification...\n")
 	} else if m.err != nil {
-		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#FF5555")).Render("✗ Error: "+m.err.Error())+"\n")
+		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#FF5555")).Render("✗ Error: "+m.err.Error()) + "\n")
 	} else if m.completed {
 		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF88")).Render("✓ Packaging complete\n"))
 	}

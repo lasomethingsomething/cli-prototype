@@ -275,14 +275,14 @@ Examples:
 		// Output results
 		if jsonOutputFlag {
 			result := map[string]interface{}{
-				"artifact":     artifact,
+				"artifact": artifact,
 				"requirements": map[string]string{
-					"runtime_type":       runtimeType,
-					"layer_dedup":        layerDedup,
-					"dlc_endpoint":       dlcEndpoint,
-					"skill_refs":         skillRefs,
+					"runtime_type": runtimeType,
+					"layer_dedup":  layerDedup,
+					"dlc_endpoint": dlcEndpoint,
+					"skill_refs":   skillRefs,
 				},
-				"pass":       allPass,
+				"pass": allPass,
 			}
 			if !allPass {
 				result["errors"] = validationErrors

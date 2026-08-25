@@ -105,7 +105,7 @@ Examples:
 		// Check if we need to add a sample metadata contract
 		if _, hasContract := manifest.Annotations[workflow.AnnotationMetadataContract]; !hasContract && simulatePushFlag {
 			fmt.Println("⚠ No metadata contract found in manifest annotations.")
-			
+
 			// Prompt to add one
 			var addContract bool
 			if err := huh.NewConfirm().
@@ -135,7 +135,7 @@ Examples:
 
 		// Validate using the admission webhook logic
 		fmt.Println("\n=== Validating Metadata Contract ===")
-		
+
 		// Create admission request
 		request := &workflow.OCIManifestAdmissionRequest{
 			Artifact:    manifest.Annotations["org.opencontainers.image.title"],
@@ -147,7 +147,7 @@ Examples:
 		// Create webhook and validate
 		webhook := workflow.NewMetadataContractAdmissionWebhook()
 		webhook.StrictMode = strictFlag
-		
+
 		response := webhook.Admit(request)
 
 		// Print validation results
@@ -155,21 +155,21 @@ Examples:
 			fmt.Println("\n✗ ADMISSION DENIED")
 			fmt.Printf("  Reason: %s\n", response.Reason)
 			fmt.Printf("  Message: %s\n", response.Message)
-			
+
 			if len(response.Errors) > 0 {
 				fmt.Println("\n  Errors:")
 				for _, err := range response.Errors {
 					fmt.Printf("    - %s\n", err)
 				}
 			}
-			
+
 			if len(response.Warnings) > 0 {
 				fmt.Println("\n  Warnings:")
 				for _, warn := range response.Warnings {
 					fmt.Printf("    - %s\n", warn)
 				}
 			}
-			
+
 			if response.Validation != nil {
 				if len(response.Validation.MissingFields) > 0 {
 					fmt.Println("\n  Missing required fields:")
@@ -178,13 +178,13 @@ Examples:
 					}
 				}
 			}
-			
+
 			return fmt.Errorf("admission denied: %s", response.Message)
 		}
 
 		fmt.Println("\n✓ ADMISSION ALLOWED")
 		fmt.Printf("  Message: %s\n", response.Message)
-		
+
 		if len(response.Warnings) > 0 {
 			fmt.Println("\n  Warnings:")
 			for _, warn := range response.Warnings {
@@ -197,7 +197,7 @@ Examples:
 			fmt.Println("\n=== Validation Details ===")
 			fmt.Printf("  Artifact Type: %s\n", response.Validation.ArtifactType)
 			fmt.Printf("  Valid: %v\n", response.Validation.Valid)
-			
+
 			if len(response.Validation.RequiredFields) > 0 {
 				fmt.Println("  Required Fields:")
 				for _, field := range response.Validation.RequiredFields {
@@ -216,7 +216,7 @@ Examples:
 		// Parse and display the metadata contract if present
 		if contractJSON, ok := manifest.Annotations[workflow.AnnotationMetadataContract]; ok {
 			fmt.Println("\n=== Metadata Contract ===")
-			
+
 			// Pretty print the contract
 			var contract workflow.MetadataContract
 			if err := json.Unmarshal([]byte(contractJSON), &contract); err == nil {
@@ -228,7 +228,7 @@ Examples:
 
 			// Display relationships
 			fmt.Println("\n=== Relationship Mapping ===")
-			
+
 			switch artifactType {
 			case workflow.ArtifactTypeModel:
 				if contract.Assets.Model != nil && len(contract.Assets.Model.Relationships) > 0 {
@@ -275,7 +275,7 @@ Examples:
 		fmt.Println("✓ Standardized Metadata Contract validated at manifest level")
 		fmt.Println("✓ Relationships mapped without downloading binaries")
 		fmt.Println("✓ Dependencies validated")
-		
+
 		return nil
 	},
 }
@@ -285,14 +285,14 @@ func runWebhookServer(port int) error {
 	if port <= 0 {
 		port = 8443 // Default port
 	}
-	
+
 	proxy := workflow.NewRegistryAdmissionProxy(port)
-	
+
 	fmt.Printf("Starting Registry Admission Proxy on port %d...\n", port)
 	fmt.Println("This server validates OCI manifests for the Standardized Metadata Contract")
 	fmt.Println("Send POST requests to /validate with an OCIManifestAdmissionRequest")
 	fmt.Println("\nPress Ctrl+C to stop the server")
-	
+
 	return proxy.Run()
 }
 
@@ -301,46 +301,46 @@ func createSampleMetadataContract(artifactType workflow.ArtifactType) *workflow.
 	contract := &workflow.MetadataContract{
 		Assets: workflow.ContractAssetMetadata{},
 	}
-	
+
 	switch artifactType {
 	case workflow.ArtifactTypeModel:
 		contract.Assets.Model = &workflow.ContractModelMetadata{
-			Type:      "llm",
-			Framework: "pytorch",
-			Input:     "text",
-			Output:    "text",
+			Type:         "llm",
+			Framework:    "pytorch",
+			Input:        "text",
+			Output:       "text",
 			Capabilities: []string{"chat", "completion", "embeddings"},
-			Runtime:    "vllm",
-			Accelerator: "nvidia-gpu",
+			Runtime:      "vllm",
+			Accelerator:  "nvidia-gpu",
 			Relationships: map[string][]string{
 				"skills": {"my-skill:v1", "my-rag:v1"},
 			},
 			Description: "Sample LLM model",
-			Version:    "1.0.0",
-			Author:     "model-cli",
-			License:    "Apache-2.0",
+			Version:     "1.0.0",
+			Author:      "model-cli",
+			License:     "Apache-2.0",
 		}
 	case workflow.ArtifactTypeSkill:
 		contract.Assets.Skill = &workflow.ContractSkillMetadata{
 			Type:        "rag",
 			PipelineRef: "my-pipeline:v1",
 			Dependencies: map[string][]string{
-				"models": {"model:sha256:abc123", "embedding-model:sha256:def456"},
+				"models":    {"model:sha256:abc123", "embedding-model:sha256:def456"},
 				"pipelines": {"my-pipeline:v1"},
 			},
-			Runtime:    "python",
+			Runtime:     "python",
 			Accelerator: "cpu",
 			Description: "Sample RAG skill",
-			Version:    "1.0.0",
-			Author:     "model-cli",
+			Version:     "1.0.0",
+			Author:      "model-cli",
 		}
 	case workflow.ArtifactTypePipeline:
 		contract.Assets.Pipeline = &workflow.ContractPipelineMetadata{
-			Type:    "inference",
-			Stages:  []string{"preprocess", "inference", "postprocess"},
+			Type:   "inference",
+			Stages: []string{"preprocess", "inference", "postprocess"},
 			Dependencies: map[string][]string{
-				"models":  {"model:v1"},
-				"skills":  {"skill:v1"},
+				"models":   {"model:v1"},
+				"skills":   {"skill:v1"},
 				"datasets": {"dataset:v1"},
 			},
 			Components: []workflow.ContractPipelineComponent{
@@ -349,11 +349,11 @@ func createSampleMetadataContract(artifactType workflow.ArtifactType) *workflow.
 				{Name: "postprocessor", Type: "postprocessor", Reference: "postprocessor:v1"},
 			},
 			Description: "Sample inference pipeline",
-			Version:    "1.0.0",
-			Author:     "model-cli",
+			Version:     "1.0.0",
+			Author:      "model-cli",
 		}
 	}
-	
+
 	return contract
 }
 

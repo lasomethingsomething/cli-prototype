@@ -100,7 +100,7 @@ Examples:
 			sha256 := extractSHA256(skillFlag)
 			graph.AddSkill(skillFlag, sha256, skillTypeFlag)
 			fmt.Printf("Added skill: %s\n", skillFlag)
-			
+
 			// Add requirements (models that this skill requires)
 			for _, req := range requiresFlag {
 				modelRef := cleanReference(req)
@@ -113,7 +113,7 @@ Examples:
 					}
 				}
 			}
-			
+
 			// Add used-by (pipelines that use this skill)
 			for _, user := range usedByFlag {
 				pipelineRef := cleanReference(user)
@@ -139,11 +139,11 @@ Examples:
 			}
 			graph.AddPipeline(pipelineFlag, sha256, pipelineTypeFlag, stages)
 			fmt.Printf("Added pipeline: %s\n", pipelineFlag)
-			
+
 			// Add dependencies (models and skills that this pipeline uses)
 			for _, req := range requiresFlag {
-				if strings.HasPrefix(req, "model:") || strings.HasPrefix(req, "skill:") || 
-				   strings.HasPrefix(req, "pipeline:") || strings.HasPrefix(req, "dataset:") {
+				if strings.HasPrefix(req, "model:") || strings.HasPrefix(req, "skill:") ||
+					strings.HasPrefix(req, "pipeline:") || strings.HasPrefix(req, "dataset:") {
 					// Typed reference - extract the actual reference
 					ref := cleanReference(req)
 					if _, exists := graph.Models[ref]; !exists {
@@ -177,14 +177,14 @@ Examples:
 		// If no relationships were added, check if we should print existing
 		if isEmpty {
 			fmt.Println("No relationships specified.")
-			
+
 			if manifestFlag != "" {
 				fmt.Println("\nExisting relationship graph:")
 				unifiedManifest, err := workflow.ReadUnifiedOCIManifest(manifestFlag)
 				if err != nil {
 					return err
 				}
-				
+
 				if relGraph, ok := unifiedManifest.Annotations[workflow.AnnotationRelationshipGraph]; ok {
 					existingGraph, err := workflow.ParseRelationshipGraphFromAnnotation(relGraph)
 					if err == nil && existingGraph != nil {
@@ -196,7 +196,7 @@ Examples:
 					fmt.Println("  No existing relationship graph found in manifest.")
 				}
 			}
-			
+
 			return nil
 		}
 
@@ -210,7 +210,7 @@ Examples:
 		if printFlag || outputFlag == "" {
 			fmt.Println("\n=== Relationship Graph ===")
 			fmt.Println(graph.String())
-			
+
 			fmt.Println("\n=== Generated Annotation ===")
 			fmt.Printf("%s: %s\n", workflow.AnnotationRelationshipGraph, annotationValue)
 		}
@@ -225,7 +225,7 @@ Examples:
 		if outputPath != "" {
 			var manifest *workflow.UnifiedOCIManifest
 			var readFrom string
-			
+
 			if manifestFlag != "" {
 				readFrom = manifestFlag
 				manifest, err = workflow.ReadUnifiedOCIManifest(readFrom)
@@ -236,18 +236,18 @@ Examples:
 				// Create a new manifest
 				manifest = workflow.NewUnifiedOCIManifest(workflow.ArtifactTypeModel, "relationships", []workflow.OCILayer{})
 			}
-			
+
 			// Set the relationship graph annotation
 			if manifest.Annotations == nil {
 				manifest.Annotations = make(map[string]string)
 			}
 			manifest.Annotations[workflow.AnnotationRelationshipGraph] = annotationValue
-			
+
 			// Write the manifest
 			if err := workflow.WriteUnifiedOCIManifest(manifest, outputPath); err != nil {
 				return fmt.Errorf("failed to write manifest: %v", err)
 			}
-			
+
 			if outputFlag != "" {
 				fmt.Printf("\n✓ Relationship graph written to: %s\n", outputPath)
 			} else {
@@ -281,7 +281,7 @@ func cleanReference(ref string) string {
 	// Check for type prefixes followed by a name with tag or digest
 	// Pattern: type:name where type is one of: model, skill, pipeline, dataset
 	// But only strip if name contains : or / (indicating it's a full reference)
-	
+
 	typePrefixes := []string{"model:", "skill:", "pipeline:", "dataset:"}
 	for _, prefix := range typePrefixes {
 		if strings.HasPrefix(ref, prefix) {

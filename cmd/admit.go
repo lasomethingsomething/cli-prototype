@@ -13,11 +13,11 @@ import (
 // admitRunOptions holds the configuration for the admit command
 type admitRunOptions struct {
 	artifact    string
-	registry   string
+	registry    string
 	environment string
-	strict     bool
-	jsonOutput bool
-	region     string
+	strict      bool
+	jsonOutput  bool
+	region      string
 }
 
 var admitCmd = &cobra.Command{

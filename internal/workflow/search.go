@@ -10,35 +10,35 @@ import (
 type SearchQuery struct {
 	// Registry to search in
 	Registry string
-	
+
 	// ArtifactType filters by artifact type (model, skill, pipeline, dataset)
 	ArtifactType string
-	
+
 	// Model filters by model reference
 	Model string
-	
+
 	// Skill filters by skill reference
 	Skill string
-	
+
 	// Pipeline filters by pipeline reference
 	Pipeline string
-	
+
 	// Dataset filters by dataset reference
 	Dataset string
-	
+
 	// Metadata filters (key=value pairs for annotation filtering)
 	// e.g., ai.model.type=llm, ai.skill.type=rag
 	MetadataFilters map[string]string
-	
+
 	// Relationship filters
-	UsesModel string
-	UsesSkill string
+	UsesModel     string
+	UsesSkill     string
 	RequiresModel string
-	UsedBy string
-	
+	UsedBy        string
+
 	// Limit the number of results
 	Limit int
-	
+
 	// Output format
 	OutputFormat string // json, yaml, table
 }
@@ -47,19 +47,19 @@ type SearchQuery struct {
 type SearchResult struct {
 	// Reference is the full artifact reference (e.g., ghcr.io/org/model:v1)
 	Reference string `json:"reference"`
-	
+
 	// Digest is the SHA256 digest of the artifact
 	Digest string `json:"digest,omitempty"`
-	
+
 	// ArtifactType is the type of AI artifact
 	ArtifactType string `json:"artifact_type,omitempty"`
-	
+
 	// Annotations contains the manifest annotations
 	Annotations map[string]string `json:"annotations,omitempty"`
-	
+
 	// RelationshipGraph contains the parsed relationship graph (if available)
 	RelationshipGraph *RelationshipGraph `json:"relationships,omitempty"`
-	
+
 	// Metadata contains parsed metadata from annotations
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
 }
@@ -68,13 +68,13 @@ type SearchResult struct {
 type SearchResults struct {
 	// Query contains the original search query
 	Query *SearchQuery `json:"query,omitempty"`
-	
+
 	// Results contains the list of matching artifacts
 	Results []SearchResult `json:"results"`
-	
+
 	// TotalCount is the total number of results (may be more than len(Results) if paginated)
 	TotalCount int `json:"total_count"`
-	
+
 	// Registry is the registry that was searched
 	Registry string `json:"registry"`
 }
@@ -83,15 +83,15 @@ type SearchResults struct {
 func NewSearchQuery() *SearchQuery {
 	return &SearchQuery{
 		MetadataFilters: make(map[string]string),
-		Limit:          100,
-		OutputFormat:   "table",
+		Limit:           100,
+		OutputFormat:    "table",
 	}
 }
 
 // String returns a human-readable representation of the search query
 func (q *SearchQuery) String() string {
 	var parts []string
-	
+
 	if q.Registry != "" {
 		parts = append(parts, fmt.Sprintf("registry=%s", q.Registry))
 	}
@@ -125,7 +125,7 @@ func (q *SearchQuery) String() string {
 	for k, v := range q.MetadataFilters {
 		parts = append(parts, fmt.Sprintf("%s=%s", k, v))
 	}
-	
+
 	return strings.Join(parts, ", ")
 }
 
@@ -133,12 +133,12 @@ func (q *SearchQuery) String() string {
 // This follows the OCI Distribution Spec filtering format
 func (q *SearchQuery) ToFilterString() string {
 	var filters []string
-	
+
 	// Filter by artifact type
 	if q.ArtifactType != "" {
 		filters = append(filters, fmt.Sprintf("%s=%s", AnnotationArtifactType, q.ArtifactType))
 	}
-	
+
 	// Add metadata filters
 	for k, v := range q.MetadataFilters {
 		// Handle special AI metadata paths
@@ -149,7 +149,7 @@ func (q *SearchQuery) ToFilterString() string {
 			filters = append(filters, fmt.Sprintf("%s=%s", k, v))
 		}
 	}
-	
+
 	// Add relationship filters
 	// These are more complex and may require client-side filtering
 	// since not all registries support complex relationship queries
@@ -165,7 +165,7 @@ func (q *SearchQuery) ToFilterString() string {
 	if q.Dataset != "" {
 		filters = append(filters, fmt.Sprintf("ai.dataset.ref=%s", q.Dataset))
 	}
-	
+
 	return strings.Join(filters, "&")
 }
 
@@ -189,10 +189,10 @@ func (r *SearchResults) String() string {
 	if len(r.Results) == 0 {
 		return "No results found"
 	}
-	
+
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("Search Results from %s:\n\n", r.Registry))
-	
+
 	for i, result := range r.Results {
 		sb.WriteString(fmt.Sprintf("%d. %s\n", i+1, result.Reference))
 		if result.Digest != "" {
@@ -201,7 +201,7 @@ func (r *SearchResults) String() string {
 		if result.ArtifactType != "" {
 			sb.WriteString(fmt.Sprintf("   Type: %s\n", result.ArtifactType))
 		}
-		
+
 		// Show key annotations
 		if result.Annotations != nil {
 			if title, ok := result.Annotations["org.opencontainers.image.title"]; ok {
@@ -210,7 +210,7 @@ func (r *SearchResults) String() string {
 			if desc, ok := result.Annotations["org.opencontainers.image.description"]; ok {
 				sb.WriteString(fmt.Sprintf("   Description: %s\n", desc))
 			}
-			
+
 			// Show AI-specific metadata
 			if modelType, ok := result.Annotations["ai.model.type"]; ok {
 				sb.WriteString(fmt.Sprintf("   Model Type: %s\n", modelType))
@@ -225,7 +225,7 @@ func (r *SearchResults) String() string {
 				sb.WriteString(fmt.Sprintf("   Pipeline Type: %s\n", pipelineType))
 			}
 		}
-		
+
 		// Show relationships if available
 		if result.RelationshipGraph != nil {
 			if len(result.RelationshipGraph.Models) > 0 {
@@ -247,12 +247,12 @@ func (r *SearchResults) String() string {
 				}
 			}
 		}
-		
+
 		if i < len(r.Results)-1 {
 			sb.WriteString("\n")
 		}
 	}
-	
+
 	return sb.String()
 }
 
@@ -268,7 +268,7 @@ func (r *SearchResults) ToJSON() (string, error) {
 // FilterByRelationship filters results to only those that have the specified relationship
 func (r *SearchResults) FilterByRelationship(query *SearchQuery) *SearchResults {
 	filtered := NewSearchResults(query, r.Registry)
-	
+
 	for _, result := range r.Results {
 		// If no relationship graph, include it (can't filter)
 		if result.RelationshipGraph == nil {
@@ -278,9 +278,9 @@ func (r *SearchResults) FilterByRelationship(query *SearchQuery) *SearchResults 
 			}
 			continue
 		}
-		
+
 		graph := result.RelationshipGraph
-		
+
 		// Filter by uses_model
 		if query.UsesModel != "" {
 			found := false
@@ -310,7 +310,7 @@ func (r *SearchResults) FilterByRelationship(query *SearchQuery) *SearchResults 
 				continue
 			}
 		}
-		
+
 		// Filter by uses_skill
 		if query.UsesSkill != "" {
 			found := false
@@ -329,7 +329,7 @@ func (r *SearchResults) FilterByRelationship(query *SearchQuery) *SearchResults 
 				continue
 			}
 		}
-		
+
 		// Filter by requires_model
 		if query.RequiresModel != "" {
 			found := false
@@ -348,7 +348,7 @@ func (r *SearchResults) FilterByRelationship(query *SearchQuery) *SearchResults 
 				continue
 			}
 		}
-		
+
 		// Filter by used_by
 		if query.UsedBy != "" {
 			found := false
@@ -378,11 +378,11 @@ func (r *SearchResults) FilterByRelationship(query *SearchQuery) *SearchResults 
 				continue
 			}
 		}
-		
+
 		// If all filters passed, add to results
 		filtered.AddResult(result)
 	}
-	
+
 	return filtered
 }
 
@@ -392,14 +392,14 @@ func (r *SearchResults) matchesAnnotationQuery(result SearchResult, query *Searc
 	if query.Model == "" && query.Skill == "" && query.Pipeline == "" && query.Dataset == "" {
 		return true
 	}
-	
+
 	// Check for model match
 	if query.Model != "" {
 		if modelType, ok := result.Annotations[AnnotationArtifactType]; ok && modelType == "model" {
 			if ref, ok := result.Annotations["org.opencontainers.image.title"]; ok && ref == query.Model {
 				return true
 			}
-				// Check if this model is referenced in relationships
+			// Check if this model is referenced in relationships
 			if relGraph, ok := result.Annotations[AnnotationRelationshipGraph]; ok {
 				var graph RelationshipGraph
 				if err := json.Unmarshal([]byte(relGraph), &graph); err == nil {
@@ -411,7 +411,7 @@ func (r *SearchResults) matchesAnnotationQuery(result SearchResult, query *Searc
 			}
 		}
 	}
-	
+
 	// Similar checks for other types
 	return false
 }
@@ -421,22 +421,22 @@ func ParseSearchResultsFromManifests(manifests [][]byte) (*SearchResults, error)
 	results := &SearchResults{
 		Results: []SearchResult{},
 	}
-	
+
 	for _, manifestBytes := range manifests {
 		var manifestData map[string]interface{}
 		if err := json.Unmarshal(manifestBytes, &manifestData); err != nil {
 			continue // Skip malformed manifests
 		}
-		
+
 		result := SearchResult{
 			Annotations: make(map[string]string),
 		}
-		
+
 		// Extract reference
 		if ref, ok := manifestData["reference"].(string); ok {
 			result.Reference = ref
 		}
-		
+
 		// Extract annotations
 		if annotations, ok := manifestData["annotations"].(map[string]interface{}); ok {
 			for k, v := range annotations {
@@ -445,12 +445,12 @@ func ParseSearchResultsFromManifests(manifests [][]byte) (*SearchResults, error)
 				}
 			}
 		}
-		
+
 		// Extract artifact type
 		if at, ok := manifestData[AnnotationArtifactType].(string); ok {
 			result.ArtifactType = at
 		}
-		
+
 		// Parse relationship graph if present
 		if relGraph, ok := manifestData[AnnotationRelationshipGraph].(string); ok {
 			graph, err := ParseRelationshipGraphFromAnnotation(relGraph)
@@ -458,21 +458,21 @@ func ParseSearchResultsFromManifests(manifests [][]byte) (*SearchResults, error)
 				result.RelationshipGraph = graph
 			}
 		}
-		
+
 		// Parse metadata from annotations
 		result.Metadata = parseMetadataFromAnnotations(result.Annotations)
-		
+
 		results.Results = append(results.Results, result)
 		results.TotalCount++
 	}
-	
+
 	return results, nil
 }
 
 // parseMetadataFromAnnotations extracts metadata from annotations
 func parseMetadataFromAnnotations(annotations map[string]string) map[string]interface{} {
 	metadata := make(map[string]interface{})
-	
+
 	// Parse ai.assets if present
 	if assetsJSON, ok := annotations[AnnotationMetadataContract]; ok {
 		var assets ContractAssetMetadata
@@ -488,31 +488,31 @@ func parseMetadataFromAnnotations(annotations map[string]string) map[string]inte
 			}
 		}
 	}
-	
+
 	// Copy other AI annotations
 	for k, v := range annotations {
 		if strings.HasPrefix(k, "ai.") {
 			metadata[k] = v
 		}
 	}
-	
+
 	return metadata
 }
 
 // BuildOCIFilter builds an OCI-compliant filter string for registry queries
 func BuildOCIFilter(query *SearchQuery) string {
 	var filters []string
-	
+
 	// Artifact type filter
 	if query.ArtifactType != "" {
 		filters = append(filters, fmt.Sprintf("%s=%s", AnnotationArtifactType, query.ArtifactType))
 	}
-	
+
 	// Metadata filters
 	for k, v := range query.MetadataFilters {
 		filters = append(filters, fmt.Sprintf("%s=%s", k, v))
 	}
-	
+
 	// Relationship filters (these may need client-side filtering)
 	// We'll add them as annotation filters for registries that support it
 	if query.Model != "" {
@@ -524,6 +524,6 @@ func BuildOCIFilter(query *SearchQuery) string {
 	if query.Pipeline != "" {
 		filters = append(filters, fmt.Sprintf("ai.pipeline.ref=%s", query.Pipeline))
 	}
-	
+
 	return strings.Join(filters, "&")
 }

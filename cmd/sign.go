@@ -65,7 +65,7 @@ Examples:
 
 		var keyRef string
 		var useKey bool
-		
+
 		if keyRefFlag != "" {
 			useKey = true
 			keyRef = keyRefFlag
@@ -111,7 +111,7 @@ Examples:
 		}
 
 		fmt.Printf("\nSigning artifact '%s' with %s...\n", artifact, signer)
-		
+
 		if useKey {
 			if err := sp.Sign(artifact, keyRef); err != nil {
 				return err

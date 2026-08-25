@@ -125,14 +125,14 @@ func TestAnnotationConstants(t *testing.T) {
 // Test custom annotation values
 func TestAnnotationSetCustomValues(t *testing.T) {
 	annotations := &AnnotationSet{
-		ProfileVersion:  "2.0.0",
-		ArtifactType:    "skill",
-		Runtime:         "kserve",
-		Accelerator:     "amd-gpu",
-		CUDAMin:         "11.8",
-		MemoryMin:       "32GiB",
-		MOFClass:       "II",
-		MOFComponents:  "weights,code",
+		ProfileVersion:   "2.0.0",
+		ArtifactType:     "skill",
+		Runtime:          "kserve",
+		Accelerator:      "amd-gpu",
+		CUDAMin:          "11.8",
+		MemoryMin:        "32GiB",
+		MOFClass:         "II",
+		MOFComponents:    "weights,code",
 		SigningFramework: "notation",
 		SBOMFormat:       "cyclonedx",
 	}

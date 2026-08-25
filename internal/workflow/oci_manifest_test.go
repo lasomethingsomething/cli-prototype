@@ -9,23 +9,23 @@ import (
 
 func TestNewUnifiedOCIManifest(t *testing.T) {
 	tests := []struct {
-		name         string
-		artifactType ArtifactType
+		name           string
+		artifactType   ArtifactType
 		wantConfigType string
 	}{
 		{
-			name:         "model manifest",
-			artifactType: ArtifactTypeModel,
+			name:           "model manifest",
+			artifactType:   ArtifactTypeModel,
 			wantConfigType: AIModelConfigMediaType,
 		},
 		{
-			name:         "skill manifest",
-			artifactType: ArtifactTypeSkill,
+			name:           "skill manifest",
+			artifactType:   ArtifactTypeSkill,
 			wantConfigType: AISkillConfigMediaType,
 		},
 		{
-			name:         "pipeline manifest",
-			artifactType: ArtifactTypePipeline,
+			name:           "pipeline manifest",
+			artifactType:   ArtifactTypePipeline,
 			wantConfigType: AIPipelineConfigMediaType,
 		},
 	}
@@ -52,7 +52,7 @@ func TestNewUnifiedOCIManifest(t *testing.T) {
 
 func TestSetModelConfig(t *testing.T) {
 	manifest := NewUnifiedOCIManifest(ArtifactTypeModel, "test-model", []OCILayer{})
-	
+
 	config := AIModelConfig{
 		ModelType: "text-generation",
 		Runtime:   "vllm",
@@ -69,7 +69,7 @@ func TestSetModelConfig(t *testing.T) {
 
 func TestSetSkillConfig(t *testing.T) {
 	manifest := NewUnifiedOCIManifest(ArtifactTypeSkill, "test-skill", []OCILayer{})
-	
+
 	config := AISkillConfig{
 		SkillType: "rag",
 		Runtime:   "python",
@@ -86,7 +86,7 @@ func TestSetSkillConfig(t *testing.T) {
 
 func TestSetPipelineConfig(t *testing.T) {
 	manifest := NewUnifiedOCIManifest(ArtifactTypePipeline, "test-pipeline", []OCILayer{})
-	
+
 	config := AIPipelineConfig{
 		PipelineType: "inference",
 		Components: []PipelineComponent{
@@ -105,7 +105,7 @@ func TestSetPipelineConfig(t *testing.T) {
 
 func TestAddLayer(t *testing.T) {
 	manifest := NewUnifiedOCIManifest(ArtifactTypeModel, "test-model", []OCILayer{})
-	
+
 	layer := OCILayer{
 		MediaType: "application/vnd.oci.image.layer.v1.tar",
 		Digest:    "sha256:abc123",
@@ -123,9 +123,9 @@ func TestAddLayer(t *testing.T) {
 
 func TestSetRelationships(t *testing.T) {
 	manifest := NewUnifiedOCIManifest(ArtifactTypeModel, "test-model", []OCILayer{})
-	
+
 	relationships := map[string][]string{
-		"skills": {"skill:v1", "skill:v2"},
+		"skills":    {"skill:v1", "skill:v2"},
 		"pipelines": {"pipeline:v1"},
 	}
 	manifest.SetRelationships(relationships)
@@ -134,12 +134,12 @@ func TestSetRelationships(t *testing.T) {
 	if manifest.AIConfig == nil {
 		t.Fatal("AIConfig is nil")
 	}
-	
+
 	modelConfig, ok := manifest.AIConfig.(AIModelConfig)
 	if !ok {
 		t.Fatal("AIConfig is not AIModelConfig")
 	}
-	
+
 	if len(modelConfig.Relationships) != 2 {
 		t.Errorf("len(Relationships) = %d, want 2", len(modelConfig.Relationships))
 	}
@@ -150,21 +150,21 @@ func TestSetRelationships(t *testing.T) {
 
 func TestWriteUnifiedOCIManifest(t *testing.T) {
 	manifest := NewUnifiedOCIManifest(ArtifactTypeModel, "test-model", []OCILayer{})
-	
+
 	tmpDir := t.TempDir()
 	manifestPath := filepath.Join(tmpDir, "manifest.json")
-	
+
 	err := WriteUnifiedOCIManifest(manifest, manifestPath)
 	if err != nil {
 		t.Fatalf("WriteUnifiedOCIManifest failed: %v", err)
 	}
-	
+
 	// Read it back and verify
 	readManifest, err := ReadUnifiedOCIManifest(manifestPath)
 	if err != nil {
 		t.Fatalf("ReadUnifiedOCIManifest failed: %v", err)
 	}
-	
+
 	if readManifest.SchemaVersion != manifest.SchemaVersion {
 		t.Errorf("SchemaVersion = %d, want %d", readManifest.SchemaVersion, manifest.SchemaVersion)
 	}
@@ -178,9 +178,9 @@ func TestWriteUnifiedOCIManifest(t *testing.T) {
 
 func TestValidateOCIManifest(t *testing.T) {
 	tests := []struct {
-		name    string
+		name     string
 		manifest *UnifiedOCIManifest
-		wantErr bool
+		wantErr  bool
 	}{
 		{
 			name: "valid model manifest",
@@ -269,8 +269,8 @@ func TestValidateOCIManifest(t *testing.T) {
 func TestUnifiedOCIManifestJSONStructure(t *testing.T) {
 	manifest := NewUnifiedOCIManifest(ArtifactTypeModel, "test-model", []OCILayer{})
 	config := AIModelConfig{
-		ModelType: "text-generation",
-		Runtime:   "vllm",
+		ModelType:    "text-generation",
+		Runtime:      "vllm",
 		Capabilities: []string{"chat", "completion"},
 		Relationships: map[string][]string{
 			"skills": {"skill:v1"},
@@ -303,9 +303,9 @@ func TestUnifiedOCIManifestWithLayers(t *testing.T) {
 		{MediaType: "application/vnd.oci.image.layer.v1.tar", Digest: "sha256:abc123", Size: 1024},
 		{MediaType: "application/vnd.oci.image.layer.v1.tar", Digest: "sha256:def456", Size: 2048},
 	}
-	
+
 	manifest := NewUnifiedOCIManifest(ArtifactTypeModel, "test-model", layers)
-	
+
 	if len(manifest.Layers) != 2 {
 		t.Errorf("len(Layers) = %d, want 2", len(manifest.Layers))
 	}
@@ -327,12 +327,12 @@ func TestReadUnifiedOCIManifestMissingFile(t *testing.T) {
 func TestReadUnifiedOCIManifestInvalidJSON(t *testing.T) {
 	tmpDir := t.TempDir()
 	manifestPath := filepath.Join(tmpDir, "manifest.json")
-	
+
 	// Write invalid JSON
 	if err := os.WriteFile(manifestPath, []byte("invalid json"), 0644); err != nil {
 		t.Fatalf("failed to write invalid JSON: %v", err)
 	}
-	
+
 	_, err := ReadUnifiedOCIManifest(manifestPath)
 	if err == nil {
 		t.Error("expected error for invalid JSON, got nil")
