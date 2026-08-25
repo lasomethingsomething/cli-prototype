@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"errors"
 	"os"
 	"testing"
 )
@@ -345,18 +346,30 @@ func TestAnnotationArgs(t *testing.T) {
 	}
 }
 
-// TestModelPackProviderPushWithAnnotations verifies ModelPackProvider.Push
-// accepts and does not error on an annotation map (ModelPack push itself is
-// simulated in this prototype and does not shell out).
-func TestModelPackProviderPushWithAnnotations(t *testing.T) {
+// TestModelPackProviderIsNotImplemented verifies every ModelPack registry
+// operation fails with ErrNotImplemented instead of pretending to succeed.
+func TestModelPackProviderIsNotImplemented(t *testing.T) {
 	p, err := GetRegistryProvider("modelpack")
 	if err != nil {
 		t.Fatalf("GetRegistryProvider(\"modelpack\") error = %v", err)
 	}
 
-	annotations := NewAnnotationSet().ToMap()
-	if _, err := p.Push("my-model:v1", "ghcr.io/my-org", t.TempDir(), annotations); err != nil {
-		t.Errorf("Push() with annotations error = %v, want nil", err)
+	ops := map[string]func() error{
+		"Push": func() error {
+			_, err := p.Push("my-model:v1", "ghcr.io/my-org", t.TempDir(), NewAnnotationSet().ToMap())
+			return err
+		},
+		"Pull":                     func() error { return p.Pull("my-model:v1", "ghcr.io/my-org") },
+		"GetArtifactDigest":        func() error { _, err := p.GetArtifactDigest("my-model:v1", "ghcr.io/my-org"); return err },
+		"PushReferrer":             func() error { return p.PushReferrer("my-model:v1", "ghcr.io/my-org", "t", nil, nil) },
+		"GetReferrers":             func() error { _, err := p.GetReferrers("my-model:v1", "ghcr.io/my-org", "t"); return err },
+		"Search":                   func() error { _, err := p.Search("ghcr.io/my-org", ""); return err },
+		"FetchManifestAnnotations": func() error { _, err := p.FetchManifestAnnotations("ghcr.io/my-org/my-model:v1"); return err },
+	}
+	for name, op := range ops {
+		if err := op(); !errors.Is(err, ErrNotImplemented) {
+			t.Errorf("%s() error = %v, want ErrNotImplemented", name, err)
+		}
 	}
 }
 
