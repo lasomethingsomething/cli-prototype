@@ -116,3 +116,69 @@ func TestORASGetArtifactDigestRejectsMissingDigest(t *testing.T) {
 		t.Error("GetArtifactDigest() should fail when the descriptor has no digest")
 	}
 }
+
+func TestRepositoryOf(t *testing.T) {
+	cases := map[string]string{
+		"my-model:v1":                   "my-model",
+		"my-org/my-model:v1":            "my-org/my-model",
+		"my-model@sha256:abc":           "my-model",
+		"my-model":                      "my-model",
+		"localhost:5000/my-model:v1":    "localhost:5000/my-model",
+		"localhost:5000/my-model":       "localhost:5000/my-model",
+		"my-org/my-model:v1@sha256:abc": "my-org/my-model:v1",
+	}
+	for in, want := range cases {
+		if got := repositoryOf(in); got != want {
+			t.Errorf("repositoryOf(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestORASGetReferrersDiscoversAndFetchesBlobs(t *testing.T) {
+	const refDigest = "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+	const blobDigest = "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+	attestation := `{"_type":"https://in-toto.io/Statement/v1"}`
+	calls := installFakeOrasSequence(t, []string{
+		`{"manifests":[{"digest":"` + refDigest + `","artifactType":"` + AttestationTypeProvenance + `"}]}`,
+		`{"schemaVersion":2,"layers":[{"mediaType":"application/json","digest":"` + blobDigest + `","size":42}]}`,
+		attestation,
+	}, 0)
+
+	blobs, err := (&ORASProvider{}).GetReferrers("my-model:v1", "ghcr.io/my-org", AttestationTypeProvenance)
+	if err != nil {
+		t.Fatalf("GetReferrers() error = %v", err)
+	}
+	if len(blobs) != 1 || string(blobs[0]) != attestation {
+		t.Fatalf("GetReferrers() = %q, want the attestation blob", blobs)
+	}
+
+	got := calls()
+	wantArgs := []string{
+		"discover --artifact-type " + AttestationTypeProvenance + " --format json ghcr.io/my-org/my-model:v1",
+		"manifest fetch ghcr.io/my-org/my-model@" + refDigest,
+		"blob fetch --output - ghcr.io/my-org/my-model@" + blobDigest,
+	}
+	if len(got) != len(wantArgs) {
+		t.Fatalf("expected %d oras invocations, got %d: %v", len(wantArgs), len(got), got)
+	}
+	for i, want := range wantArgs {
+		_, args, _ := strings.Cut(got[i], "\t")
+		if args != want {
+			t.Errorf("call %d args = %q, want %q", i, args, want)
+		}
+	}
+}
+
+func TestORASGetReferrersNoneFound(t *testing.T) {
+	calls := installFakeOras(t, `{"manifests":[]}`, 0)
+	blobs, err := (&ORASProvider{}).GetReferrers("my-model:v1", "ghcr.io/my-org", AttestationTypeProvenance)
+	if err != nil {
+		t.Fatalf("GetReferrers() error = %v", err)
+	}
+	if len(blobs) != 0 {
+		t.Errorf("GetReferrers() = %v, want none", blobs)
+	}
+	if len(calls()) != 1 {
+		t.Errorf("expected only the discover call, got %v", calls())
+	}
+}
