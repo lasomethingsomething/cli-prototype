@@ -175,6 +175,9 @@ func TestPackageWorkflowDefaults(t *testing.T) {
 // and forwards that same annotation map to the registry provider's Push.
 func TestPackageWorkflowRunWritesManifestWithAnnotations(t *testing.T) {
 	modelPath := t.TempDir()
+	if err := os.WriteFile(filepath.Join(modelPath, "model.txt"), []byte("weights"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	fake := &fakeRegistryProvider{installed: true}
 	pf := &PackageWorkflow{
@@ -201,15 +204,21 @@ func TestPackageWorkflowRunWritesManifestWithAnnotations(t *testing.T) {
 		t.Fatalf("expected manifest file at %s: %v", wantManifestPath, err)
 	}
 
-	manifest, err := ReadManifest(wantManifestPath)
+	manifest, err := ReadUnifiedOCIManifest(wantManifestPath)
 	if err != nil {
-		t.Fatalf("ReadManifest() error = %v", err)
+		t.Fatalf("ReadUnifiedOCIManifest() error = %v", err)
 	}
 	if manifest.Annotations[AnnotationRuntime] != "vllm" {
 		t.Errorf("manifest annotation %s = %q, want %q", AnnotationRuntime, manifest.Annotations[AnnotationRuntime], "vllm")
 	}
 	if manifest.Annotations[AnnotationAccelerator] != "nvidia-gpu" {
 		t.Errorf("manifest annotation %s = %q, want %q", AnnotationAccelerator, manifest.Annotations[AnnotationAccelerator], "nvidia-gpu")
+	}
+	if len(manifest.Layers) != 1 || manifest.Layers[0].Annotations["org.opencontainers.image.title"] != "model.txt" {
+		t.Errorf("manifest layers = %+v, want one layer for model.txt", manifest.Layers)
+	}
+	if err := ValidateOCIManifest(manifest); err != nil {
+		t.Errorf("written manifest does not validate: %v", err)
 	}
 
 	if !fake.pushCalled {

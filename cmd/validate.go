@@ -82,7 +82,7 @@ Examples:
 			// Read the real OCI manifest written by 'model-cli package' and
 			// validate the Standardized Metadata Contract.
 			fmt.Println("✓ Reading manifest from disk...")
-			manifest, err := workflow.ReadManifest(manifestFlag)
+			manifest, err := workflow.ReadUnifiedOCIManifest(manifestFlag)
 			if err != nil {
 				return err
 			}
