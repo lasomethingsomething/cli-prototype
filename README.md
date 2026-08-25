@@ -42,7 +42,12 @@ You'll end up with:
 
 A detailed, annotated walkthrough of this run is in [docs/trial-run-report.md](docs/trial-run-report.md).
 
-Any value you pass as a flag is not prompted for again (`--runtime vllm --accelerator cpu --mof-class II ...`). Empty values and the RAG confirmation still prompt, so `package` cannot yet run without a terminal - see [Known limitations](#known-limitations).
+Anything you pass as a flag is not prompted for again. In CI or scripts, prompts are disabled automatically when stdin is not a terminal (or with `--non-interactive` / `MODEL_CLI_NO_INTERACTIVE=1`): saved config and defaults fill the gaps, and a missing required value fails with a message naming the flag to pass:
+
+```bash
+./model-cli package --model test-model --model-path ~/test-model --artifact test:v1 \
+  --registry oras --registry-url "" --accelerator cpu --non-interactive
+```
 
 ## Commands
 
@@ -62,7 +67,7 @@ Start with `model-cli wizard` for the guided end-to-end journey. Each step is al
 | Deploy | `validate-nodes` / `validate-runtime` / `schedule` | Check cluster nodes and runtime operators against artifact requirements |
 | Deploy | `deploy` / `serve` | Hand off to Argo CD / Flux and vLLM / KServe |
 
-Every command takes flags and falls back to prompts for anything you leave out. Tool choices are remembered in `~/.model-cli.yaml`.
+Every command takes flags and falls back to prompts for anything you leave out (never without a terminal - see the non-interactive note above). Tool choices are remembered in `~/.model-cli.yaml`. The wizard is the one command that is prompt-only.
 
 ## Key Concepts
 
@@ -102,7 +107,6 @@ Honest list of what is scaffolding today:
 
 - **ModelPack provider is not implemented** - tool detection works, but every registry operation returns a clear `not implemented` error. Use `--registry oras`.
 - **The local `manifest.json` is a preview** - it has real layer descriptors (digest, size, title per file) and the annotations, but the AI config is inlined (`aiConfig`) rather than stored as a separate blob. On push, ORAS assembles the manifest the registry stores; the annotations are passed to it.
-- **`package` always needs a TTY** - flags suppress their prompt only when non-empty, and the RAG confirm always asks, so it fails in CI with `huh: could not open a new TTY`. The `MODEL_CLI_NO_INTERACTIVE` variable mentioned in older docs is not implemented.
 - **No published binaries yet**; build from source or tag a release.
 
 ## Development

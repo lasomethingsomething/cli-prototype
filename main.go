@@ -1,13 +1,15 @@
 package main
 
 import (
-	"log"
+	"fmt"
+	"os"
 
 	"github.com/lasomethingsomething/cli-prototype/cmd"
 )
 
 func main() {
 	if err := cmd.Execute(); err != nil {
-		log.Fatalf("Failed to execute CLI: %v", err)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
 	}
 }

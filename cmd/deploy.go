@@ -62,6 +62,10 @@ Examples:
 			fmt.Println("You can run 'model-cli deploy' again when you have a cluster ready.")
 		}
 
+		if err := requireValues("model", modelName); err != nil {
+			return err
+		}
+
 		// All inputs collected: remember the tool choices for next time.
 		warnIfSaveFails(config.Save(cfg))
 

@@ -88,6 +88,10 @@ Examples:
 			}
 		}
 
+		if err := requireValues("artifact", opts.artifact); err != nil {
+			return err
+		}
+
 		// Get registry provider
 		provider, err := workflow.GetRegistryProvider(opts.registry)
 		if err != nil {
