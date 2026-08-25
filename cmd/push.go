@@ -216,7 +216,7 @@ Examples:
 		fullArtifact := destination + "/" + artifact
 
 		// Push the artifact with unified OCI manifest annotations
-		if err := provider.Push(artifact, destination, mergedAnnotations); err != nil {
+		if err := provider.Push(artifact, destination, modelPath, mergedAnnotations); err != nil {
 			return err
 		}
 
