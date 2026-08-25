@@ -10,7 +10,9 @@ import (
 // AttestationType constants for OSSF Model Signing Spec
 const (
 	// AttestationTypeProvenance is the type for SLSA provenance attestations
-	AttestationTypeProvenance = "application/vnd.in-toto+json;type=provenance"
+	// It is used as the OCI artifactType of the referrer and as the media
+	// type of its layer, following the in-toto attestation convention.
+	AttestationTypeProvenance = "application/vnd.in-toto+json"
 	// AttestationTypeSBOM is the type for SBOM attestations
 	AttestationTypeSBOM = "application/spdx+json"
 	// AttestationTypeMOF is the type for MOF classification attestations
