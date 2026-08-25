@@ -73,6 +73,10 @@ Examples:
 		registry := cfg.Registry
 		warnIfSaveFails(config.Save(cfg))
 
+		if err := requireValues("artifact", artifact); err != nil {
+			return err
+		}
+
 		// Get registry provider
 		provider, err := workflow.GetRegistryProvider(registry)
 		if err != nil {

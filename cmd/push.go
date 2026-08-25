@@ -98,6 +98,10 @@ Examples:
 			}
 		}
 
+		if err := requireValues("artifact", artifact, "destination", destination); err != nil {
+			return err
+		}
+
 		// Determine artifact type
 		var artifactType workflow.ArtifactType
 		if artifactTypeFlag != "" {

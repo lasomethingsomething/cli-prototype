@@ -63,6 +63,10 @@ Examples:
 			skillRefs = append(skillRefs, skillRef)
 		}
 
+		if err := requireValues("model-path", modelPath); err != nil {
+			return err
+		}
+
 		// Create serve workflow
 		wf, err := workflow.NewServeWorkflow(runtime)
 		if err != nil {

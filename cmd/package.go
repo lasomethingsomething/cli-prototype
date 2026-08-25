@@ -153,6 +153,10 @@ Examples:
 			return err
 		}
 
+		if err := requireValues("model", modelName, "model-path", modelPath, "artifact", artifactName); err != nil {
+			return err
+		}
+
 		// All inputs collected: remember the tool choice for next time.
 		warnIfSaveFails(config.Save(cfg))
 

@@ -50,6 +50,10 @@ Examples:
 		signer := cfg.Signer
 		warnIfSaveFails(config.Save(cfg))
 
+		if err := requireValues("artifact", artifact); err != nil {
+			return err
+		}
+
 		// Get signing provider
 		sp, err := workflow.GetSigningProvider(signer)
 		if err != nil {

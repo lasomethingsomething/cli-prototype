@@ -111,6 +111,10 @@ Examples:
   model-cli wizard --skip-signing
   model-cli wizard --registry oras`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if !interactive() {
+			return fmt.Errorf("the wizard is a guided, interactive tour and needs a terminal (%s); use the individual commands with flags instead", nonInteractiveReason())
+		}
+
 		// Check for skip flags
 		skipSigning, _ := cmd.Flags().GetBool("skip-signing")
 		skipDeploy, _ := cmd.Flags().GetBool("skip-deploy")

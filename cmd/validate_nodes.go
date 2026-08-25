@@ -65,6 +65,10 @@ Examples:
 			namespace = "default"
 		}
 
+		if err := requireValues("artifact", artifact); err != nil {
+			return err
+		}
+
 		// Get registry provider
 		registryProvider, err := workflow.GetRegistryProvider(registry)
 		if err != nil {
