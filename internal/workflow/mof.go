@@ -17,11 +17,11 @@ type MOFClassifier interface {
 type MOFClass string
 
 const (
-	// MOFClassI - Fully open: model weights, code, training data, and documentation all openly available
+	// MOFClassI - Fully open: weights, code, training data, documentation and license all available
 	MOFClassI MOFClass = "I"
-	// MOFClassII - Partially open: some but not all components available
+	// MOFClassII - Partially open: weights plus at least one of code, training data or documentation
 	MOFClassII MOFClass = "II"
-	// MOFClassIII - Closed: proprietary with minimal transparency
+	// MOFClassIII - Closed: weights only (a license alone does not add transparency)
 	MOFClassIII MOFClass = "III"
 )
 
@@ -88,34 +88,29 @@ func (m *MOFClassifierImpl) classifyModelPath(modelPath string) (*Classification
 		filename := info.Name()
 		lowerName := strings.ToLower(filename)
 
-		// Check for weights
-		if !result.HasWeights && isWeightFile(lowerName) {
+		// Skip files that model-cli itself writes next to the model.
+		if isGeneratedArtifact(lowerName) {
+			return nil
+		}
+
+		// Each file counts as exactly one component, checked most-specific first,
+		// so a weight file such as model.h5 is never also counted as code or data.
+		switch {
+		case isWeightFile(lowerName):
 			result.HasWeights = true
 			result.Components = appendUnique(result.Components, "weights")
-		}
-
-		// Check for code
-		if !result.HasCode && isCodeFile(lowerName) {
-			result.HasCode = true
-			result.Components = appendUnique(result.Components, "code")
-		}
-
-		// Check for training data
-		if !result.HasTrainingData && isTrainingDataFile(lowerName, path) {
-			result.HasTrainingData = true
-			result.Components = appendUnique(result.Components, "training-data")
-		}
-
-		// Check for documentation
-		if !result.HasDocs && isDocFile(lowerName) {
-			result.HasDocs = true
-			result.Components = appendUnique(result.Components, "documentation")
-		}
-
-		// Check for license
-		if !result.HasLicense && isLicenseFile(lowerName) {
+		case isLicenseFile(lowerName):
 			result.HasLicense = true
 			result.Components = appendUnique(result.Components, "license")
+		case isCodeFile(lowerName):
+			result.HasCode = true
+			result.Components = appendUnique(result.Components, "code")
+		case isDocFile(lowerName):
+			result.HasDocs = true
+			result.Components = appendUnique(result.Components, "documentation")
+		case isTrainingDataFile(lowerName, path):
+			result.HasTrainingData = true
+			result.Components = appendUnique(result.Components, "training-data")
 		}
 
 		return nil
@@ -154,23 +149,18 @@ func (m *MOFClassifierImpl) classifyModelPath(modelPath string) (*Classification
 
 // determineMOFClass applies MOF classification rules
 func (m *MOFClassifierImpl) determineMOFClass(result *ClassificationResult) MOFClass {
-	// MOF Class I: All core components are openly available
-	// - Model weights
-	// - Training code
-	// - Training data
-	// - Documentation (including license)
+	// Class I: weights, code, training data, documentation and license all present.
 	if result.HasWeights && result.HasCode && result.HasTrainingData && result.HasDocs && result.HasLicense {
 		return MOFClassI
 	}
 
-	// MOF Class II: Some but not all components are available
-	// At minimum, should have weights and some documentation
-	if result.HasWeights && (result.HasCode || result.HasTrainingData || result.HasDocs || result.HasLicense) {
+	// Class II: weights plus at least one component that adds transparency
+	// (code, training data or documentation). A license on its own does not.
+	if result.HasWeights && (result.HasCode || result.HasTrainingData || result.HasDocs) {
 		return MOFClassII
 	}
 
-	// MOF Class III: Closed/Proprietary
-	// May only have weights with no other transparency
+	// Class III: weights only, or nothing recognised.
 	return MOFClassIII
 }
 
@@ -218,14 +208,11 @@ func isWeightFile(filename string) bool {
 		".bin", ".pt", ".pth", ".ckpt", ".safetensors", ".gguf",
 		".h5", ".hdf5", ".pkl", ".pickle", ".npz", ".npy",
 		".tflite", ".pb", ".onnx", ".meta", ".params",
-		"model", "weights",
 	}
-	for _, ext := range weightExtensions {
-		if strings.HasSuffix(filename, ext) || strings.Contains(filename, ext) {
-			return true
-		}
+	if hasAnySuffix(filename, weightExtensions) {
+		return true
 	}
-	return false
+	return strings.Contains(filename, "model") || strings.Contains(filename, "weights")
 }
 
 // isCodeFile checks if a filename is a code file
@@ -233,16 +220,36 @@ func isCodeFile(filename string) bool {
 	codeExtensions := []string{
 		".py", ".js", ".ts", ".java", ".cpp", ".c", ".h", ".hpp",
 		".go", ".rs", ".rb", ".php", ".sh", ".bash",
-		"makefile", "dockerfile", ".yaml", ".yml", ".json",
-		".toml", ".cfg", ".config", "requirements.txt",
+	}
+	if hasAnySuffix(filename, codeExtensions) {
+		return true
+	}
+	codeFiles := []string{
+		"makefile", "dockerfile", "requirements.txt",
 		"setup.py", "pyproject.toml", "package.json",
 	}
-	for _, ext := range codeExtensions {
-		if strings.HasSuffix(filename, ext) || strings.Contains(filename, ext) {
+	for _, name := range codeFiles {
+		if filename == name {
 			return true
 		}
 	}
 	return false
+}
+
+// hasAnySuffix reports whether filename ends with any of the given suffixes.
+func hasAnySuffix(filename string, suffixes []string) bool {
+	for _, suffix := range suffixes {
+		if strings.HasSuffix(filename, suffix) {
+			return true
+		}
+	}
+	return false
+}
+
+// isGeneratedArtifact reports whether a file was produced by model-cli itself
+// (manifest, attestation, SBOM) and should not influence classification.
+func isGeneratedArtifact(filename string) bool {
+	return filename == "manifest.json" || filename == "attestation.json" || strings.HasPrefix(filename, "sbom.")
 }
 
 // isTrainingDataFile checks if a filename is training data
@@ -311,7 +318,7 @@ func isCodeDir(dirname string) bool {
 // isDocFile checks if a filename is documentation
 func isDocFile(filename string) bool {
 	docFiles := []string{
-		"readme", "license", "changelog", "contributing",
+		"readme", "changelog", "contributing",
 		"history", "roadmap", "authors", "acknowledgements",
 		"citation", "bibtex",
 	}
