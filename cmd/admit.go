@@ -93,7 +93,7 @@ Examples:
 				}
 				// Save config for future use
 				cfg.Registry = opts.registry
-				config.Save(cfg)
+				warnIfSaveFails(config.Save(cfg))
 			}
 		}
 

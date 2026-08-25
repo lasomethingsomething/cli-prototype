@@ -41,7 +41,7 @@ Examples:
 				return err
 			}
 			cfg.Runtime = runtime
-			config.Save(cfg)
+			warnIfSaveFails(config.Save(cfg))
 		} else {
 			runtime = cfg.Runtime
 		}

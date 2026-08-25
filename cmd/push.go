@@ -111,7 +111,7 @@ Examples:
 				return err
 			}
 			cfg.Registry = registry
-			config.Save(cfg)
+			warnIfSaveFails(config.Save(cfg))
 		} else {
 			registry = cfg.Registry
 		}
