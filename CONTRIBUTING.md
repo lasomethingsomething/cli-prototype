@@ -18,17 +18,32 @@ go build -o model-cli .
 
 ## Development Workflow
 
-1. Add interface in `internal/workflow/providers.go`
-2. Implement concrete provider
-3. Register in factory function (`Get*Provider`)
-4. Add CLI command
+Provider interfaces live in `internal/workflow/`, one file per tool family:
+
+| File | Interface | Implementations |
+|------|-----------|-----------------|
+| `registry.go` | `RegistryProvider` | ORAS, ModelPack |
+| `signing.go` | `SigningProvider` | Sigstore (cosign), Notary v2 (notation) |
+| `sbom.go` | `SBOMGenerator` | Syft, Trivy, cdxgen |
+| `gitops.go` | `GitOpsProvider` | Argo CD, Flux |
+| `runtime.go` | `RuntimeProvider` | vLLM, KServe |
+| `mof.go` | `MOFClassifier` | built-in classifier |
+
+To add a tool:
+
+1. Add the interface (or reuse an existing one) in the matching file
+2. Implement the concrete provider
+3. Register it in the factory function (`Get*Provider`)
+4. Add or extend the CLI command in `cmd/`
 5. Support both interactive and non-interactive modes
 
 ## Testing
 
-Run the test suite:
 ```bash
+go build ./...
 go test ./...
+gofmt -l .      # CI fails if this prints anything
+go vet ./...
 ```
 
 ## Pull Requests
