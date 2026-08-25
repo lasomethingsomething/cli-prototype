@@ -312,8 +312,13 @@ Examples:
 		} else {
 			if err := huh.NewSelect[string]().
 				Title("MOF Class:").
-				Description("Model Openness Framework classification").
-				Options(huh.NewOptions("I", "II", "III")...).
+				Description("Model Openness Framework classification (auto = detect from the model files)").
+				Options(
+					huh.NewOption("auto", ""),
+					huh.NewOption("I - open weights, code, training data, docs and license", "I"),
+					huh.NewOption("II - open weights plus code, data or docs", "II"),
+					huh.NewOption("III - weights only", "III"),
+				).
 				Value(&annotations.MOFClass).
 				Run(); err != nil {
 				return err
@@ -325,7 +330,7 @@ Examples:
 		} else {
 			if err := huh.NewInput().
 				Title("MOF Components:").
-				Description("Comma-separated list of MOF components (e.g., weights,training-data,code)").
+				Description("Comma-separated MOF components (e.g., weights,training-data,code); leave empty to detect").
 				Value(&annotations.MOFComponents).
 				Run(); err != nil {
 				return err
@@ -380,8 +385,8 @@ func init() {
 	packageCmd.Flags().String("accelerator", "", "Hardware accelerator: nvidia-gpu, amd-gpu, intel-gpu, cpu, or none")
 	packageCmd.Flags().String("cuda-min", "", "Minimum CUDA version (e.g., 12.1)")
 	packageCmd.Flags().String("memory-min", "", "Minimum memory (e.g., 24GiB)")
-	packageCmd.Flags().String("mof-class", "", "MOF Class: I, II, or III")
-	packageCmd.Flags().String("mof-components", "", "MOF components (comma-separated)")
+	packageCmd.Flags().String("mof-class", "", "MOF Class: I, II, or III (default: detected from the model files)")
+	packageCmd.Flags().String("mof-components", "", "MOF components, comma-separated (default: detected from the model files)")
 	// Node requirement flags for infrastructure orchestration (Story #68)
 	packageCmd.Flags().String("gpu-type", "", "Specific GPU type (e.g., nvidia-a100, nvidia-h100)")
 	packageCmd.Flags().String("vram-min", "", "Minimum vRAM per GPU (e.g., 40GiB, 80GiB)")
