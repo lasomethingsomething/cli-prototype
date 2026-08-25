@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"github.com/charmbracelet/huh"
 	"github.com/lasomethingsomething/cli-prototype/config"
 	"github.com/lasomethingsomething/cli-prototype/internal/workflow"
 	"github.com/spf13/cobra"
@@ -20,109 +19,46 @@ Examples:
 		cfg := config.Load()
 
 		// Get flags
-		runtimeFlag, _ := cmd.Flags().GetString("runtime")
-		modelPathFlag, _ := cmd.Flags().GetString("model-path")
-		hostFlag, _ := cmd.Flags().GetString("host")
-		portFlag, _ := cmd.Flags().GetString("port")
-		modelSizeFlag, _ := cmd.Flags().GetString("model-size")
-		loadSkillsFlag, _ := cmd.Flags().GetBool("load-skills")
-		skillRefFlag, _ := cmd.Flags().GetString("skill-ref")
 
 		// Interactive prompts
-		var runtime string
-		if runtimeFlag != "" {
-			runtime = runtimeFlag
-		} else if cfg.Runtime == "" {
-			if err := huh.NewSelect[string]().
-				Title("Select runtime:").
-				Options(huh.NewOptions("vllm", "kserve")...).
-				Value(&runtime).
-				Run(); err != nil {
-				return err
-			}
-			cfg.Runtime = runtime
-			warnIfSaveFails(config.Save(cfg))
-		} else {
-			runtime = cfg.Runtime
+		if err := askSelectIfEmpty(cmd, "runtime", &cfg.Runtime, "Select runtime:", "", []string{"vllm", "kserve"}); err != nil {
+			return err
 		}
+		runtime := cfg.Runtime
+		warnIfSaveFails(config.Save(cfg))
 
 		var modelPath string
-		if modelPathFlag != "" {
-			modelPath = modelPathFlag
-		} else {
-			if err := huh.NewInput().
-				Title("Model path:").
-				Value(&modelPath).
-				Run(); err != nil {
-				return err
-			}
+		if err := askString(cmd, "model-path", &modelPath, "Model path:", ""); err != nil {
+			return err
 		}
 
 		var host string
-		if hostFlag != "" {
-			host = hostFlag
-		} else {
-			if err := huh.NewInput().
-				Title("Host:").
-				Value(&host).
-				Run(); err != nil {
-				return err
-			}
+		if err := askString(cmd, "host", &host, "Host:", ""); err != nil {
+			return err
 		}
 
 		var port string
-		if portFlag != "" {
-			port = portFlag
-		} else {
-			if err := huh.NewInput().
-				Title("Port:").
-				Value(&port).
-				Run(); err != nil {
-				return err
-			}
+		if err := askString(cmd, "port", &port, "Port:", ""); err != nil {
+			return err
 		}
 
 		// Phase 5: Large Binary Asset Optimization
 		var modelSize string
-		if modelSizeFlag != "" {
-			modelSize = modelSizeFlag
-		} else {
-			if err := huh.NewInput().
-				Title("Model size (optional):").
-				Description("Approximate model size for optimization (e.g., 14GB, 70GB)").
-				Value(&modelSize).
-				Run(); err != nil {
-				return err
-			}
+		if err := askString(cmd, "model-size", &modelSize, "Model size (optional):", "Approximate model size for optimization (e.g., 14GB, 70GB)"); err != nil {
+			return err
 		}
 
 		// Phase 5: Reference Skill DLC
 		var loadSkills bool
-		if loadSkillsFlag {
-			loadSkills = true
-		} else {
-			if err := huh.NewConfirm().
-				Title("Load agentic skills?").
-				Description("Enable Reference Skill DLC for dynamic skill loading").
-				Value(&loadSkills).
-				Run(); err != nil {
-				return err
-			}
+		if err := askConfirm(cmd, "load-skills", &loadSkills, "Load agentic skills?", "Enable Reference Skill DLC for dynamic skill loading"); err != nil {
+			return err
 		}
 
 		var skillRefs []string
 		if loadSkills {
 			var skillRef string
-			if skillRefFlag != "" {
-				skillRef = skillRefFlag
-			} else {
-				if err := huh.NewInput().
-					Title("Skill reference:").
-					Description("Skill reference (e.g., my-skill:v1, agentskills.io/skill-name)").
-					Value(&skillRef).
-					Run(); err != nil {
-					return err
-				}
+			if err := askString(cmd, "skill-ref", &skillRef, "Skill reference:", "Skill reference (e.g., my-skill:v1, agentskills.io/skill-name)"); err != nil {
+				return err
 			}
 			skillRefs = append(skillRefs, skillRef)
 		}

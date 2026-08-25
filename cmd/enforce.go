@@ -34,13 +34,11 @@ Examples:
   model-cli enforce --webhook --port 8443`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Get flags
-		manifestFlag, _ := cmd.Flags().GetString("manifest")
 		artifactFlag, _ := cmd.Flags().GetString("artifact")
 		strictFlag, _ := cmd.Flags().GetBool("strict")
 		webhookFlag, _ := cmd.Flags().GetBool("webhook")
 		portFlag, _ := cmd.Flags().GetInt("port")
 		simulatePushFlag, _ := cmd.Flags().GetBool("simulate-push")
-		artifactTypeFlag, _ := cmd.Flags().GetString("artifact-type")
 
 		// If webhook mode, start the admission proxy server
 		if webhookFlag {
@@ -49,16 +47,8 @@ Examples:
 
 		// Interactive prompts for manifest path
 		var manifestPath string
-		if manifestFlag != "" {
-			manifestPath = manifestFlag
-		} else {
-			if err := huh.NewInput().
-				Title("Manifest path:").
-				Description("Path to the OCI manifest JSON file to validate").
-				Value(&manifestPath).
-				Run(); err != nil {
-				return err
-			}
+		if err := askString(cmd, "manifest", &manifestPath, "Manifest path:", "Path to the OCI manifest JSON file to validate"); err != nil {
+			return err
 		}
 
 		// Read the manifest
@@ -73,25 +63,13 @@ Examples:
 		}
 
 		// Determine or prompt for artifact type
-		var artifactType workflow.ArtifactType
-		if artifactTypeFlag != "" {
-			artifactType = workflow.ArtifactType(artifactTypeFlag)
-		} else if at, ok := manifest.Annotations[workflow.AnnotationArtifactType]; ok {
-			artifactType = workflow.ArtifactType(at)
-		} else {
-			if err := huh.NewSelect[workflow.ArtifactType]().
-				Title("Artifact type:").
-				Description("Select the type of AI artifact").
-				Options(
-					huh.NewOption(string(workflow.ArtifactTypeModel), workflow.ArtifactTypeModel),
-					huh.NewOption(string(workflow.ArtifactTypeSkill), workflow.ArtifactTypeSkill),
-					huh.NewOption(string(workflow.ArtifactTypePipeline), workflow.ArtifactTypePipeline),
-				).
-				Value(&artifactType).
-				Run(); err != nil {
-				return err
-			}
+		// Flag wins, then the manifest's own annotation, then ask.
+		artifactTypeName := manifest.Annotations[workflow.AnnotationArtifactType]
+		if err := askSelectIfEmpty(cmd, "artifact-type", &artifactTypeName, "Artifact type:", "Select the type of AI artifact",
+			[]string{string(workflow.ArtifactTypeModel), string(workflow.ArtifactTypeSkill), string(workflow.ArtifactTypePipeline)}); err != nil {
+			return err
 		}
+		artifactType := workflow.ArtifactType(artifactTypeName)
 
 		// Set artifact type annotation if not already set
 		if _, ok := manifest.Annotations[workflow.AnnotationArtifactType]; !ok {

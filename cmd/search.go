@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/charmbracelet/huh"
 	"github.com/lasomethingsomething/cli-prototype/config"
 	"github.com/lasomethingsomething/cli-prototype/internal/workflow"
 	"github.com/spf13/cobra"
@@ -33,7 +32,6 @@ Examples:
 		cfg := config.Load()
 
 		// Get flags
-		destinationFlag, _ := cmd.Flags().GetString("destination")
 		registryToolFlag, _ := cmd.Flags().GetString("registry-tool")
 		artifactTypeFlag, _ := cmd.Flags().GetString("type")
 		modelFlag, _ := cmd.Flags().GetString("model")
@@ -55,18 +53,11 @@ Examples:
 
 		// Get registry destination
 		var destination string
-		if destinationFlag != "" {
-			destination = destinationFlag
-		} else if cfg.Registry != "" {
+		if cfg.Registry != "" {
 			destination = cfg.Registry
-		} else {
-			// For search, we need at least a registry destination
-			// If not configured, prompt the user
-			if err := huh.NewInput().
-				Title("Registry to search:").
-				Description("Enter the registry to search (e.g., ghcr.io/my-org, docker.io/myuser)").
-				Value(&destination).
-				Run(); err != nil {
+		}
+		if cmd.Flags().Changed("destination") || destination == "" {
+			if err := askString(cmd, "destination", &destination, "Registry to search:", "Enter the registry to search (e.g., ghcr.io/my-org, docker.io/myuser)"); err != nil {
 				return err
 			}
 		}

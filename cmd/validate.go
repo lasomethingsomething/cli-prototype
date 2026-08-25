@@ -5,7 +5,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/charmbracelet/huh"
 	"github.com/lasomethingsomething/cli-prototype/internal/workflow"
 	"github.com/spf13/cobra"
 )
@@ -39,8 +38,6 @@ Examples:
   model-cli validate --manifest my-manifest.json --check-relationships`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Get flags
-		artifactFlag, _ := cmd.Flags().GetString("artifact")
-		checkRelationshipsFlag, _ := cmd.Flags().GetBool("check-relationships")
 		manifestFlag, _ := cmd.Flags().GetString("manifest")
 		jsonSchemaFlag, _ := cmd.Flags().GetBool("json-schema")
 		strictFlag, _ := cmd.Flags().GetBool("strict")
@@ -48,29 +45,13 @@ Examples:
 
 		// Interactive prompts
 		var artifact string
-		if artifactFlag != "" {
-			artifact = artifactFlag
-		} else {
-			if err := huh.NewInput().
-				Title("Artifact to validate:").
-				Description("The OCI artifact reference (e.g., ghcr.io/my-org/my-model:latest)").
-				Value(&artifact).
-				Run(); err != nil {
-				return err
-			}
+		if err := askString(cmd, "artifact", &artifact, "Artifact to validate:", "The OCI artifact reference (e.g., ghcr.io/my-org/my-model:latest)"); err != nil {
+			return err
 		}
 
 		var checkRelationships bool
-		if checkRelationshipsFlag {
-			checkRelationships = true
-		} else {
-			if err := huh.NewConfirm().
-				Title("Check relationships?").
-				Description("Map model->skill and other artifact relationships").
-				Value(&checkRelationships).
-				Run(); err != nil {
-				return err
-			}
+		if err := askConfirm(cmd, "check-relationships", &checkRelationships, "Check relationships?", "Map model->skill and other artifact relationships"); err != nil {
+			return err
 		}
 
 		fmt.Printf("\nValidating manifest for: %s\n\n", artifact)

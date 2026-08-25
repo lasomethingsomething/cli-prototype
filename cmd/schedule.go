@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/charmbracelet/huh"
 	"github.com/lasomethingsomething/cli-prototype/internal/workflow"
 	"github.com/spf13/cobra"
 )
@@ -31,20 +30,11 @@ Examples:
 		// Check for flags
 		listNodesFlag, _ := cmd.Flags().GetBool("list-nodes")
 		dryRunFlag, _ := cmd.Flags().GetBool("dry-run")
-		artifactFlag, _ := cmd.Flags().GetString("artifact")
 
 		// Interactive prompts
 		var artifact string
-		if artifactFlag != "" {
-			artifact = artifactFlag
-		} else {
-			if err := huh.NewInput().
-				Title("Artifact to schedule:").
-				Description("The OCI artifact reference (e.g., ghcr.io/my-org/my-model:latest)").
-				Value(&artifact).
-				Run(); err != nil {
-				return err
-			}
+		if err := askString(cmd, "artifact", &artifact, "Artifact to schedule:", "The OCI artifact reference (e.g., ghcr.io/my-org/my-model:latest)"); err != nil {
+			return err
 		}
 
 		listNodes := listNodesFlag

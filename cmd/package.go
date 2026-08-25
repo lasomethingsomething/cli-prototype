@@ -40,127 +40,48 @@ Examples:
 		cfg := config.Load()
 
 		// Get flags
-		registryFlag, _ := cmd.Flags().GetString("registry")
-		modelNameFlag, _ := cmd.Flags().GetString("model")
-		modelPathFlag, _ := cmd.Flags().GetString("model-path")
-		artifactNameFlag, _ := cmd.Flags().GetString("artifact")
-		registryURLFlag, _ := cmd.Flags().GetString("registry-url")
-		includeRAGFlag, _ := cmd.Flags().GetBool("include-rag")
-		ragPathFlag, _ := cmd.Flags().GetString("rag-path")
-		runtimeFlag, _ := cmd.Flags().GetString("runtime")
-		acceleratorFlag, _ := cmd.Flags().GetString("accelerator")
-		cudaMinFlag, _ := cmd.Flags().GetString("cuda-min")
-		memoryMinFlag, _ := cmd.Flags().GetString("memory-min")
-		mofClassFlag, _ := cmd.Flags().GetString("mof-class")
-		mofComponentsFlag, _ := cmd.Flags().GetString("mof-components")
 		isSkillFlag, _ := cmd.Flags().GetBool("skill")
 		signFlag, _ := cmd.Flags().GetBool("sign")
 		signerFlag, _ := cmd.Flags().GetString("signer")
 		provenanceFlag, _ := cmd.Flags().GetBool("generate-provenance")
 		// Node requirement flags for infrastructure orchestration (Story #68)
-		gpuTypeFlag, _ := cmd.Flags().GetString("gpu-type")
-		vramMinFlag, _ := cmd.Flags().GetString("vram-min")
-		gpuTopologyFlag, _ := cmd.Flags().GetString("gpu-topology")
 		// Runtime execution flags for Story #69
-		runtimeTypeFlag, _ := cmd.Flags().GetString("runtime-type")
-		layerDedupFlag, _ := cmd.Flags().GetString("layer-dedup")
-		dlcEndpointFlag, _ := cmd.Flags().GetString("dlc-endpoint")
-		skillRefsFlag, _ := cmd.Flags().GetString("skill-refs")
 
 		// Interactive prompts if not set in config or via flags
-		if cfg.Registry == "" && registryFlag == "" {
-			var registryTool string
-			if err := huh.NewSelect[string]().
-				Title("Select Registry tool:").
-				Description("Choose how you want to package your model").
-				Options(huh.NewOptions("oras", "modelpack")...).
-				Value(&registryTool).
-				Run(); err != nil {
-				return err
-			}
-			cfg.Registry = registryTool
-		} else if registryFlag != "" {
-			cfg.Registry = registryFlag
+		if err := askSelectIfEmpty(cmd, "registry", &cfg.Registry, "Select Registry tool:", "Choose how you want to package your model", []string{"oras", "modelpack"}); err != nil {
+			return err
 		}
 
 		// Get packaging information
 		var modelName string
-		if modelNameFlag != "" {
-			modelName = modelNameFlag
-		} else {
-			if err := huh.NewInput().
-				Title("Model name:").
-				Description("What is the name of your model? (e.g., phi-4-mini)").
-				Value(&modelName).
-				Run(); err != nil {
-				return err
-			}
+		if err := askString(cmd, "model", &modelName, "Model name:", "What is the name of your model? (e.g., phi-4-mini)"); err != nil {
+			return err
 		}
 
 		var modelPath string
-		if modelPathFlag != "" {
-			modelPath = modelPathFlag
-		} else {
-			if err := huh.NewInput().
-				Title("Model path:").
-				Description("Path to your model files or directory").
-				Value(&modelPath).
-				Run(); err != nil {
-				return err
-			}
+		if err := askString(cmd, "model-path", &modelPath, "Model path:", "Path to your model files or directory"); err != nil {
+			return err
 		}
 
 		var artifactName string
-		if artifactNameFlag != "" {
-			artifactName = artifactNameFlag
-		} else {
-			if err := huh.NewInput().
-				Title("Artifact name:").
-				Description("What would you like to name the OCI artifact? (e.g., my-org/my-model:latest)").
-				Value(&artifactName).
-				Run(); err != nil {
-				return err
-			}
+		if err := askString(cmd, "artifact", &artifactName, "Artifact name:", "What would you like to name the OCI artifact? (e.g., my-org/my-model:latest)"); err != nil {
+			return err
 		}
 
 		var registryURL string
-		if registryURLFlag != "" {
-			registryURL = registryURLFlag
-		} else {
-			if err := huh.NewInput().
-				Title("Registry URL:").
-				Description("Where should we push the artifact? (e.g., ghcr.io or leave empty for local)").
-				Value(&registryURL).
-				Run(); err != nil {
-				return err
-			}
+		if err := askString(cmd, "registry-url", &registryURL, "Registry URL:", "Where should we push the artifact? (e.g., ghcr.io or leave empty for local)"); err != nil {
+			return err
 		}
 
 		var includeRAG bool
-		if includeRAGFlag {
-			includeRAG = true
-		} else {
-			if err := huh.NewConfirm().
-				Title("Include RAG context?").
-				Description("Do you want to package RAG (Retrieval-Augmented Generation) context with your model?").
-				Value(&includeRAG).
-				Run(); err != nil {
-				return err
-			}
+		if err := askConfirm(cmd, "include-rag", &includeRAG, "Include RAG context?", "Do you want to package RAG (Retrieval-Augmented Generation) context with your model?"); err != nil {
+			return err
 		}
 
 		var ragPath string
 		if includeRAG {
-			if ragPathFlag != "" {
-				ragPath = ragPathFlag
-			} else {
-				if err := huh.NewInput().
-					Title("RAG context path:").
-					Description("Path to your RAG context files").
-					Value(&ragPath).
-					Run(); err != nil {
-					return err
-				}
+			if err := askString(cmd, "rag-path", &ragPath, "RAG context path:", "Path to your RAG context files"); err != nil {
+				return err
 			}
 		}
 
@@ -168,173 +89,68 @@ Examples:
 		annotations := workflow.NewAnnotationSet()
 
 		// Runtime annotations
-		if runtimeFlag != "" {
-			annotations.Runtime = runtimeFlag
-		} else {
-			if err := huh.NewInput().
-				Title("Runtime:").
-				Description("Serving runtime (e.g., vllm, kserve)").
-				Value(&annotations.Runtime).
-				Run(); err != nil {
-				return err
-			}
+		if err := askString(cmd, "runtime", &annotations.Runtime, "Runtime:", "Serving runtime (e.g., vllm, kserve)"); err != nil {
+			return err
 		}
 
-		if acceleratorFlag != "" {
-			annotations.Accelerator = acceleratorFlag
-		} else {
-			if err := huh.NewSelect[string]().
-				Title("Accelerator:").
-				Description("Hardware accelerator requirement").
-				Options(huh.NewOptions("nvidia-gpu", "amd-gpu", "intel-gpu", "cpu", "none")...).
-				Value(&annotations.Accelerator).
-				Run(); err != nil {
-				return err
-			}
+		if err := askSelect(cmd, "accelerator", &annotations.Accelerator, "Accelerator:", "Hardware accelerator requirement", []string{"nvidia-gpu", "amd-gpu", "intel-gpu", "cpu", "none"}); err != nil {
+			return err
 		}
 
-		if cudaMinFlag != "" {
-			annotations.CUDAMin = cudaMinFlag
-		} else {
-			if err := huh.NewInput().
-				Title("Minimum CUDA version:").
-				Description("Minimum CUDA version required (e.g., 12.1, leave empty if not applicable)").
-				Value(&annotations.CUDAMin).
-				Run(); err != nil {
-				return err
-			}
+		if err := askString(cmd, "cuda-min", &annotations.CUDAMin, "Minimum CUDA version:", "Minimum CUDA version required (e.g., 12.1, leave empty if not applicable)"); err != nil {
+			return err
 		}
 
-		if memoryMinFlag != "" {
-			annotations.MemoryMin = memoryMinFlag
-		} else {
-			if err := huh.NewInput().
-				Title("Minimum memory:").
-				Description("Minimum memory required (e.g., 24GiB)").
-				Value(&annotations.MemoryMin).
-				Run(); err != nil {
-				return err
-			}
+		if err := askString(cmd, "memory-min", &annotations.MemoryMin, "Minimum memory:", "Minimum memory required (e.g., 24GiB)"); err != nil {
+			return err
 		}
 
 		// Node requirement annotations for infrastructure orchestration (Story #68)
-		if gpuTypeFlag != "" {
-			annotations.GPUType = gpuTypeFlag
-		} else {
-			if err := huh.NewInput().
-				Title("GPU type:").
-				Description("Specific GPU type required (e.g., nvidia-a100, nvidia-h100, leave empty if not applicable)").
-				Value(&annotations.GPUType).
-				Run(); err != nil {
-				return err
-			}
+		if err := askString(cmd, "gpu-type", &annotations.GPUType, "GPU type:", "Specific GPU type required (e.g., nvidia-a100, nvidia-h100, leave empty if not applicable)"); err != nil {
+			return err
 		}
 
-		if vramMinFlag != "" {
-			annotations.VRAMMin = vramMinFlag
-		} else {
-			if err := huh.NewInput().
-				Title("Minimum vRAM per GPU:").
-				Description("Minimum vRAM required per GPU (e.g., 40GiB, 80GiB, leave empty if not applicable)").
-				Value(&annotations.VRAMMin).
-				Run(); err != nil {
-				return err
-			}
+		if err := askString(cmd, "vram-min", &annotations.VRAMMin, "Minimum vRAM per GPU:", "Minimum vRAM required per GPU (e.g., 40GiB, 80GiB, leave empty if not applicable)"); err != nil {
+			return err
 		}
 
-		if gpuTopologyFlag != "" {
-			annotations.GPUTopology = gpuTopologyFlag
-		} else {
-			if err := huh.NewInput().
-				Title("GPU topology:").
-				Description("GPU topology requirement (e.g., 8xH100, 4xA100, leave empty if not applicable)").
-				Value(&annotations.GPUTopology).
-				Run(); err != nil {
-				return err
-			}
+		if err := askString(cmd, "gpu-topology", &annotations.GPUTopology, "GPU topology:", "GPU topology requirement (e.g., 8xH100, 4xA100, leave empty if not applicable)"); err != nil {
+			return err
 		}
 
 		// Runtime execution annotations for Story #69
-		if runtimeTypeFlag != "" {
-			annotations.RuntimeType = runtimeTypeFlag
-		} else {
-			if err := huh.NewInput().
-				Title("Runtime type:").
-				Description("Specific runtime for serving (e.g., vllm, kserve, leave empty to use default)").
-				Value(&annotations.RuntimeType).
-				Run(); err != nil {
+		if err := askString(cmd, "runtime-type", &annotations.RuntimeType, "Runtime type:", "Specific runtime for serving (e.g., vllm, kserve, leave empty to use default)"); err != nil {
+			return err
+		}
+
+		if err := askSelect(cmd, "layer-dedup", &annotations.LayerDeduplication, "Layer deduplication:", "Enable layer deduplication optimization for large models", []string{"true", "false", ""}); err != nil {
+			return err
+		}
+
+		// Skill-only annotations: prompt only when packaging a skill.
+		if cmd.Flags().Changed("dlc-endpoint") || isSkillFlag {
+			if err := askString(cmd, "dlc-endpoint", &annotations.ReferenceSkillDLC, "Reference Skill DLC endpoint:", "Endpoint for dynamic skill loading (e.g., https://dlc.example.com, leave empty if not applicable)"); err != nil {
 				return err
 			}
 		}
-
-		if layerDedupFlag != "" {
-			annotations.LayerDeduplication = layerDedupFlag
-		} else {
-			if err := huh.NewSelect[string]().
-				Title("Layer deduplication:").
-				Description("Enable layer deduplication optimization for large models").
-				Options(huh.NewOptions("true", "false", "")...).
-				Value(&annotations.LayerDeduplication).
-				Run(); err != nil {
-				return err
-			}
-		}
-
-		if dlcEndpointFlag != "" {
-			annotations.ReferenceSkillDLC = dlcEndpointFlag
-		} else if isSkillFlag {
-			// Only prompt for DLC endpoint if this is a skill
-			if err := huh.NewInput().
-				Title("Reference Skill DLC endpoint:").
-				Description("Endpoint for dynamic skill loading (e.g., https://dlc.example.com, leave empty if not applicable)").
-				Value(&annotations.ReferenceSkillDLC).
-				Run(); err != nil {
-				return err
-			}
-		}
-
-		if skillRefsFlag != "" {
-			annotations.SkillReferences = skillRefsFlag
-		} else if isSkillFlag {
-			// Only prompt for skill references if this is a skill
-			if err := huh.NewInput().
-				Title("Skill references:").
-				Description("Comma-separated list of skill references (e.g., skill:sha256:abc,skill:sha256:def)").
-				Value(&annotations.SkillReferences).
-				Run(); err != nil {
+		if cmd.Flags().Changed("skill-refs") || isSkillFlag {
+			if err := askString(cmd, "skill-refs", &annotations.SkillReferences, "Skill references:", "Comma-separated list of skill references (e.g., skill:sha256:abc,skill:sha256:def)"); err != nil {
 				return err
 			}
 		}
 
 		// MOF classification
-		if mofClassFlag != "" {
-			annotations.MOFClass = mofClassFlag
-		} else {
-			if err := huh.NewSelect[string]().
-				Title("MOF Class:").
-				Description("Model Openness Framework classification (auto = detect from the model files)").
-				Options(
-					huh.NewOption("auto", ""),
-					huh.NewOption("I - open weights, code, training data, docs and license", "I"),
-					huh.NewOption("II - open weights plus code, data or docs", "II"),
-					huh.NewOption("III - weights only", "III"),
-				).
-				Value(&annotations.MOFClass).
-				Run(); err != nil {
-				return err
-			}
+		if err := askSelectLabeled(cmd, "mof-class", &annotations.MOFClass, "MOF Class:", "Model Openness Framework classification (auto = detect from the model files)", []huh.Option[string]{
+			huh.NewOption("auto", ""),
+			huh.NewOption("I - open weights, code, training data, docs and license", "I"),
+			huh.NewOption("II - open weights plus code, data or docs", "II"),
+			huh.NewOption("III - weights only", "III"),
+		}); err != nil {
+			return err
 		}
 
-		if mofComponentsFlag != "" {
-			annotations.MOFComponents = mofComponentsFlag
-		} else {
-			if err := huh.NewInput().
-				Title("MOF Components:").
-				Description("Comma-separated MOF components (e.g., weights,training-data,code); leave empty to detect").
-				Value(&annotations.MOFComponents).
-				Run(); err != nil {
-				return err
-			}
+		if err := askString(cmd, "mof-components", &annotations.MOFComponents, "MOF Components:", "Comma-separated MOF components (e.g., weights,training-data,code); leave empty to detect"); err != nil {
+			return err
 		}
 
 		// All inputs collected: remember the tool choice for next time.
