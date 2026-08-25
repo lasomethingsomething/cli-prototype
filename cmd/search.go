@@ -1,9 +1,7 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 
 	"github.com/charmbracelet/huh"
 	"github.com/lasomethingsomething/cli-prototype/config"
@@ -197,106 +195,6 @@ Examples:
 
 		return nil
 	},
-}
-
-// searchWithClientSideFiltering performs a search using only client-side filtering
-// This is used when the registry doesn't support server-side filtering
-func searchWithClientSideFiltering(provider workflow.RegistryProvider, registry string, query *workflow.SearchQuery) (*workflow.SearchResults, error) {
-	// Get all manifests from the registry
-	manifestBytes, err := provider.Search(registry, "")
-	if err != nil {
-		return nil, err
-	}
-
-	// Parse results
-	results, err := workflow.ParseSearchResultsFromManifests(manifestBytes)
-	if err != nil {
-		return nil, err
-	}
-
-	// Apply filters client-side
-	filtered := results.FilterByRelationship(query)
-
-	return filtered, nil
-}
-
-// printResultTable prints search results in a formatted table
-func printResultTable(results *workflow.SearchResults) {
-	// Simple table formatting for terminal output
-	fmt.Printf("\nResults from %s:\n", results.Registry)
-	fmt.Println("==============================================================================")
-
-	for i, result := range results.Results {
-		fmt.Printf("%d. %s\n", i+1, result.Reference)
-		if result.ArtifactType != "" {
-			fmt.Printf("   Type: %s\n", result.ArtifactType)
-		}
-		if result.Digest != "" {
-			fmt.Printf("   Digest: %s\n", result.Digest)
-		}
-
-		// Show key metadata
-		if result.Metadata != nil {
-			if meta, ok := result.Metadata["model"].(map[string]interface{}); ok {
-				if modelType, ok := meta["type"].(string); ok {
-					fmt.Printf("   Model Type: %s\n", modelType)
-				}
-				if framework, ok := meta["framework"].(string); ok {
-					fmt.Printf("   Framework: %s\n", framework)
-				}
-			}
-			if meta, ok := result.Metadata["skill"].(map[string]interface{}); ok {
-				if skillType, ok := meta["type"].(string); ok {
-					fmt.Printf("   Skill Type: %s\n", skillType)
-				}
-			}
-			if meta, ok := result.Metadata["pipeline"].(map[string]interface{}); ok {
-				if pipelineType, ok := meta["type"].(string); ok {
-					fmt.Printf("   Pipeline Type: %s\n", pipelineType)
-				}
-			}
-		}
-
-		// Show relationships
-		if result.RelationshipGraph != nil {
-			if len(result.RelationshipGraph.Models) > 0 {
-				fmt.Printf("   Relationships - Models: %d\n", len(result.RelationshipGraph.Models))
-			}
-			if len(result.RelationshipGraph.Skills) > 0 {
-				fmt.Printf("   Relationships - Skills: %d\n", len(result.RelationshipGraph.Skills))
-			}
-			if len(result.RelationshipGraph.Pipelines) > 0 {
-				fmt.Printf("   Relationships - Pipelines: %d\n", len(result.RelationshipGraph.Pipelines))
-			}
-		}
-
-		if i < len(results.Results)-1 {
-			fmt.Println()
-		}
-	}
-	fmt.Println("==============================================================================")
-}
-
-// exportResults exports search results to a file
-func exportResults(results *workflow.SearchResults, path string) error {
-	var data []byte
-	var err error
-
-	switch results.Query.OutputFormat {
-	case "json":
-		data, err = json.MarshalIndent(results, "", "  ")
-	case "yaml":
-		// Use JSON as YAML subset
-		data, err = json.MarshalIndent(results, "", "  ")
-	default:
-		data = []byte(results.String())
-	}
-
-	if err != nil {
-		return err
-	}
-
-	return os.WriteFile(path, data, 0644)
 }
 
 func init() {
