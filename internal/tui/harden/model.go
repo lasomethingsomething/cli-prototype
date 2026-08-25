@@ -70,7 +70,7 @@ type Model struct {
 	// State
 	loading   bool
 	completed bool
-	err        error
+	err       error
 	logs      []string
 
 	// Steps
@@ -517,7 +517,7 @@ func (m *Model) renderHardening() string {
 		sb.WriteString("→ Applying MOF classification...\n")
 		sb.WriteString("→ Applying security annotations...\n")
 	} else if m.err != nil {
-		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#FF5555")).Render("✗ Error: "+m.err.Error())+"\n")
+		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#FF5555")).Render("✗ Error: "+m.err.Error()) + "\n")
 	} else if m.completed {
 		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF88")).Render("✓ Hardening complete\n"))
 		if m.sbomPath != "" {

@@ -42,7 +42,7 @@ Examples:
 		includeMOF, _ := cmd.Flags().GetBool("include-mof")
 		sbomTool, _ := cmd.Flags().GetString("sbom-tool")
 		sbomFormat, _ := cmd.Flags().GetString("sbom-format")
-		
+
 		if modelName == "" {
 			return fmt.Errorf("model name is required")
 		}
@@ -52,20 +52,20 @@ Examples:
 		if artifactName == "" {
 			return fmt.Errorf("artifact name is required")
 		}
-		
+
 		// Create hardening workflow
 		hw := workflow.NewHardenWorkflow(registry)
 		hw.SetHardenInfo(modelName, modelPath, artifactName)
 		hw.SetOptions(generateSBOM, includeMOF)
 		hw.SetSBOMTool(sbomTool, workflow.SBOMFormat(sbomFormat))
 		hw.SetLicense(license)
-		
+
 		// Run the workflow
 		fmt.Println()
 		if err := hw.Run(); err != nil {
 			return err
 		}
-		
+
 		// Print results
 		fmt.Println()
 		fmt.Println("Hardening Complete!")
@@ -85,29 +85,29 @@ Examples:
 				fmt.Printf("    %s: %s\n", key, value)
 			}
 		}
-		
+
 		return nil
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(hardenCmd)
-	
+
 	// Model flags
 	hardenCmd.Flags().String("model", "", "Name of the model")
 	hardenCmd.Flags().String("model-path", "", "Path to the model directory")
 	hardenCmd.Flags().String("artifact", "", "Artifact name (e.g., my-org/my-model:v1.0.0)")
 	hardenCmd.Flags().String("registry", "", "Registry to use (e.g., ghcr.io)")
-	
+
 	// Hardening options
 	hardenCmd.Flags().Bool("generate-sbom", true, "Generate SBOM")
 	hardenCmd.Flags().Bool("include-mof", true, "Include MOF classification")
 	hardenCmd.Flags().String("license", "CC-BY-4.0", "License for MOF metadata (default: CC-BY-4.0)")
-	
+
 	// SBOM options
 	hardenCmd.Flags().String("sbom-tool", "syft", "SBOM generation tool (syft, trivy, cdxgen)")
 	hardenCmd.Flags().String("sbom-format", "spdx-json", "SBOM format (spdx-json, cyclonedx, spdx)")
-	
+
 	// Mark required flags
 	hardenCmd.MarkFlagRequired("model")
 	hardenCmd.MarkFlagRequired("model-path")

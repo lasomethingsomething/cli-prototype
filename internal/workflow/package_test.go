@@ -212,7 +212,7 @@ func TestPackageWorkflowRunWritesManifestWithAnnotations(t *testing.T) {
 	if fake.pushedAnnotations[AnnotationRuntime] != "vllm" {
 		t.Errorf("Push() annotations[%s] = %q, want %q", AnnotationRuntime, fake.pushedAnnotations[AnnotationRuntime], "vllm")
 	}
-	
+
 	// Verify local digest was computed
 	if pf.LocalDigest() == "" {
 		t.Error("expected local digest to be computed")
@@ -226,15 +226,15 @@ func TestPackageWorkflowRunVerifiesLocalParity(t *testing.T) {
 
 	// Create a fake provider
 	fake := &fakeRegistryProvider{
-		installed: true,
+		installed:      true,
 		artifactDigest: make(map[string]string),
 	}
-	
+
 	artifactName := "my-model:v1"
 	registryURL := "ghcr.io/my-org"
-	
+
 	pf := &PackageWorkflow{
-		registry:          "fake",
+		registry:         "fake",
 		registryProvider: fake,
 		registryURL:      registryURL,
 		annotations:      NewAnnotationSet(),
@@ -248,13 +248,13 @@ func TestPackageWorkflowRunVerifiesLocalParity(t *testing.T) {
 	if err == nil {
 		t.Error("expected Run() to fail due to local parity mismatch with fake provider")
 	}
-	
+
 	// Verify the error message mentions local parity
 	errStr := err.Error()
 	if !strings.Contains(errStr, "local parity") {
 		t.Errorf("expected error to mention 'local parity', got: %s", errStr)
 	}
-	
+
 	// Verify local digest was computed
 	if pf.LocalDigest() == "" {
 		t.Error("expected local digest to be computed")
@@ -312,21 +312,21 @@ func TestSetSigningOptions(t *testing.T) {
 // fakeSigningProvider is a test double for SigningProvider
 // that records whether Sign() was called instead of shelling out to a real tool.
 type fakeSigningProvider struct {
-	name       string
-	installed  bool
-	signCalled bool
+	name         string
+	installed    bool
+	signCalled   bool
 	lastArtifact string
 }
 
-func (f *fakeSigningProvider) Name() string                         { return f.name }
-func (f *fakeSigningProvider) IsInstalled() bool                    { return f.installed }
-func (f *fakeSigningProvider) InstallInstructions() string          { return "n/a" }
+func (f *fakeSigningProvider) Name() string                { return f.name }
+func (f *fakeSigningProvider) IsInstalled() bool           { return f.installed }
+func (f *fakeSigningProvider) InstallInstructions() string { return "n/a" }
 func (f *fakeSigningProvider) Sign(artifact, keyRef string) error {
 	f.signCalled = true
 	f.lastArtifact = artifact
 	return nil
 }
-func (f *fakeSigningProvider) Verify(artifact string) error         { return nil }
+func (f *fakeSigningProvider) Verify(artifact string) error            { return nil }
 func (f *fakeSigningProvider) GetSignaturePath(artifact string) string { return artifact + ".sig" }
 
 // TestPackageWorkflowRunWithSigning verifies that when sign=true, the workflow
@@ -336,24 +336,24 @@ func TestPackageWorkflowRunWithSigning(t *testing.T) {
 
 	// Create a fake registry provider
 	fakeReg := &fakeRegistryProvider{installed: true}
-	
+
 	// Create a fake signing provider and register it
 	// We need to temporarily replace the GetSigningProvider function
 	// For this test, we'll create a custom workflow with the fake signer
-	
+
 	pf := &PackageWorkflow{
-		registry:          "fake",
+		registry:         "fake",
 		registryProvider: fakeReg,
 		annotations:      NewAnnotationSet(),
-		sign:              true,
-		signer:            "fake-sign",
+		sign:             true,
+		signer:           "fake-sign",
 	}
 	pf.SetPackageInfo("phi-4-mini", modelPath, "my-model:v1", "", false, "")
 
 	// Since we can't easily mock GetSigningProvider, we'll test the workflow
 	// logic by checking that the sign flag is properly set
 	// The actual signing integration is tested via the command tests
-	
+
 	// Just verify the workflow can be created with signing options
 	if !pf.sign {
 		t.Error("sign should be true")

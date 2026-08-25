@@ -41,8 +41,8 @@ type ContextModel struct {
 	// Results
 	PackageSucceeded bool
 	SignSucceeded    bool
-	VerifySucceeded   bool
-	DeploySucceeded   bool
+	VerifySucceeded  bool
+	DeploySucceeded  bool
 
 	// Logs
 	Logs []string
@@ -65,9 +65,9 @@ func NewContextModel() *ContextModel {
 		CurrentStep: 1,
 		TotalSteps:  8,
 		ActiveTab:   TabProgress,
-		Logs:       make([]string, 0),
-		width:      40,
-		height:     15,
+		Logs:        make([]string, 0),
+		width:       40,
+		height:      15,
 	}
 }
 
@@ -123,28 +123,28 @@ func (m *ContextModel) renderHeader() string {
 // renderTabBar renders the tab navigation bar
 func (m *ContextModel) renderTabBar() string {
 	tabs := []string{"Progress", "Config", "Model", "Logs", "Help", "Env"}
-	
+
 	var sb strings.Builder
-	
+
 	for i, tab := range tabs {
 		style := lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#555555")).
 			Padding(0, 1)
-		
+
 		if i == int(m.ActiveTab) {
 			style = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("#FAFAFA")).
 				Bold(true).
 				Underline(true)
 		}
-		
+
 		sb.WriteString(style.Render(tab))
-		
+
 		if i < len(tabs)-1 {
 			sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#555555")).Render("|"))
 		}
 	}
-	
+
 	return sb.String()
 }
 
@@ -196,7 +196,7 @@ func (m *ContextModel) renderProgressTab() string {
 		if i > m.CurrentStep {
 			symbol = "·"
 		}
-		
+
 		// Color based on results
 		color := "#555555"
 		if i == int(m.CurrentStep) {
@@ -205,7 +205,7 @@ func (m *ContextModel) renderProgressTab() string {
 		if i < m.CurrentStep {
 			color = "#00FF88"
 		}
-		
+
 		style := lipgloss.NewStyle().Foreground(lipgloss.Color(color))
 		sb.WriteString(fmt.Sprintf("  %s %s\n", symbol, style.Render(step)))
 	}
@@ -263,7 +263,7 @@ func (m *ContextModel) renderModelTab() string {
 	if m.PackageSucceeded || m.SignSucceeded || m.VerifySucceeded || m.DeploySucceeded {
 		sb.WriteString("\n")
 		sb.WriteString("Status:\n")
-		
+
 		if m.PackageSucceeded {
 			sb.WriteString("  ✓ Package\n")
 		}

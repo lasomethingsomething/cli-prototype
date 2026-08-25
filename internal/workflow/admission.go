@@ -11,20 +11,20 @@ import (
 // AdmissionRequest represents a Kubernetes-style admission webhook request
 type AdmissionRequest struct {
 	// Standard Kubernetes admission request fields
-	Kind       Kind               `json:"kind"`
-	APIVersion string             `json:"apiVersion"`
-	Namespace  string             `json:"namespace"`
-	Operation  string             `json:"operation"` // CREATE, UPDATE, DELETE, CONNECT
-	
+	Kind       Kind   `json:"kind"`
+	APIVersion string `json:"apiVersion"`
+	Namespace  string `json:"namespace"`
+	Operation  string `json:"operation"` // CREATE, UPDATE, DELETE, CONNECT
+
 	// Object is the new object being admitted
 	Object json.RawMessage `json:"object"`
-	
+
 	// OldObject is the existing object for UPDATE operations
 	OldObject json.RawMessage `json:"oldObject,omitempty"`
-	
+
 	// UserInfo contains information about the requesting user
 	UserInfo UserInfo `json:"userInfo"`
-	
+
 	// Additional context
 	Resource Resource `json:"resource"`
 }
@@ -38,9 +38,9 @@ type Kind struct {
 
 // UserInfo represents user information from the admission request
 type UserInfo struct {
-	Username string `json:"username"`
-	UID      string `json:"uid"`
-	Groups   []string `json:"groups"`
+	Username string              `json:"username"`
+	UID      string              `json:"uid"`
+	Groups   []string            `json:"groups"`
 	Extra    map[string][]string `json:"extra,omitempty"`
 }
 
@@ -55,19 +55,19 @@ type Resource struct {
 type AdmissionResponse struct {
 	// Allowed indicates whether the request is allowed
 	Allowed bool `json:"allowed"`
-	
+
 	// Result contains the reason if the request is denied
 	Result *Metav1Status `json:"status,omitempty"`
-	
+
 	// Patch contains JSON Patch operations to mutate the object
 	Patch []PatchOperation `json:"patch,omitempty"`
-	
+
 	// PatchType indicates the type of patch
 	PatchType *string `json:"patchType,omitempty"`
-	
+
 	// Warnings contains warning messages
 	Warnings []string `json:"warnings,omitempty"`
-	
+
 	// AuditAnnotations contains additional audit information
 	AuditAnnotations map[string]string `json:"auditAnnotations,omitempty"`
 }
@@ -92,19 +92,19 @@ type PatchOperation struct {
 type OCIManifestAdmissionRequest struct {
 	// Artifact reference (e.g., ghcr.io/my-org/my-model:v1)
 	Artifact string `json:"artifact"`
-	
+
 	// The OCI manifest being pushed
 	Manifest json.RawMessage `json:"manifest"`
-	
+
 	// Manifest annotations extracted from the manifest
 	Annotations map[string]string `json:"annotations,omitempty"`
-	
+
 	// Operation type (push, pull, delete)
 	Operation string `json:"operation"`
-	
+
 	// Registry information
 	Registry string `json:"registry"`
-	
+
 	// User information
 	User string `json:"user,omitempty"`
 }
@@ -113,19 +113,19 @@ type OCIManifestAdmissionRequest struct {
 type OCIManifestAdmissionResponse struct {
 	// Allowed indicates whether the manifest can be accepted
 	Allowed bool `json:"allowed"`
-	
+
 	// Message contains a human-readable message
 	Message string `json:"message,omitempty"`
-	
+
 	// Reason contains a machine-readable reason
 	Reason string `json:"reason,omitempty"`
-	
+
 	// Errors contains validation errors
 	Errors []string `json:"errors,omitempty"`
-	
+
 	// Warnings contains validation warnings
 	Warnings []string `json:"warnings,omitempty"`
-	
+
 	// ValidationResult contains the detailed validation result
 	Validation *ContractValidationResult `json:"validation,omitempty"`
 }
@@ -135,13 +135,13 @@ type OCIManifestAdmissionResponse struct {
 type MetadataContractAdmissionWebhook struct {
 	// StrictMode determines whether to reject on warnings
 	StrictMode bool
-	
+
 	// AllowedArtifactTypes defines which artifact types are allowed
 	AllowedArtifactTypes []ArtifactType
-	
+
 	// AllowedRegistries defines which registries are allowed
 	AllowedRegistries []string
-	
+
 	// Validator is a custom validation function
 	Validator func(request *OCIManifestAdmissionRequest) (*ContractValidationResult, error)
 }
@@ -149,9 +149,9 @@ type MetadataContractAdmissionWebhook struct {
 // NewMetadataContractAdmissionWebhook creates a new admission webhook
 func NewMetadataContractAdmissionWebhook() *MetadataContractAdmissionWebhook {
 	return &MetadataContractAdmissionWebhook{
-		StrictMode:          false,
+		StrictMode:           false,
 		AllowedArtifactTypes: []ArtifactType{ArtifactTypeModel, ArtifactTypeSkill, ArtifactTypePipeline},
-		AllowedRegistries:   []string{}, // Empty means all registries are allowed
+		AllowedRegistries:    []string{}, // Empty means all registries are allowed
 	}
 }
 
@@ -163,21 +163,21 @@ func (w *MetadataContractAdmissionWebhook) HandleHTTPRequest(writer http.Respons
 		w.writeErrorResponse(writer, http.StatusBadRequest, fmt.Sprintf("failed to read request body: %v", err))
 		return
 	}
-	
+
 	// Parse the admission request
 	var req OCIManifestAdmissionRequest
 	if err := json.Unmarshal(body, &req); err != nil {
 		w.writeErrorResponse(writer, http.StatusBadRequest, fmt.Sprintf("failed to parse admission request: %v", err))
 		return
 	}
-	
+
 	// Validate the request
 	response := w.Admit(&req)
-	
+
 	// Write the response
 	writer.Header().Set("Content-Type", "application/json")
 	writer.WriteHeader(http.StatusOK)
-	
+
 	if err := json.NewEncoder(writer).Encode(response); err != nil {
 		// Log error but don't fail the request
 		w.writeErrorResponse(writer, http.StatusInternalServerError, fmt.Sprintf("failed to write response: %v", err))
@@ -191,7 +191,7 @@ func (w *MetadataContractAdmissionWebhook) Admit(request *OCIManifestAdmissionRe
 		Allowed: true,
 		Message: "Manifest admitted",
 	}
-	
+
 	// Validate operation type
 	if request.Operation != "push" && request.Operation != "CREATE" {
 		// For non-push operations, we might not need validation
@@ -202,7 +202,7 @@ func (w *MetadataContractAdmissionWebhook) Admit(request *OCIManifestAdmissionRe
 			return response
 		}
 	}
-	
+
 	// Check registry allowlist
 	if len(w.AllowedRegistries) > 0 {
 		allowed := false
@@ -220,14 +220,14 @@ func (w *MetadataContractAdmissionWebhook) Admit(request *OCIManifestAdmissionRe
 			}
 		}
 	}
-	
+
 	// Determine artifact type from annotations
 	artifactType := determineArtifactType(request.Annotations)
 	if artifactType == "" {
 		// Try to determine from the artifact reference
 		artifactType = inferArtifactTypeFromReference(request.Artifact)
 	}
-	
+
 	// Validate artifact type
 	if artifactType == "" {
 		return &OCIManifestAdmissionResponse{
@@ -237,7 +237,7 @@ func (w *MetadataContractAdmissionWebhook) Admit(request *OCIManifestAdmissionRe
 			Errors:  []string{"artifact type annotation is required: " + AnnotationArtifactType},
 		}
 	}
-	
+
 	// Check if artifact type is allowed
 	if len(w.AllowedArtifactTypes) > 0 {
 		allowed := false
@@ -255,39 +255,39 @@ func (w *MetadataContractAdmissionWebhook) Admit(request *OCIManifestAdmissionRe
 			}
 		}
 	}
-	
+
 	// Validate the metadata contract
 	result := ValidateManifestMetadata(request.Annotations, ArtifactType(artifactType))
 	response.Validation = result
-	
+
 	if !result.Valid {
 		return &OCIManifestAdmissionResponse{
-			Allowed: false,
-			Message: result.String(),
-			Reason:  "InvalidMetadataContract",
-			Errors:  result.Errors,
-			Warnings: result.Warnings,
+			Allowed:    false,
+			Message:    result.String(),
+			Reason:     "InvalidMetadataContract",
+			Errors:     result.Errors,
+			Warnings:   result.Warnings,
 			Validation: result,
 		}
 	}
-	
+
 	// Check for warnings in strict mode
 	if w.StrictMode && len(result.Warnings) > 0 {
 		return &OCIManifestAdmissionResponse{
-			Allowed: false,
-			Message: fmt.Sprintf("strict mode: %d warning(s) found", len(result.Warnings)),
-			Reason:  "MetadataWarningsInStrictMode",
-			Warnings: result.Warnings,
+			Allowed:    false,
+			Message:    fmt.Sprintf("strict mode: %d warning(s) found", len(result.Warnings)),
+			Reason:     "MetadataWarningsInStrictMode",
+			Warnings:   result.Warnings,
 			Validation: result,
 		}
 	}
-	
+
 	// If we have warnings but not in strict mode, include them
 	if len(result.Warnings) > 0 {
 		response.Warnings = result.Warnings
 		response.Message = fmt.Sprintf("Manifest admitted with %d warning(s)", len(result.Warnings))
 	}
-	
+
 	return response
 }
 
@@ -296,17 +296,17 @@ func determineArtifactType(annotations map[string]string) string {
 	if annotations == nil {
 		return ""
 	}
-	
+
 	// Check for the standard artifact type annotation
 	if val, ok := annotations[AnnotationArtifactType]; ok {
 		return val
 	}
-	
+
 	// Check for legacy annotation
 	if val, ok := annotations["org.cncf.ai.artifact.type"]; ok {
 		return val
 	}
-	
+
 	return ""
 }
 
@@ -314,9 +314,9 @@ func determineArtifactType(annotations map[string]string) string {
 func inferArtifactTypeFromReference(artifact string) string {
 	// This is a best-effort inference based on naming conventions
 	// In production, this should be explicitly set in annotations
-	
+
 	lower := strings.ToLower(artifact)
-	
+
 	// Check for common patterns
 	if strings.Contains(lower, "model") || strings.Contains(lower, "-model") || strings.Contains(lower, "_model") {
 		return string(ArtifactTypeModel)
@@ -327,7 +327,7 @@ func inferArtifactTypeFromReference(artifact string) string {
 	if strings.Contains(lower, "pipeline") || strings.Contains(lower, "-pipeline") || strings.Contains(lower, "_pipeline") {
 		return string(ArtifactTypePipeline)
 	}
-	
+
 	// Default to model
 	return string(ArtifactTypeModel)
 }
@@ -336,13 +336,13 @@ func inferArtifactTypeFromReference(artifact string) string {
 func (w *MetadataContractAdmissionWebhook) writeErrorResponse(writer http.ResponseWriter, statusCode int, message string) {
 	writer.Header().Set("Content-Type", "application/json")
 	writer.WriteHeader(statusCode)
-	
+
 	response := &OCIManifestAdmissionResponse{
 		Allowed: false,
 		Message: message,
 		Reason:  http.StatusText(statusCode),
 	}
-	
+
 	json.NewEncoder(writer).Encode(response)
 }
 
@@ -352,45 +352,45 @@ func ValidateOCIManifestForPush(manifest *UnifiedOCIManifest) (*ContractValidati
 	if manifest == nil {
 		return nil, fmt.Errorf("manifest is nil")
 	}
-	
+
 	// Determine artifact type
 	artifactTypeStr := manifest.Annotations[AnnotationArtifactType]
 	if artifactTypeStr == "" {
 		return &ContractValidationResult{
 			Valid:         false,
-			Errors:       []string{"artifact type annotation is required: " + AnnotationArtifactType},
-			ArtifactType: "unknown",
+			Errors:        []string{"artifact type annotation is required: " + AnnotationArtifactType},
+			ArtifactType:  "unknown",
 			MissingFields: []string{AnnotationArtifactType},
 		}, nil
 	}
-	
+
 	artifactType := ArtifactType(artifactTypeStr)
-	
+
 	// Extract metadata contract from annotations
 	// The contract can be in a separate annotation or embedded in the manifest
 	contractJSON := manifest.Annotations[AnnotationMetadataContract]
-	
+
 	if contractJSON != "" {
 		// Parse and validate the contract
 		var contract MetadataContract
 		if err := json.Unmarshal([]byte(contractJSON), &contract); err != nil {
 			return &ContractValidationResult{
 				Valid:         false,
-				Errors:       []string{fmt.Sprintf("failed to parse metadata contract: %v", err)},
-				ArtifactType: string(artifactType),
+				Errors:        []string{fmt.Sprintf("failed to parse metadata contract: %v", err)},
+				ArtifactType:  string(artifactType),
 				MissingFields: []string{AnnotationMetadataContract},
 			}, nil
 		}
-		
+
 		return ValidateContract(&contract, artifactType), nil
 	}
-	
+
 	// If no explicit contract, try to build one from the AIConfig
 	contract := buildContractFromAIConfig(manifest)
 	if contract != nil {
 		return ValidateContract(contract, artifactType), nil
 	}
-	
+
 	// No contract found - validate based on AIConfig presence
 	return ValidateManifestMetadata(manifest.Annotations, artifactType), nil
 }
@@ -400,42 +400,42 @@ func buildContractFromAIConfig(manifest *UnifiedOCIManifest) *MetadataContract {
 	if manifest.AIConfig == nil {
 		return nil
 	}
-	
+
 	contract := &MetadataContract{
 		Assets: ContractAssetMetadata{},
 	}
-	
+
 	artifactType := manifest.Annotations[AnnotationArtifactType]
-	
+
 	switch artifactType {
 	case string(ArtifactTypeModel):
 		if config, ok := manifest.AIConfig.(AIModelConfig); ok {
 			contract.Assets.Model = &ContractModelMetadata{
-				Type:       config.ModelType,
-				Framework:  config.ModelFormat,
-				Input:      config.InputFormat,
-				Output:     config.OutputFormat,
-				Capabilities: config.Capabilities,
-				Runtime:    config.Runtime,
-				Accelerator: config.Accelerator,
+				Type:          config.ModelType,
+				Framework:     config.ModelFormat,
+				Input:         config.InputFormat,
+				Output:        config.OutputFormat,
+				Capabilities:  config.Capabilities,
+				Runtime:       config.Runtime,
+				Accelerator:   config.Accelerator,
 				Relationships: config.Relationships,
-				Description: config.Description,
-				Version:    config.Version,
-				Author:     config.Author,
-				License:    config.License,
+				Description:   config.Description,
+				Version:       config.Version,
+				Author:        config.Author,
+				License:       config.License,
 			}
 		}
 	case string(ArtifactTypeSkill):
 		if config, ok := manifest.AIConfig.(AISkillConfig); ok {
 			contract.Assets.Skill = &ContractSkillMetadata{
-				Type:        config.SkillType,
-				PipelineRef: "", // Not available in AISkillConfig
+				Type:         config.SkillType,
+				PipelineRef:  "", // Not available in AISkillConfig
 				Dependencies: config.Dependencies,
-				Runtime:    config.Runtime,
-				Accelerator: config.Accelerator,
-				Description: config.Description,
-				Version:    config.Version,
-				Author:     config.Author,
+				Runtime:      config.Runtime,
+				Accelerator:  config.Accelerator,
+				Description:  config.Description,
+				Version:      config.Version,
+				Author:       config.Author,
 			}
 		}
 	case string(ArtifactTypePipeline):
@@ -454,17 +454,17 @@ func buildContractFromAIConfig(manifest *UnifiedOCIManifest) *MetadataContract {
 				})
 			}
 			contract.Assets.Pipeline = &ContractPipelineMetadata{
-				Type:       config.PipelineType,
-				Stages:     stages,
+				Type:         config.PipelineType,
+				Stages:       stages,
 				Dependencies: config.Dependencies,
-				Components: contractComps,
-				Description: config.Description,
-				Version:    config.Version,
-				Author:     config.Author,
+				Components:   contractComps,
+				Description:  config.Description,
+				Version:      config.Version,
+				Author:       config.Author,
 			}
 		}
 	}
-	
+
 	return contract
 }
 
@@ -478,13 +478,13 @@ func CreateAdmissionMiddleware(webhook *MetadataContractAdmissionWebhook) func(h
 				next.ServeHTTP(writer, request)
 				return
 			}
-			
+
 			// Check if this is a manifest push
 			if !isManifestPushRequest(request) {
 				next.ServeHTTP(writer, request)
 				return
 			}
-			
+
 			// Parse and validate the manifest
 			manifest, err := parseManifestFromRequest(request)
 			if err != nil {
@@ -493,7 +493,7 @@ func CreateAdmissionMiddleware(webhook *MetadataContractAdmissionWebhook) func(h
 				next.ServeHTTP(writer, request)
 				return
 			}
-			
+
 			// Validate using the webhook
 			result, err := ValidateOCIManifestForPush(manifest)
 			if err != nil {
@@ -501,34 +501,34 @@ func CreateAdmissionMiddleware(webhook *MetadataContractAdmissionWebhook) func(h
 				next.ServeHTTP(writer, request)
 				return
 			}
-			
+
 			if !result.Valid {
 				// Reject the push
 				writer.Header().Set("Content-Type", "application/json")
 				writer.WriteHeader(http.StatusBadRequest)
 				json.NewEncoder(writer).Encode(&OCIManifestAdmissionResponse{
-					Allowed:   false,
-					Message:   result.String(),
-					Reason:    "InvalidMetadataContract",
-					Errors:    result.Errors,
-					Warnings:  result.Warnings,
+					Allowed:  false,
+					Message:  result.String(),
+					Reason:   "InvalidMetadataContract",
+					Errors:   result.Errors,
+					Warnings: result.Warnings,
 				})
 				return
 			}
-			
+
 			// If strict mode and warnings, reject
 			if webhook.StrictMode && len(result.Warnings) > 0 {
 				writer.Header().Set("Content-Type", "application/json")
 				writer.WriteHeader(http.StatusBadRequest)
 				json.NewEncoder(writer).Encode(&OCIManifestAdmissionResponse{
-					Allowed:   false,
-					Message:   fmt.Sprintf("strict mode: %d warning(s)", len(result.Warnings)),
-					Reason:    "MetadataWarningsInStrictMode",
-					Warnings:  result.Warnings,
+					Allowed:  false,
+					Message:  fmt.Sprintf("strict mode: %d warning(s)", len(result.Warnings)),
+					Reason:   "MetadataWarningsInStrictMode",
+					Warnings: result.Warnings,
 				})
 				return
 			}
-			
+
 			// Allow the request through
 			next.ServeHTTP(writer, request)
 		})
@@ -543,7 +543,7 @@ func isManifestPushRequest(request *http.Request) bool {
 		contentType != "application/json" {
 		return false
 	}
-	
+
 	// Check path patterns common in registry APIs
 	path := request.URL.Path
 	return strings.Contains(path, "/v2/") && strings.Contains(path, "/manifests")
@@ -555,15 +555,15 @@ func parseManifestFromRequest(request *http.Request) (*UnifiedOCIManifest, error
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Reset the body for the next handler
 	request.Body = io.NopCloser(strings.NewReader(string(body)))
-	
+
 	var manifest UnifiedOCIManifest
 	if err := json.Unmarshal(body, &manifest); err != nil {
 		return nil, err
 	}
-	
+
 	return &manifest, nil
 }
 
@@ -585,9 +585,9 @@ func NewRegistryAdmissionProxy(port int) *RegistryAdmissionProxy {
 // Run starts the admission proxy server
 func (p *RegistryAdmissionProxy) Run() error {
 	http.HandleFunc("/validate", p.Webhook.HandleHTTPRequest)
-	
+
 	addr := fmt.Sprintf(":%d", p.Port)
 	fmt.Printf("Starting registry admission proxy on %s\n", addr)
-	
+
 	return http.ListenAndServe(addr, nil)
 }

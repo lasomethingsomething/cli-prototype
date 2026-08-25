@@ -37,7 +37,7 @@ Examples:
 		registryFlag, _ := cmd.Flags().GetString("registry")
 		localManifestFlag, _ := cmd.Flags().GetString("local-manifest")
 		localParityFlag, _ := cmd.Flags().GetBool("local-parity")
-		
+
 		// Pre-extract destination and artifact name for provenance operations
 		var destination, artifactName, registry string
 
@@ -85,22 +85,22 @@ Examples:
 		}
 
 		fmt.Printf("\nVerifying artifact '%s' with %s...\n", artifact, signer)
-		
+
 		if err := sp.Verify(artifact); err != nil {
 			return err
 		}
-		
+
 		fmt.Println("\n✓ Signature is VALID")
-		
+
 		// Extract destination and artifact name for provenance operations
 		destination = extractDestinationFromArtifact(artifact)
 		artifactName = extractArtifactNameFromArtifact(artifact)
-		
+
 		// Perform local parity verification if requested
 		if localParityFlag {
 			fmt.Println("\n=== Local Parity Verification ===")
 			fmt.Println("→ Verifying that local artifact matches registry copy...")
-			
+
 			// Determine registry if not specified
 			if registryFlag != "" {
 				registry = registryFlag
@@ -111,7 +111,7 @@ Examples:
 			} else {
 				return fmt.Errorf("registry must be specified for local parity verification (use --registry)")
 			}
-			
+
 			// Get the registry provider
 			provider, err := workflow.GetRegistryProvider(registry)
 			if err != nil {
@@ -120,7 +120,7 @@ Examples:
 			if !provider.IsInstalled() {
 				return fmt.Errorf("%s not installed. Install with: %s", provider.Name(), provider.InstallInstructions())
 			}
-			
+
 			// Compute local digest from manifest file
 			localDigest := ""
 			if localManifestFlag != "" {
@@ -134,7 +134,7 @@ Examples:
 					return fmt.Errorf("local manifest not found. Specify with --local-manifest or ensure it's at default location")
 				}
 			}
-			
+
 			// Verify parity
 			verifier := workflow.NewLocalParityVerifier(provider, localDigest)
 			result, err := verifier.Verify(artifactName, destination)
@@ -149,7 +149,7 @@ Examples:
 
 		// Try to verify provenance attestation if available
 		attestationPath := attestationFlag
-		
+
 		// Determine registry if not specified
 		if registry == "" {
 			if registryFlag != "" {
@@ -160,19 +160,19 @@ Examples:
 				registry = "oras" // default
 			}
 		}
-		
+
 		// Try to fetch attestation from registry first (if we have a registry and artifact with registry prefix)
 		var attestation *workflow.ProvenanceAttestation
 		var attestationSource string
-		
+
 		if attestationPath == "" && registry != "" {
 			// Try to fetch from registry as a referrer
 			provider, err := workflow.GetRegistryProvider(registry)
 			if err == nil && provider.IsInstalled() {
 				fmt.Println("\n=== Provenance Attestation ===")
-				
+
 				fmt.Printf("→ Fetching provenance attestation from registry for %s...\n", artifact)
-				
+
 				// Use AttestationManager to fetch from registry
 				am := workflow.NewAttestationManager(nil, provider, destination)
 				fetchedAttestation, err := am.GetAttestation(artifactName)
@@ -186,18 +186,18 @@ Examples:
 				}
 			}
 		}
-		
+
 		// Fall back to local file if not fetched from registry
 		if attestation == nil {
 			if attestationPath == "" {
 				// Try default location
 				attestationPath = artifact + ".provenance.json"
 			}
-			
+
 			if attestationPath != "" {
 				fmt.Println("\n=== Provenance Attestation ===")
 				fmt.Printf("→ Looking for attestation at: %s\n", attestationPath)
-				
+
 				// Read the attestation file
 				attestationData, err := os.ReadFile(attestationPath)
 				if err != nil {
@@ -218,7 +218,7 @@ Examples:
 				fmt.Println("\n  Note: No attestation file specified or found")
 			}
 		}
-		
+
 		// Validate and display attestation if we have one
 		if attestation != nil {
 			// Create an attestation manager for validation (with signer if available)
@@ -229,13 +229,13 @@ Examples:
 					am = workflow.NewAttestationManager(sp, provider, destination)
 				}
 			}
-			
+
 			// Validate the attestation structure and signature
 			if err := workflow.ValidateAttestation(attestation); err != nil {
 				fmt.Printf("  ✗ Provenance attestation validation failed: %v\n", err)
 			} else {
 				fmt.Printf("✓ Provenance attestation (from %s) structure is VALID\n", attestationSource)
-				
+
 				// If we have an attestation manager with a signer, validate the signature too
 				if am != nil {
 					if err := am.ValidateAndVerify(attestation); err != nil {
@@ -246,7 +246,7 @@ Examples:
 				} else {
 					fmt.Printf("  ⚠ Skipping signature verification (no signer configured)\n")
 				}
-				
+
 				// Display attestation details
 				predicate := attestation.Statement.Predicate
 				fmt.Println("\n  Attestation Details:")
@@ -258,7 +258,7 @@ Examples:
 					fmt.Printf("    - Source URI: %s\n", predicate.Source.URI)
 				}
 				fmt.Printf("    - Completed: %s\n", predicate.Metadata.BuildFinishedOn.Format("2006-01-02 15:04:05 MST"))
-				
+
 				// Display materials if present
 				if len(predicate.Materials) > 0 {
 					fmt.Println("\n  Materials:")
@@ -271,14 +271,14 @@ Examples:
 						}
 					}
 				}
-				
+
 				// Check completeness
 				fmt.Println("\n  Completeness:")
 				fmt.Printf("    - Environment: %v\n", predicate.Metadata.Completeness.Environment)
 				fmt.Printf("    - Parameters: %v\n", predicate.Metadata.Completeness.Parameters)
 				fmt.Printf("    - Materials: %v\n", predicate.Metadata.Completeness.Materials)
 				fmt.Printf("    - Reproducible: %v\n", predicate.Metadata.Reproducible)
-				
+
 				// Display invocations if present
 				if len(predicate.Invocations) > 0 {
 					fmt.Println("\n  Invocation:")
@@ -292,7 +292,7 @@ Examples:
 						}
 					}
 				}
-				
+
 				fmt.Println("\n✓ Artifact provenance fully verified")
 				fmt.Println("✓ The hardened provenance metadata is frozen and verified")
 			}

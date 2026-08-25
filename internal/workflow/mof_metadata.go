@@ -13,19 +13,19 @@ import (
 type MOFMetadata struct {
 	// MOF specification version
 	MOFVersion string `json:"mof_version" yaml:"mof_version"`
-	
+
 	// Release metadata
 	Release ReleaseMetadata `json:"release" yaml:"release"`
-	
+
 	// Model-specific MOF metadata
 	Model ModelMetadata `json:"model" yaml:"model"`
-	
+
 	// Components list with detailed information
 	Components []ComponentMetadata `json:"components" yaml:"components"`
-	
+
 	// Generation metadata
 	GeneratedAt time.Time `json:"generated_at" yaml:"generated_at"`
-	Generator    string   `json:"generator" yaml:"generator"`
+	Generator   string    `json:"generator" yaml:"generator"`
 }
 
 // ReleaseMetadata contains release information
@@ -33,15 +33,15 @@ type ReleaseMetadata struct {
 	Name    string `json:"name" yaml:"name"`
 	Version string `json:"version" yaml:"version"`
 	Date    string `json:"date" yaml:"date"`
-	Type    string `json:"type" yaml:"type"`    // e.g., "model", "skill", "dataset"
+	Type    string `json:"type" yaml:"type"`       // e.g., "model", "skill", "dataset"
 	License string `json:"license" yaml:"license"` // e.g., "CC-BY-4.0"
 }
 
 // ModelMetadata contains MOF classification for the model
 type ModelMetadata struct {
-	Name       string `json:"name" yaml:"name"`
-	Class      string `json:"class" yaml:"class"` // I, II, or III
-	ClassName  string `json:"class_name" yaml:"class_name"`
+	Name        string `json:"name" yaml:"name"`
+	Class       string `json:"class" yaml:"class"` // I, II, or III
+	ClassName   string `json:"class_name" yaml:"class_name"`
 	Explanation string `json:"explanation" yaml:"explanation"`
 }
 
@@ -49,19 +49,19 @@ type ModelMetadata struct {
 type ComponentMetadata struct {
 	// Component type: data, code, documentation, license, weights, training-data
 	Type string `json:"type" yaml:"type"`
-	
+
 	// Description of the component
 	Description string `json:"description" yaml:"description"`
-	
+
 	// Identifier (file path, URL, or other unique identifier)
 	Identifier string `json:"identifier" yaml:"identifier"`
-	
+
 	// Whether this component is present/available
 	Present bool `json:"present" yaml:"present"`
-	
+
 	// Optional: hash or checksum for verification
 	Checksum string `json:"checksum,omitempty" yaml:"checksum,omitempty"`
-	
+
 	// Optional: license information (for code/data components)
 	License string `json:"license,omitempty" yaml:"license,omitempty"`
 }
@@ -74,7 +74,7 @@ type MOFMetadataGenerator struct {
 	mofClass     string
 	components   []string
 	explanation  string
-	
+
 	// Release info
 	releaseName    string
 	releaseVersion string
@@ -126,11 +126,11 @@ func (g *MOFMetadataGenerator) Generate() *MOFMetadata {
 	if license == "" {
 		license = "CC-BY-4.0"
 	}
-	
+
 	metadata := &MOFMetadata{
-		MOFVersion: "1.0",
+		MOFVersion:  "1.0",
 		GeneratedAt: time.Now().UTC(),
-		Generator:    "model-cli",
+		Generator:   "model-cli",
 		Release: ReleaseMetadata{
 			Name:    g.releaseName,
 			Version: g.releaseVersion,
@@ -139,14 +139,14 @@ func (g *MOFMetadataGenerator) Generate() *MOFMetadata {
 			License: license,
 		},
 		Model: ModelMetadata{
-			Name:       g.modelName,
-			Class:      g.mofClass,
-			ClassName:  getMOFClassName(g.mofClass),
+			Name:        g.modelName,
+			Class:       g.mofClass,
+			ClassName:   getMOFClassName(g.mofClass),
 			Explanation: g.explanation,
 		},
 		Components: g.buildComponentMetadata(),
 	}
-	
+
 	// If release fields are empty, use defaults
 	if metadata.Release.Name == "" {
 		metadata.Release.Name = g.modelName
@@ -157,7 +157,7 @@ func (g *MOFMetadataGenerator) Generate() *MOFMetadata {
 	if metadata.Release.Date == "" {
 		metadata.Release.Date = time.Now().UTC().Format("2006-01-02")
 	}
-	
+
 	return metadata
 }
 
@@ -195,37 +195,37 @@ func (g *MOFMetadataGenerator) buildComponentMetadata() []ComponentMetadata {
 			Present:     sliceContains(g.components, "license"),
 		},
 	}
-	
+
 	return components
 }
 
 // WriteToFile writes the metadata to a JSON or YAML file
 func (g *MOFMetadataGenerator) WriteToFile(outputPath string, format string) error {
 	metadata := g.Generate()
-	
+
 	var data []byte
 	var err error
-	
+
 	if format == "yaml" || format == "yml" {
 		data, err = yamlMarshal(metadata)
 	} else {
 		// Default to JSON
 		data, err = json.MarshalIndent(metadata, "", "  ")
 	}
-	
+
 	if err != nil {
 		return fmt.Errorf("failed to marshal MOF metadata: %w", err)
 	}
-	
+
 	// Ensure output directory exists
 	if err := os.MkdirAll(filepath.Dir(outputPath), 0755); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
-	
+
 	if err := os.WriteFile(outputPath, data, 0644); err != nil {
 		return fmt.Errorf("failed to write MOF metadata file: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -266,7 +266,7 @@ func getMOFClassName(class string) string {
 func MOFMetadataFromClassification(modelName, modelPath, artifactName, releaseVersion string, result *ClassificationResult) *MOFMetadata {
 	generator := NewMOFMetadataGenerator()
 	generator.SetModelInfo(modelName, modelPath, artifactName)
-	
+
 	// Build components list
 	components := []string{}
 	if result.HasWeights {
@@ -284,9 +284,9 @@ func MOFMetadataFromClassification(modelName, modelPath, artifactName, releaseVe
 	if result.HasLicense {
 		components = append(components, "license")
 	}
-	
+
 	generator.SetMOFClassification(string(result.Class), components, result.Explanation)
 	generator.SetReleaseInfo(modelName, releaseVersion, "", "model")
-	
+
 	return generator.Generate()
 }

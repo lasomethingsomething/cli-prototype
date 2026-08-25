@@ -74,36 +74,36 @@ Examples:
 		// Simulated node list
 		nodes := []map[string]string{
 			{
-				"name":        "node-gpu-a100-1",
-				"gpu-type":    "nvidia-a100",
-				"gpu-count":   "2",
-				"cuda":        "12.3",
-				"memory":      "256GiB",
-				"status":      "Ready",
+				"name":      "node-gpu-a100-1",
+				"gpu-type":  "nvidia-a100",
+				"gpu-count": "2",
+				"cuda":      "12.3",
+				"memory":    "256GiB",
+				"status":    "Ready",
 			},
 			{
-				"name":        "node-gpu-a100-2",
-				"gpu-type":    "nvidia-a100",
-				"gpu-count":   "2",
-				"cuda":        "12.3",
-				"memory":      "256GiB",
-				"status":      "Ready",
+				"name":      "node-gpu-a100-2",
+				"gpu-type":  "nvidia-a100",
+				"gpu-count": "2",
+				"cuda":      "12.3",
+				"memory":    "256GiB",
+				"status":    "Ready",
 			},
 			{
-				"name":        "node-gpu-v100-1",
-				"gpu-type":    "nvidia-v100",
-				"gpu-count":   "4",
-				"cuda":        "11.8",
-				"memory":      "128GiB",
-				"status":      "Ready",
+				"name":      "node-gpu-v100-1",
+				"gpu-type":  "nvidia-v100",
+				"gpu-count": "4",
+				"cuda":      "11.8",
+				"memory":    "128GiB",
+				"status":    "Ready",
 			},
 			{
-				"name":        "node-cpu-1",
-				"gpu-type":    "none",
-				"gpu-count":   "0",
-				"cuda":        "N/A",
-				"memory":      "64GiB",
-				"status":      "Ready",
+				"name":      "node-cpu-1",
+				"gpu-type":  "none",
+				"gpu-count": "0",
+				"cuda":      "N/A",
+				"memory":    "64GiB",
+				"status":    "Ready",
 			},
 		}
 
@@ -171,11 +171,11 @@ Examples:
 
 		// === Step 5: Map to GPU Topology ===
 		fmt.Println("\n=== GPU Topology Mapping ===")
-		
+
 		if selectedNode["gpu-type"] != "none" {
 			fmt.Printf("  ✓ Mapping to %s topology\n", selectedNode["gpu-type"])
 			fmt.Printf("  ✓ Allocating %s GPUs\n", selectedNode["gpu-count"])
-			
+
 			// Runtime-specific mapping
 			switch annotations.Runtime {
 			case "vllm":
@@ -191,7 +191,7 @@ Examples:
 
 		// === Step 6: Finalize Scheduling ===
 		fmt.Println("\n=== Scheduling Decision ===")
-		
+
 		if dryRun {
 			fmt.Printf("  ⚠ DRY RUN: Would schedule to %s\n", selectedNode["name"])
 			fmt.Println("  ⚠ No workload created")

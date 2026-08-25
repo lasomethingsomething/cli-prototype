@@ -115,8 +115,8 @@ type AnnotationSet struct {
 	ArtifactType   string
 
 	// MOF classification
-	MOFClass    string
-	MOFVersion  string
+	MOFClass      string
+	MOFVersion    string
 	MOFComponents string
 
 	// Security
@@ -126,10 +126,10 @@ type AnnotationSet struct {
 	PackagingFormat  string
 
 	// Runtime requirements
-	Runtime      string
-	Accelerator  string
-	CUDAMin      string
-	MemoryMin    string
+	Runtime     string
+	Accelerator string
+	CUDAMin     string
+	MemoryMin   string
 
 	// Node requirements for infrastructure orchestration (Story #68)
 	GPUType     string
@@ -137,26 +137,26 @@ type AnnotationSet struct {
 	GPUTopology string
 
 	// Runtime execution for Story #69
-	RuntimeType       string
+	RuntimeType        string
 	LayerDeduplication string
-	ReferenceSkillDLC string
+	ReferenceSkillDLC  string
 	SkillReferences    string
 }
 
 // NewAnnotationSet creates a new annotation set with sensible defaults
 func NewAnnotationSet() *AnnotationSet {
 	return &AnnotationSet{
-		ProfileVersion:  "1.0.0",
-		ArtifactType:    "model",
-		MOFVersion:     "1.0",
+		ProfileVersion:   "1.0.0",
+		ArtifactType:     "model",
+		MOFVersion:       "1.0",
 		SigningFramework: "sigstore-cosign",
-		SBOMFormat:      "spdx-json",
-		ProvenanceType:  "slsa-v1.0",
-		PackagingFormat: "modelpack",
-		Runtime:        "vllm",
-		Accelerator:    "nvidia-gpu",
-		CUDAMin:        "12.1",
-		MemoryMin:      "24GiB",
+		SBOMFormat:       "spdx-json",
+		ProvenanceType:   "slsa-v1.0",
+		PackagingFormat:  "modelpack",
+		Runtime:          "vllm",
+		Accelerator:      "nvidia-gpu",
+		CUDAMin:          "12.1",
+		MemoryMin:        "24GiB",
 	}
 }
 

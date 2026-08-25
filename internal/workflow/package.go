@@ -8,33 +8,33 @@ import (
 
 // PackageWorkflow orchestrates the packaging of models as OCI artifacts
 type PackageWorkflow struct {
-	registry          string
+	registry         string
 	registryProvider RegistryProvider
-	modelName         string
-	modelPath         string
-	artifactName      string
-	registryURL       string
-	includeRAG        bool
-	ragPath           string
-	generateSBOM      bool
-	includeMOF        bool
-	sbomTool          string
-	sbomFormat        SBOMFormat
+	modelName        string
+	modelPath        string
+	artifactName     string
+	registryURL      string
+	includeRAG       bool
+	ragPath          string
+	generateSBOM     bool
+	includeMOF       bool
+	sbomTool         string
+	sbomFormat       SBOMFormat
 	annotations      *AnnotationSet
-	manifestPath      string
+	manifestPath     string
 	isSkill          bool
 
 	// Signing options
-	sign             bool
-	signer           string
-	
+	sign   bool
+	signer string
+
 	// Provenance options
 	generateProvenance bool
-	provenancePath    string
-	
+	provenancePath     string
+
 	// Local parity verification
-	localDigest      string
-	verifyParity    bool
+	localDigest  string
+	verifyParity bool
 }
 
 // NewPackageWorkflow creates a new packaging workflow
@@ -45,14 +45,14 @@ func NewPackageWorkflow(registry string) (*PackageWorkflow, error) {
 	}
 
 	return &PackageWorkflow{
-		registry:          registry,
-		registryProvider: registryProvider,
-		generateSBOM:      true,  // Default to generating SBOM
-		includeMOF:        true,  // Default to including MOF classification
-		sbomTool:          "syft", // Default SBOM tool
-		sbomFormat:        SPDXJSON, // Default SBOM format
-		annotations:      NewAnnotationSet(), // Default annotations
-		generateProvenance: true, // Default to generating provenance attestation
+		registry:           registry,
+		registryProvider:   registryProvider,
+		generateSBOM:       true,               // Default to generating SBOM
+		includeMOF:         true,               // Default to including MOF classification
+		sbomTool:           "syft",             // Default SBOM tool
+		sbomFormat:         SPDXJSON,           // Default SBOM format
+		annotations:        NewAnnotationSet(), // Default annotations
+		generateProvenance: true,               // Default to generating provenance attestation
 	}, nil
 }
 
@@ -144,12 +144,12 @@ func (w *PackageWorkflow) Run() error {
 	}
 
 	// === Security & Supply Chain Steps ===
-	
+
 	// 1. Generate SBOM if requested
 	if w.generateSBOM {
 		fmt.Println("\n=== Supply Chain Security ===")
 		fmt.Println("✓ Generating SBOM (Software Bill of Materials)...")
-		
+
 		sbomGen, err := GetSBOMGenerator(w.sbomTool)
 		if err != nil {
 			fmt.Printf("  Note: SBOM generation skipped: %v\n", err)
@@ -168,7 +168,7 @@ func (w *PackageWorkflow) Run() error {
 	// 2. MOF Classification if requested
 	if w.includeMOF {
 		fmt.Println("✓ Applying MOF (Model Openness Framework) classification...")
-		
+
 		mofClassifier := GetMOFClassifier()
 		mofClass, err := mofClassifier.Classify(w.modelPath)
 		if err != nil {
@@ -182,7 +182,7 @@ func (w *PackageWorkflow) Run() error {
 	// === Packaging Steps ===
 
 	fmt.Println("\n=== Packaging ===")
-	
+
 	// Display annotations that will be included
 	if w.annotations != nil {
 		w.annotations.Print()
@@ -216,7 +216,7 @@ func (w *PackageWorkflow) Run() error {
 		return fmt.Errorf("failed to write OCI manifest: %v", err)
 	}
 	fmt.Printf("  Manifest written to: %s\n", w.manifestPath)
-	
+
 	// Compute local digest for parity verification
 	// In a real implementation, this would compute the actual OCI artifact digest
 	// For now, we compute a digest of the manifest file as a stand-in
@@ -237,7 +237,7 @@ func (w *PackageWorkflow) Run() error {
 			return fmt.Errorf("failed to push artifact: %v", err)
 		}
 		fmt.Printf("✓ Successfully pushed %s to %s\n", fullArtifact, w.registryURL)
-		
+
 		// Verify local parity: ensure what was pushed matches the local artifact
 		if w.verifyParity {
 			fmt.Println("\n=== Local Parity Verification ===")
@@ -261,7 +261,7 @@ func (w *PackageWorkflow) Run() error {
 	if w.generateProvenance {
 		fmt.Println("\n=== Provenance ===")
 		fmt.Println("→ Generating SLSA provenance attestation...")
-		
+
 		// Create provenance generator
 		pg := NewProvenanceGenerator()
 		pg.SetSourceInfo(w.modelPath, "")
@@ -271,19 +271,19 @@ func (w *PackageWorkflow) Run() error {
 			fmt.Sprintf("registry:%s", w.registry),
 			"package",
 		)
-		
+
 		// Generate and write the attestation
 		w.provenancePath = filepath.Join(w.modelPath, "attestation.json")
 		attestation, err := pg.WriteToFile(w.provenancePath)
 		if err != nil {
 			return fmt.Errorf("failed to generate provenance attestation: %v", err)
 		}
-		
+
 		// Validate the attestation
 		if err := ValidateAttestation(attestation); err != nil {
 			return fmt.Errorf("failed to validate provenance attestation: %v", err)
 		}
-		
+
 		fmt.Printf("✓ Provenance attestation generated: %s\n", w.provenancePath)
 		fmt.Println("  Attestation contains:")
 		fmt.Printf("    - Build ID: %s\n", attestation.Statement.Predicate.BuildID)
@@ -292,34 +292,34 @@ func (w *PackageWorkflow) Run() error {
 		fmt.Printf("    - Source: %s\n", attestation.Statement.Predicate.Source.ID)
 		fmt.Printf("    - Timestamp: %s\n", attestation.Statement.Predicate.Metadata.BuildFinishedOn.Format(time.RFC3339))
 	}
-	
+
 	// Sign the artifact if requested (at point of creation)
 	if w.sign {
 		fmt.Println("\n=== Signing ===")
 		fmt.Printf("→ Signing artifact '%s'...\n", fullArtifact)
-		
+
 		// Determine signer to use
 		signerToUse := w.signer
 		if signerToUse == "" {
 			signerToUse = "sigstore" // Default to sigstore
 		}
-		
+
 		// Get signing provider
 		sp, err := GetSigningProvider(signerToUse)
 		if err != nil {
 			return fmt.Errorf("failed to get signing provider: %v", err)
 		}
-		
+
 		// Check if tool is installed
 		if !sp.IsInstalled() {
 			return fmt.Errorf("%s not installed. Install with: %s", sp.Name(), sp.InstallInstructions())
 		}
-		
+
 		// Sign the artifact
 		if err := sp.Sign(fullArtifact, ""); err != nil {
 			return fmt.Errorf("failed to sign artifact: %v", err)
 		}
-		
+
 		sigPath := sp.GetSignaturePath(fullArtifact)
 		fmt.Printf("✓ Signed artifact: %s\n", fullArtifact)
 		fmt.Printf("  Signature: %s\n", sigPath)
@@ -327,7 +327,7 @@ func (w *PackageWorkflow) Run() error {
 
 	fmt.Println("\n=== Summary ===")
 	fmt.Println("Packaging complete!")
-	
+
 	if !w.sign {
 		fmt.Println("\nNext steps:")
 		fmt.Println("  - Sign with: model-cli sign --artifact " + fullArtifact)

@@ -25,14 +25,14 @@ func (r *LocalParityResult) String() string {
 // LocalParityVerifier checks that a local artifact matches what's in the registry
 type LocalParityVerifier struct {
 	registryProvider RegistryProvider
-	localDigest     string
+	localDigest      string
 }
 
 // NewLocalParityVerifier creates a new local parity verifier
 func NewLocalParityVerifier(registryProvider RegistryProvider, localDigest string) *LocalParityVerifier {
 	return &LocalParityVerifier{
 		registryProvider: registryProvider,
-		localDigest:     localDigest,
+		localDigest:      localDigest,
 	}
 }
 
@@ -43,10 +43,10 @@ func (v *LocalParityVerifier) Verify(artifact, registry string) (*LocalParityRes
 	if err != nil {
 		return nil, fmt.Errorf("failed to get artifact digest from registry: %v", err)
 	}
-	
+
 	// Compare digests
 	match := v.localDigest == registryDigest
-	
+
 	return &LocalParityResult{
 		LocalDigest:    v.localDigest,
 		RegistryDigest: registryDigest,

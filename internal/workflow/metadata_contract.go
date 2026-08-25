@@ -11,10 +11,10 @@ import (
 // ContractModelMetadata defines required and optional metadata for AI models in the metadata contract
 type ContractModelMetadata struct {
 	// Required fields
-	Type       string `json:"type"`               // e.g., llm, embedding, classification
-	Framework  string `json:"framework"`          // e.g., pytorch, tensorflow, onnx
-	Input      string `json:"input,omitempty"`    // e.g., text, image, audio
-	Output     string `json:"output,omitempty"`   // e.g., text, embedding, json
+	Type         string   `json:"type"`                   // e.g., llm, embedding, classification
+	Framework    string   `json:"framework"`              // e.g., pytorch, tensorflow, onnx
+	Input        string   `json:"input,omitempty"`        // e.g., text, image, audio
+	Output       string   `json:"output,omitempty"`       // e.g., text, embedding, json
 	Capabilities []string `json:"capabilities,omitempty"` // e.g., chat, completion, embeddings
 
 	// Optional fields
@@ -22,7 +22,7 @@ type ContractModelMetadata struct {
 	Version     string `json:"version,omitempty"`
 	Author      string `json:"author,omitempty"`
 	License     string `json:"license,omitempty"`
-	Runtime     string `json:"runtime,omitempty"`    // e.g., vllm, tensorrt-llm
+	Runtime     string `json:"runtime,omitempty"`     // e.g., vllm, tensorrt-llm
 	Accelerator string `json:"accelerator,omitempty"` // e.g., nvidia-gpu, cpu
 
 	// Relationships to other assets
@@ -32,7 +32,7 @@ type ContractModelMetadata struct {
 // ContractSkillMetadata defines required and optional metadata for AI skills in the metadata contract
 type ContractSkillMetadata struct {
 	// Required fields
-	Type        string `json:"type"`                // e.g., rag, classification, summarization
+	Type        string `json:"type"`                   // e.g., rag, classification, summarization
 	PipelineRef string `json:"pipeline_ref,omitempty"` // Reference to pipeline this skill belongs to
 
 	// Optional fields
@@ -49,8 +49,8 @@ type ContractSkillMetadata struct {
 // ContractPipelineMetadata defines required and optional metadata for AI pipelines in the metadata contract
 type ContractPipelineMetadata struct {
 	// Required fields
-	Type   string `json:"type"`              // e.g., inference, training, fine-tuning
-	Stages []string `json:"stages"`          // e.g., preprocess, inference, postprocess
+	Type   string   `json:"type"`   // e.g., inference, training, fine-tuning
+	Stages []string `json:"stages"` // e.g., preprocess, inference, postprocess
 
 	// Optional fields
 	Description string `json:"description,omitempty"`
@@ -98,11 +98,11 @@ const (
 // ContractValidationResult represents the result of validating a metadata contract
 type ContractValidationResult struct {
 	Valid          bool
-	Errors        []string
-	Warnings      []string
-	ArtifactType  string
+	Errors         []string
+	Warnings       []string
+	ArtifactType   string
 	RequiredFields []string
-	MissingFields []string
+	MissingFields  []string
 }
 
 // String returns a human-readable representation of the validation result
@@ -128,7 +128,7 @@ func (r *ContractValidationResult) String() string {
 // ValidateContract validates a metadata contract based on artifact type
 func ValidateContract(contract *MetadataContract, artifactType ArtifactType) *ContractValidationResult {
 	result := &ContractValidationResult{
-		Valid:         true,
+		Valid:        true,
 		Errors:       []string{},
 		Warnings:     []string{},
 		ArtifactType: string(artifactType),
@@ -435,8 +435,8 @@ func parseLegacyContractRelationships(relationshipsJSON string) (*MetadataContra
 	// If we have model references, assume it's a model
 	if models, ok := relationships["models"]; ok && len(models) > 0 {
 		contract.Assets.Model = &ContractModelMetadata{
-			Type:        "llm",
-			Framework:   "pytorch",
+			Type:          "llm",
+			Framework:     "pytorch",
 			Relationships: relationships,
 		}
 	}
@@ -452,8 +452,8 @@ func parseLegacyContractRelationships(relationshipsJSON string) (*MetadataContra
 	// If we have pipeline references, assume it's a pipeline
 	if pipelines, ok := relationships["pipelines"]; ok && len(pipelines) > 0 {
 		contract.Assets.Pipeline = &ContractPipelineMetadata{
-			Type:        "inference",
-			Stages:      []string{"inference"},
+			Type:         "inference",
+			Stages:       []string{"inference"},
 			Dependencies: relationships,
 		}
 	}
@@ -467,8 +467,8 @@ func ValidateManifestMetadata(annotations map[string]string, artifactType Artifa
 	if err != nil {
 		return &ContractValidationResult{
 			Valid:         false,
-			Errors:       []string{err.Error()},
-			ArtifactType: string(artifactType),
+			Errors:        []string{err.Error()},
+			ArtifactType:  string(artifactType),
 			MissingFields: []string{AnnotationMetadataContract},
 		}
 	}
@@ -515,12 +515,12 @@ func getCompiledSchema() (*jsonschema.Schema, error) {
 	if compiledSchema != nil {
 		return compiledSchema, nil
 	}
-	
+
 	schema, err := jsonschema.CompileString("metadata-contract.json", jsonSchema)
 	if err != nil {
 		return nil, fmt.Errorf("failed to compile JSON schema: %v", err)
 	}
-	
+
 	compiledSchema = schema
 	return compiledSchema, nil
 }
@@ -529,7 +529,7 @@ func getCompiledSchema() (*jsonschema.Schema, error) {
 // This provides an alternative validation method that can catch schema-level issues
 func ValidateContractWithJSONSchema(contract *MetadataContract) (*ContractValidationResult, error) {
 	result := &ContractValidationResult{
-		Valid:         true,
+		Valid:        true,
 		Errors:       []string{},
 		Warnings:     []string{},
 		ArtifactType: "unknown",
@@ -585,9 +585,9 @@ func ValidateContractWithJSONSchema(contract *MetadataContract) (*ContractValida
 // ToMap converts the MetadataContract to a map for JSON Schema validation
 func (c *MetadataContract) ToMap() (map[string]interface{}, error) {
 	result := make(map[string]interface{})
-	
+
 	assetsMap := make(map[string]interface{})
-	
+
 	if c.Assets.Model != nil {
 		modelMap := make(map[string]interface{})
 		// Add required fields
@@ -630,7 +630,7 @@ func (c *MetadataContract) ToMap() (map[string]interface{}, error) {
 		}
 		assetsMap["model"] = modelMap
 	}
-	
+
 	if c.Assets.Skill != nil {
 		skillMap := make(map[string]interface{})
 		// Add required fields
@@ -661,7 +661,7 @@ func (c *MetadataContract) ToMap() (map[string]interface{}, error) {
 		}
 		assetsMap["skill"] = skillMap
 	}
-	
+
 	if c.Assets.Pipeline != nil {
 		pipelineMap := make(map[string]interface{})
 		// Add required fields
@@ -698,11 +698,11 @@ func (c *MetadataContract) ToMap() (map[string]interface{}, error) {
 		}
 		assetsMap["pipeline"] = pipelineMap
 	}
-	
+
 	if len(assetsMap) > 0 {
 		result["ai.assets"] = assetsMap
 	}
-	
+
 	return result, nil
 }
 
@@ -710,7 +710,7 @@ func (c *MetadataContract) ToMap() (map[string]interface{}, error) {
 // This is the primary validation method for Story #62
 func ValidateContractWithStrictJSONSchema(contractJSON string) (*ContractValidationResult, error) {
 	result := &ContractValidationResult{
-		Valid:         true,
+		Valid:        true,
 		Errors:       []string{},
 		Warnings:     []string{},
 		ArtifactType: "unknown",
@@ -763,7 +763,7 @@ func ValidateContractWithStrictJSONSchema(contractJSON string) (*ContractValidat
 				}
 			}
 		}
-		
+
 		// Determine which fields are missing based on schema requirements
 		// The schema requires ai.assets, and within that, one of model/skill/pipeline
 		if _, hasAssets := data["ai.assets"]; !hasAssets {

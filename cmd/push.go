@@ -127,7 +127,7 @@ Examples:
 				return err
 			}
 		}
-		
+
 		// Determine artifact type
 		var artifactType workflow.ArtifactType
 		if artifactTypeFlag != "" {
@@ -240,29 +240,29 @@ Examples:
 		if provenanceFlag {
 			fmt.Println("\n=== Provenance ===")
 			fmt.Println("→ Generating SLSA provenance attestation with build info, source, materials, and timestamp...")
-			
+
 			// Create provenance generator with real metadata
 			pg := workflow.NewProvenanceGenerator()
 			pg.SetSourceInfo(modelPath, destination)
 			pg.SetArtifactInfo(fullArtifact, nil) // Digest will be added by registry after push
-			
+
 			// Add destination as a material
 			if destination != "" {
 				pg.AddMaterial("oci://"+destination, nil)
 			}
-			
+
 			pg.SetRecipeInfo(
 				"https://model-cli.dev/recipe/push/v1",
 				fmt.Sprintf("registry:%s", registry),
 				"push",
 			)
-			
+
 			// Generate and push attestation as a referrer to the registry
 			// This makes it immutable and attached to the artifact per OSSF Model Signing Spec
 			if err := pushProvenanceAttestation(provider, registry, destination, artifact, pg, signFlag, signerToUse, modelPath); err != nil {
 				fmt.Printf("  ⚠ Failed to push provenance attestation to registry: %v\n", err)
 				fmt.Println("  Falling back to local file generation...")
-				
+
 				// Write attestation to a local file as fallback
 				attestationPath := artifact + ".provenance.json"
 				if _, err := pg.WriteToFile(attestationPath); err != nil {
@@ -274,35 +274,35 @@ Examples:
 				fmt.Println("✓ Provenance attestation frozen and attached to artifact as immutable referrer")
 			}
 		}
-		
+
 		// Sign the artifact if requested (at point of creation/during push)
 		if signFlag {
 			fmt.Println("\n=== Signing ===")
 			fmt.Printf("→ Signing artifact '%s'...\n", fullArtifact)
-			
+
 			// Get signing provider
 			sp, err := workflow.GetSigningProvider(signerToUse)
 			if err != nil {
 				return fmt.Errorf("failed to get signing provider: %v", err)
 			}
-			
+
 			// Check if tool is installed
 			if !sp.IsInstalled() {
 				return fmt.Errorf("%s not installed. Install with: %s", sp.Name(), sp.InstallInstructions())
 			}
-			
+
 			// Sign the artifact
 			if err := sp.Sign(fullArtifact, ""); err != nil {
 				return fmt.Errorf("failed to sign artifact: %v", err)
 			}
-			
+
 			sigPath := sp.GetSignaturePath(fullArtifact)
 			fmt.Printf("✓ Signed artifact: %s\n", fullArtifact)
 			fmt.Printf("  Signature: %s\n", sigPath)
 		}
 
 		fmt.Println("\nPhase 2 Complete: Enterprise OCI Registry")
-		
+
 		if signFlag {
 			fmt.Println("Next: Run manifest-level validation with model-cli validate")
 		} else {
@@ -321,7 +321,7 @@ func pushProvenanceAttestation(provider workflow.RegistryProvider, registryTool,
 	if signerToUse == "" {
 		signerToUse = "sigstore" // Default to sigstore
 	}
-	
+
 	// Get signing provider (may be nil if not installed, but we'll try anyway)
 	sp, err := workflow.GetSigningProvider(signerToUse)
 	if err != nil {
@@ -329,7 +329,7 @@ func pushProvenanceAttestation(provider workflow.RegistryProvider, registryTool,
 		fmt.Printf("  Note: Signing provider not available: %v\n", err)
 		sp = nil
 	}
-	
+
 	// Update provenance generator with additional metadata from the push operation
 	// Set the invocation info for traceability
 	pg.SetInvocationInfo("", map[string]interface{}{
@@ -338,15 +338,15 @@ func pushProvenanceAttestation(provider workflow.RegistryProvider, registryTool,
 		"modelPath":   modelPath,
 		"pushedAt":    time.Now().UTC().Format(time.RFC3339),
 	})
-	
+
 	// Create attestation manager
 	am := workflow.NewAttestationManager(sp, provider, destination)
-	
+
 	// Push the attestation as a referrer
 	if err := am.AttestAndPush(artifact, pg, sign && sp != nil); err != nil {
 		return err
 	}
-	
+
 	return nil
 }
 
@@ -388,20 +388,20 @@ func createUnifiedOCIManifest(artifactType workflow.ArtifactType, artifactName, 
 	switch artifactType {
 	case workflow.ArtifactTypeModel:
 		config := workflow.AIModelConfig{
-			Architecture: "amd64",
-			OS:           "linux",
-			ModelType:    modelType,
-			ModelFormat:  "pytorch", // Default, can be overridden
-			InputFormat:  "text",    // Default
-			OutputFormat: "text",    // Default
-			Capabilities: []string{"chat", "completion"}, // Default capabilities
-			Runtime:      "vllm",
-			Accelerator:  "nvidia-gpu",
+			Architecture:  "amd64",
+			OS:            "linux",
+			ModelType:     modelType,
+			ModelFormat:   "pytorch",                      // Default, can be overridden
+			InputFormat:   "text",                         // Default
+			OutputFormat:  "text",                         // Default
+			Capabilities:  []string{"chat", "completion"}, // Default capabilities
+			Runtime:       "vllm",
+			Accelerator:   "nvidia-gpu",
 			Relationships: relationships,
-			Description: fmt.Sprintf("Model artifact: %s", artifactName),
-			Version:     "1.0.0",
-			Author:      "model-cli",
-			License:     "Apache-2.0",
+			Description:   fmt.Sprintf("Model artifact: %s", artifactName),
+			Version:       "1.0.0",
+			Author:        "model-cli",
+			License:       "Apache-2.0",
 		}
 		// If modelType was provided, override the default
 		if modelType != "" {
@@ -411,12 +411,12 @@ func createUnifiedOCIManifest(artifactType workflow.ArtifactType, artifactName, 
 
 	case workflow.ArtifactTypeSkill:
 		config := workflow.AISkillConfig{
-			Architecture:  "amd64",
-			OS:            "linux",
-			SkillType:     skillType,
-			Dependencies:  relationships,
-			Runtime:       "python",
-			Accelerator:   "cpu",
+			Architecture: "amd64",
+			OS:           "linux",
+			SkillType:    skillType,
+			Dependencies: relationships,
+			Runtime:      "python",
+			Accelerator:  "cpu",
 			Description:  fmt.Sprintf("Skill artifact: %s", artifactName),
 			Version:      "1.0.0",
 			Author:       "model-cli",
@@ -428,13 +428,13 @@ func createUnifiedOCIManifest(artifactType workflow.ArtifactType, artifactName, 
 
 	case workflow.ArtifactTypePipeline:
 		config := workflow.AIPipelineConfig{
-			Architecture:  "amd64",
-			OS:            "linux",
-			PipelineType:  pipelineType,
-			Dependencies:  relationships,
-			Description:   fmt.Sprintf("Pipeline artifact: %s", artifactName),
-			Version:       "1.0.0",
-			Author:        "model-cli",
+			Architecture: "amd64",
+			OS:           "linux",
+			PipelineType: pipelineType,
+			Dependencies: relationships,
+			Description:  fmt.Sprintf("Pipeline artifact: %s", artifactName),
+			Version:      "1.0.0",
+			Author:       "model-cli",
 		}
 		if pipelineType != "" {
 			config.PipelineType = pipelineType
@@ -453,7 +453,7 @@ func createUnifiedOCIManifest(artifactType workflow.ArtifactType, artifactName, 
 	manifest.Annotations[workflow.AnnotationSigningFramework] = "sigstore-cosign"
 	manifest.Annotations[workflow.AnnotationSBOMFormat] = "spdx-json"
 	manifest.Annotations[workflow.AnnotationProvenanceType] = "slsa-v1.0"
-	
+
 	// Add MOF classification for compliance checking
 	manifest.Annotations[workflow.AnnotationMOFClass] = "I" // Default to most open
 	manifest.Annotations[workflow.AnnotationMOFVersion] = "1.0"
@@ -512,7 +512,7 @@ func createUnifiedOCIManifest(artifactType workflow.ArtifactType, artifactName, 
 			}
 		}
 	}
-	
+
 	// Ensure at least default values for infrastructure requirements
 	if _, ok := manifest.Annotations[workflow.AnnotationRuntime]; !ok {
 		manifest.Annotations[workflow.AnnotationRuntime] = "vllm"

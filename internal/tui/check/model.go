@@ -57,16 +57,16 @@ type Model struct {
 	artifactPath string
 
 	// Results
-	passed          bool
-	missing         []string
-	sbomCheck       bool
-	mofCheck        bool
+	passed           bool
+	missing          []string
+	sbomCheck        bool
+	mofCheck         bool
 	annotationsCheck []workflow.AnnotationCheckResult
 
 	// State
 	loading   bool
 	completed bool
-	err        error
+	err       error
 	logs      []string
 
 	// Steps
@@ -77,11 +77,11 @@ type Model struct {
 // New creates a new check TUI model
 func New() *Model {
 	return &Model{
-		panel:        PanelIntro,
-		width:        80,
-		height:       24,
-		logs:         make([]string, 0),
-		currentStep:  0,
+		panel:       PanelIntro,
+		width:       80,
+		height:      24,
+		logs:        make([]string, 0),
+		currentStep: 0,
 		steps: []Step{
 			{Label: "Check required annotations", State: StepPending},
 			{Label: "Check SBOM presence", State: StepPending},
@@ -377,7 +377,7 @@ func (m *Model) renderChecking() string {
 		sb.WriteString("→ Checking SBOM presence...\n")
 		sb.WriteString("→ Checking MOF classification...\n")
 	} else if m.err != nil {
-		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#FF5555")).Render("✗ Error: "+m.err.Error())+"\n")
+		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#FF5555")).Render("✗ Error: "+m.err.Error()) + "\n")
 	} else if m.completed {
 		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF88")).Render("✓ Compliance checks completed\n"))
 	}

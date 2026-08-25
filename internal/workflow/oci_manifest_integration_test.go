@@ -112,12 +112,12 @@ func TestSkillManifestIntegration(t *testing.T) {
 	manifest := NewUnifiedOCIManifest(ArtifactTypeSkill, "my-skill:v1", []OCILayer{})
 
 	config := AISkillConfig{
-		Architecture:  "amd64",
-		OS:            "linux",
-		SkillType:     "rag",
-		Dependencies:  map[string][]string{"models": {"model:v1"}},
-		Runtime:       "python",
-		Accelerator:   "cpu",
+		Architecture: "amd64",
+		OS:           "linux",
+		SkillType:    "rag",
+		Dependencies: map[string][]string{"models": {"model:v1"}},
+		Runtime:      "python",
+		Accelerator:  "cpu",
 		Description:  "A RAG skill",
 		Version:      "1.0.0",
 		Author:       "test-author",
@@ -139,9 +139,9 @@ func TestPipelineManifestIntegration(t *testing.T) {
 	manifest := NewUnifiedOCIManifest(ArtifactTypePipeline, "my-pipeline:v1", []OCILayer{})
 
 	config := AIPipelineConfig{
-		Architecture:  "amd64",
-		OS:            "linux",
-		PipelineType:  "inference",
+		Architecture: "amd64",
+		OS:           "linux",
+		PipelineType: "inference",
 		Components: []PipelineComponent{
 			{Name: "model", Type: "model", Reference: "model:v1", Input: "text", Output: "text"},
 			{Name: "skill", Type: "skill", Reference: "skill:v1"},

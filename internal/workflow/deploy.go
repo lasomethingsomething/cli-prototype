@@ -1,4 +1,5 @@
 package workflow
+
 import (
 	"fmt"
 )
@@ -10,7 +11,7 @@ type DeployWorkflow struct {
 	gitOpsProvider   GitOpsProvider
 	registryProvider RegistryProvider
 	modelName        string
-	artifactRef     string // Full artifact reference with annotations (Story #63)
+	artifactRef      string // Full artifact reference with annotations (Story #63)
 	repoURL          string
 	manifestPath     string
 }
