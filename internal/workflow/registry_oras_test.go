@@ -19,12 +19,15 @@ func TestORASPushUploadsSourcePathWithAnnotations(t *testing.T) {
 	}
 
 	p := &ORASProvider{}
-	err := p.Push("my-model:v1", "ghcr.io/my-org", modelDir, map[string]string{
+	digest, err := p.Push("my-model:v1", "ghcr.io/my-org", modelDir, map[string]string{
 		AnnotationArtifactType: "model",
 		AnnotationRuntime:      "vllm",
 	})
 	if err != nil {
 		t.Fatalf("Push() error = %v", err)
+	}
+	if digest != "" {
+		t.Errorf("Push() digest = %q, want empty when oras prints nothing", digest)
 	}
 
 	got := calls()
@@ -36,7 +39,7 @@ func TestORASPushUploadsSourcePathWithAnnotations(t *testing.T) {
 	if cwd != filepath.Dir(modelDir) {
 		t.Errorf("oras ran in %q, want the model's parent directory %q", cwd, filepath.Dir(modelDir))
 	}
-	want := "push ghcr.io/my-org/my-model:v1 --artifact-type application/vnd.cncf.ai.model " +
+	want := "push ghcr.io/my-org/my-model:v1 --artifact-type application/vnd.cncf.ai.model --format json " +
 		"--annotation org.cncf.ai.artifact.type=model --annotation org.cncf.ai.runtime=vllm my-model"
 	if args != want {
 		t.Errorf("oras args =\n  %s\nwant\n  %s", args, want)
@@ -47,7 +50,7 @@ func TestORASPushRejectsMissingSource(t *testing.T) {
 	calls := installFakeOras(t, "", 0)
 
 	p := &ORASProvider{}
-	err := p.Push("my-model:v1", "ghcr.io/my-org", filepath.Join(t.TempDir(), "does-not-exist"), nil)
+	_, err := p.Push("my-model:v1", "ghcr.io/my-org", filepath.Join(t.TempDir(), "does-not-exist"), nil)
 	if err == nil {
 		t.Fatal("Push() with a missing source path should fail")
 	}
@@ -60,8 +63,56 @@ func TestORASPushReportsToolFailure(t *testing.T) {
 	installFakeOras(t, "", 2)
 
 	p := &ORASProvider{}
-	err := p.Push("my-model:v1", "ghcr.io/my-org", t.TempDir(), nil)
+	_, err := p.Push("my-model:v1", "ghcr.io/my-org", t.TempDir(), nil)
 	if err == nil || !strings.Contains(err.Error(), "failed to push with ORAS") {
 		t.Errorf("Push() error = %v, want an ORAS failure", err)
+	}
+}
+
+const testDigest = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+func TestORASPushReturnsReportedDigest(t *testing.T) {
+	t.Run("json output", func(t *testing.T) {
+		installFakeOras(t, `{"reference":"ghcr.io/my-org/my-model:v1","digest":"`+testDigest+`","size":512}`, 0)
+		digest, err := (&ORASProvider{}).Push("my-model:v1", "ghcr.io/my-org", t.TempDir(), nil)
+		if err != nil {
+			t.Fatalf("Push() error = %v", err)
+		}
+		if digest != testDigest {
+			t.Errorf("Push() digest = %q, want %q", digest, testDigest)
+		}
+	})
+	t.Run("plain output from older oras", func(t *testing.T) {
+		installFakeOras(t, "Pushed ghcr.io/my-org/my-model:v1\nDigest: "+testDigest+"\n", 0)
+		digest, err := (&ORASProvider{}).Push("my-model:v1", "ghcr.io/my-org", t.TempDir(), nil)
+		if err != nil {
+			t.Fatalf("Push() error = %v", err)
+		}
+		if digest != testDigest {
+			t.Errorf("Push() digest = %q, want %q", digest, testDigest)
+		}
+	})
+}
+
+func TestORASGetArtifactDigestUsesDescriptor(t *testing.T) {
+	calls := installFakeOras(t, `{"mediaType":"application/vnd.oci.image.manifest.v1+json","digest":"`+testDigest+`","size":512}`, 0)
+
+	digest, err := (&ORASProvider{}).GetArtifactDigest("my-model:v1", "ghcr.io/my-org")
+	if err != nil {
+		t.Fatalf("GetArtifactDigest() error = %v", err)
+	}
+	if digest != testDigest {
+		t.Errorf("GetArtifactDigest() = %q, want %q", digest, testDigest)
+	}
+	_, args, _ := strings.Cut(calls()[0], "\t")
+	if args != "manifest fetch --descriptor ghcr.io/my-org/my-model:v1" {
+		t.Errorf("oras args = %q, want descriptor fetch", args)
+	}
+}
+
+func TestORASGetArtifactDigestRejectsMissingDigest(t *testing.T) {
+	installFakeOras(t, `{"mediaType":"application/vnd.oci.image.manifest.v1+json"}`, 0)
+	if _, err := (&ORASProvider{}).GetArtifactDigest("my-model:v1", "ghcr.io/my-org"); err == nil {
+		t.Error("GetArtifactDigest() should fail when the descriptor has no digest")
 	}
 }

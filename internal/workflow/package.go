@@ -33,7 +33,8 @@ type PackageWorkflow struct {
 	provenancePath     string
 
 	// Local parity verification
-	localDigest  string
+	localDigest  string // digest of the manifest written locally
+	pushedDigest string // digest the registry tool reported after pushing
 	verifyParity bool
 }
 
@@ -53,6 +54,7 @@ func NewPackageWorkflow(registry string) (*PackageWorkflow, error) {
 		sbomFormat:         SPDXJSON,           // Default SBOM format
 		annotations:        NewAnnotationSet(), // Default annotations
 		generateProvenance: true,               // Default to generating provenance attestation
+		verifyParity:       true,               // Default to verifying the pushed digest
 	}, nil
 }
 
@@ -114,9 +116,15 @@ func (w *PackageWorkflow) ManifestPath() string {
 	return w.manifestPath
 }
 
-// LocalDigest returns the computed digest of the local artifact
+// LocalDigest returns the digest of the manifest written locally by Run().
 func (w *PackageWorkflow) LocalDigest() string {
 	return w.localDigest
+}
+
+// PushedDigest returns the manifest digest reported by the registry tool
+// after pushing, or "" when nothing was pushed or the tool did not report one.
+func (w *PackageWorkflow) PushedDigest() string {
+	return w.pushedDigest
 }
 
 // SetLocalDigest sets the digest of the local artifact for parity verification
@@ -217,9 +225,6 @@ func (w *PackageWorkflow) Run() error {
 	}
 	fmt.Printf("  Manifest written to: %s\n", w.manifestPath)
 
-	// Compute local digest for parity verification
-	// In a real implementation, this would compute the actual OCI artifact digest
-	// For now, we compute a digest of the manifest file as a stand-in
 	w.localDigest = ComputeManifestDigest(w.manifestPath)
 
 	if w.includeRAG && w.ragPath != "" {
@@ -233,23 +238,32 @@ func (w *PackageWorkflow) Run() error {
 	// Push to registry if URL is provided
 	if w.registryURL != "" {
 		fmt.Printf("→ Pushing to registry '%s'...\n", w.registryURL)
-		if err := w.registryProvider.Push(w.artifactName, w.registryURL, w.modelPath, manifestAnnotations); err != nil {
+		digest, err := w.registryProvider.Push(w.artifactName, w.registryURL, w.modelPath, manifestAnnotations)
+		if err != nil {
 			return fmt.Errorf("failed to push artifact: %v", err)
 		}
+		w.pushedDigest = digest
 		fmt.Printf("✓ Successfully pushed %s to %s\n", fullArtifact, w.registryURL)
+		if digest != "" {
+			fmt.Printf("  Digest: %s\n", digest)
+		}
 
-		// Verify local parity: ensure what was pushed matches the local artifact
+		// Verify parity: the manifest stored in the registry must be the one we just pushed.
 		if w.verifyParity {
 			fmt.Println("\n=== Local Parity Verification ===")
-			fmt.Println("→ Verifying that pushed artifact matches local build...")
-			verifier := NewLocalParityVerifier(w.registryProvider, w.localDigest)
-			result, err := verifier.Verify(w.artifactName, w.registryURL)
-			if err != nil {
-				return fmt.Errorf("failed to verify local parity: %v", err)
-			}
-			fmt.Println(result.String())
-			if !result.Match {
-				return fmt.Errorf("local parity check failed: %s", result.String())
+			if digest == "" {
+				fmt.Printf("  Skipped: %s did not report a digest for the pushed artifact\n", w.registryProvider.Name())
+			} else {
+				fmt.Println("→ Verifying that the registry holds the pushed manifest...")
+				verifier := NewLocalParityVerifier(w.registryProvider, digest)
+				result, err := verifier.Verify(w.artifactName, w.registryURL)
+				if err != nil {
+					return fmt.Errorf("failed to verify local parity: %v", err)
+				}
+				fmt.Println(result.String())
+				if !result.Match {
+					return fmt.Errorf("local parity check failed: %s", result.String())
+				}
 			}
 		}
 	} else {
