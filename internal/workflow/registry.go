@@ -2,6 +2,7 @@ package workflow
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -282,6 +283,13 @@ func (o *ORASProvider) FetchManifestAnnotations(artifactRef string) (map[string]
 
 // --- ModelPack Provider ---
 
+// ErrNotImplemented is returned by provider operations that have no real
+// implementation yet, so callers fail loudly instead of assuming success.
+var ErrNotImplemented = errors.New("not implemented")
+
+// ModelPackProvider is a placeholder for the ModelPack CLI integration.
+// Tool detection works; every registry operation returns ErrNotImplemented
+// until the integration is written. Use the ORAS provider in the meantime.
 type ModelPackProvider struct{}
 
 func (m *ModelPackProvider) Name() string {
@@ -297,57 +305,36 @@ func (m *ModelPackProvider) InstallInstructions() string {
 	return "go install github.com/modelpack/modelpack@latest"
 }
 
+func (m *ModelPackProvider) notImplemented(op string) error {
+	return fmt.Errorf("modelpack %s: %w (use --registry oras)", op, ErrNotImplemented)
+}
+
 func (m *ModelPackProvider) Push(artifact, registry, sourcePath string, annotations map[string]string) (string, error) {
-	fmt.Printf("Pushed artifact %s to %s using ModelPack\n", artifact, registry)
-	if len(annotations) > 0 {
-		fmt.Printf("Attached %d CNCF AI annotation(s) to the manifest\n", len(annotations))
-	}
-	return "", nil
+	return "", m.notImplemented("push")
 }
 
 func (m *ModelPackProvider) Pull(artifact, registry string) error {
-	fmt.Printf("Pulled artifact %s from %s using ModelPack\n", artifact, registry)
-	return nil
+	return m.notImplemented("pull")
 }
 
 func (m *ModelPackProvider) GetArtifactDigest(artifact, registry string) (string, error) {
-	// ModelPack stub implementation
-	// In a real implementation, this would use modelpack CLI to inspect the artifact
-	// and return its digest
-	fullRef := registry + "/" + artifact
-	// Return a mock digest for now
-	return fmt.Sprintf("sha256:%x", fullRef[:8]), nil
+	return "", m.notImplemented("digest lookup")
 }
 
 func (m *ModelPackProvider) PushReferrer(artifact, registry, referrerType string, data []byte, annotations map[string]string) error {
-	// ModelPack supports referrers similar to ORAS
-	// For now, ModelPack implementation is a stub
-	// In a real implementation, this would use modelpack CLI to push referrers
-	fmt.Printf("Pushed %s referrer for %s to %s using ModelPack (stub)\n", referrerType, artifact, registry)
-	return nil
+	return m.notImplemented("referrer push")
 }
 
 func (m *ModelPackProvider) GetReferrers(artifact, registry, referrerType string) ([][]byte, error) {
-	// Stub implementation for ModelPack
-	// In a real implementation, this would fetch referrers from the registry
-	fmt.Printf("Fetched referrers for %s from %s using ModelPack (stub)\n", artifact, registry)
-	return nil, nil
+	return nil, m.notImplemented("referrer fetch")
 }
 
 func (m *ModelPackProvider) Search(registry, filters string) ([][]byte, error) {
-	// ModelPack stub implementation for search
-	// In a real implementation, this would integrate with ModelPack's registry query capabilities
-	// or delegate to the underlying registry's search API
-	// For now, we return a helpful message about using the registry's native search
-	return nil, fmt.Errorf("ModelPack search: delegate to registry's native search API or use client-side filtering with 'modelpack' CLI")
+	return nil, m.notImplemented("search")
 }
 
 func (m *ModelPackProvider) FetchManifestAnnotations(artifactRef string) (map[string]string, error) {
-	// ModelPack stub implementation for fetching manifest annotations
-	// In a real implementation, this would use modelpack CLI to inspect the artifact
-	// and extract its annotations
-	// For now, return an error indicating this is not fully implemented
-	return nil, fmt.Errorf("ModelPack FetchManifestAnnotations: delegate to ORAS or use modelpack inspect CLI")
+	return nil, m.notImplemented("manifest fetch")
 }
 
 // GetRegistryProvider returns the appropriate Registry provider by name
