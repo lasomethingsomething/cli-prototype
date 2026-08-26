@@ -1,4 +1,4 @@
-# OCI Models CLI
+# Model CLI
 
 **Your tour guide through the secure ML model deployment journey.**
 
@@ -6,7 +6,7 @@
 
 A trained ML model is a folder of files. Getting that folder from your laptop onto a production server safely means a series of steps: bundle it up, label it, list what is inside, record where it came from, sign it so nobody can tamper with it, upload it, check it against your organization's rules, and hand it to the system that runs it. 
 
-Specialized tools already exist for each step in the [CNCF ecosystem](https://www.cncf.io/) and beyond. OCI Models CLI is the guide that walks you through the steps in order, asks the questions each step needs, and calls the right tool for each one.
+Specialized tools already exist for each step in the [CNCF ecosystem](https://www.cncf.io/) and beyond. Model CLI is the guide that walks you through the steps in order, asks the questions each step needs, and calls the right tool for each one.
 
 The workflow in one sentence per phase:
 
