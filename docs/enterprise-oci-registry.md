@@ -435,4 +435,4 @@ model-cli validate --manifest my-manifest.json --artifact-type model --model-typ
 - [CNCF AI Interoperability Profile](https://github.com/opencontainers/image-spec/blob/main/annotations.md)
 - [JSON Schema](https://json-schema.org/)
 - [ORAS](https://oras.land/)
-- [ModelPack](https://modelpack.ai/)
+- [ModelPack](https://github.com/modelpack/model-spec)

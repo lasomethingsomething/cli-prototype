@@ -38,7 +38,7 @@ type ClassificationResult struct {
 }
 
 // --- MOF Classifier (Model Openness Framework) ---
-// Based on: https://github.com/Adopt-MOF/MOF
+// Based on: https://isitopen.ai/
 
 type MOFClassifierImpl struct{}
 
