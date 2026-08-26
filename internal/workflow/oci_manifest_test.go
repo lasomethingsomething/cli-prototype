@@ -187,6 +187,9 @@ func TestValidateOCIManifest(t *testing.T) {
 			manifest: func() *UnifiedOCIManifest {
 				m := NewUnifiedOCIManifest(ArtifactTypeModel, "test-model", []OCILayer{})
 				m.SetModelConfig(AIModelConfig{ModelType: "text-generation"})
+				if err := m.refreshConfigDescriptor(); err != nil {
+					return nil
+				}
 				return m
 			}(),
 			wantErr: false,
@@ -196,6 +199,9 @@ func TestValidateOCIManifest(t *testing.T) {
 			manifest: func() *UnifiedOCIManifest {
 				m := NewUnifiedOCIManifest(ArtifactTypeSkill, "test-skill", []OCILayer{})
 				m.SetSkillConfig(AISkillConfig{SkillType: "rag"})
+				if err := m.refreshConfigDescriptor(); err != nil {
+					return nil
+				}
 				return m
 			}(),
 			wantErr: false,
@@ -205,6 +211,9 @@ func TestValidateOCIManifest(t *testing.T) {
 			manifest: func() *UnifiedOCIManifest {
 				m := NewUnifiedOCIManifest(ArtifactTypePipeline, "test-pipeline", []OCILayer{})
 				m.SetPipelineConfig(AIPipelineConfig{PipelineType: "inference"})
+				if err := m.refreshConfigDescriptor(); err != nil {
+					return nil
+				}
 				return m
 			}(),
 			wantErr: false,

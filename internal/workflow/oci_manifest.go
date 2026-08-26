@@ -268,11 +268,27 @@ func (m *UnifiedOCIManifest) refreshConfigDescriptor() error {
 	return nil
 }
 
-// WriteUnifiedOCIManifest writes the manifest to a file
+// WriteUnifiedOCIManifest writes the manifest to a file and the AI config as a separate blob
 func WriteUnifiedOCIManifest(m *UnifiedOCIManifest, path string) error {
-	if err := m.refreshConfigDescriptor(); err != nil {
-		return err
+	// Write the AI config as a separate blob first
+	if m.AIConfig != nil && m.Config.MediaType != "" {
+		configData, err := json.MarshalIndent(m.AIConfig, "", "  ")
+		if err != nil {
+			return fmt.Errorf("failed to marshal AI config: %v", err)
+		}
+		configPath := filepath.Join(filepath.Dir(path), "config.json")
+		if err := os.WriteFile(configPath, configData, 0644); err != nil {
+			return fmt.Errorf("failed to write AI config to %s: %v", configPath, err)
+		}
+		// Update the config descriptor to reference the actual blob
+		m.Config.Digest = fmt.Sprintf("sha256:%x", sha256.Sum256(configData))
+		m.Config.Size = int64(len(configData))
 	}
+
+	// Remove the inline AIConfig field as it's now a separate blob
+	// (Keep it for now for backward compatibility with local preview)
+
+	// Write the manifest
 	data, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal unified OCI manifest: %v", err)
@@ -307,6 +323,12 @@ func ValidateOCIManifest(m *UnifiedOCIManifest) error {
 	}
 	if m.Config.MediaType == "" {
 		return fmt.Errorf("config media type is required")
+	}
+	if m.Config.Digest == "" {
+		return fmt.Errorf("config digest is required")
+	}
+	if m.Config.Size <= 0 {
+		return fmt.Errorf("config size must be positive, got %d", m.Config.Size)
 	}
 
 	// Validate artifact type

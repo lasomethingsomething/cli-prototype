@@ -35,6 +35,11 @@ func TestUnifiedOCIManifestIntegration(t *testing.T) {
 	}
 	manifest.SetModelConfig(config)
 
+	// Refresh the config descriptor to set digest and size
+	if err := manifest.refreshConfigDescriptor(); err != nil {
+		t.Fatalf("refreshConfigDescriptor failed: %v", err)
+	}
+
 	// Validate
 	if err := ValidateOCIManifest(manifest); err != nil {
 		t.Fatalf("Validation failed: %v", err)
@@ -124,6 +129,10 @@ func TestSkillManifestIntegration(t *testing.T) {
 	}
 	manifest.SetSkillConfig(config)
 
+	if err := manifest.refreshConfigDescriptor(); err != nil {
+		t.Fatalf("refreshConfigDescriptor failed: %v", err)
+	}
+
 	if err := ValidateOCIManifest(manifest); err != nil {
 		t.Fatalf("Skill validation failed: %v", err)
 	}
@@ -155,6 +164,10 @@ func TestPipelineManifestIntegration(t *testing.T) {
 		Author:      "test-author",
 	}
 	manifest.SetPipelineConfig(config)
+
+	if err := manifest.refreshConfigDescriptor(); err != nil {
+		t.Fatalf("refreshConfigDescriptor failed: %v", err)
+	}
 
 	if err := ValidateOCIManifest(manifest); err != nil {
 		t.Fatalf("Pipeline validation failed: %v", err)
