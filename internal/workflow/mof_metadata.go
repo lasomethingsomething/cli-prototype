@@ -9,7 +9,7 @@ import (
 )
 
 // MOFMetadata represents the structured MOF/MOT-compliant metadata configuration
-// Based on the Model Openness Framework specification: https://github.com/Adopt-MOF/MOF
+// Based on the Model Openness Framework specification: https://isitopen.ai/
 type MOFMetadata struct {
 	// MOF specification version
 	MOFVersion string `json:"mof_version" yaml:"mof_version"`

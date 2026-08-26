@@ -65,7 +65,7 @@ type ComponentMetadata struct {
 
 ### Compliance with MOF Spec
 
-The implementation follows the MOF specification from https://github.com/Adopt-MOF/MOF:
+The implementation follows the MOF specification from https://isitopen.ai/:
 - Includes all required MOF metadata fields
 - Structured component information with type/description/identifier
 - Machine-readable classification (Class I, II, III)
