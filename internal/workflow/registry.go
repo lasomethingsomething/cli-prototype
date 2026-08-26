@@ -4,12 +4,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 )
 
 // RegistryProvider defines the interface for registry tools like ORAS and ModelPack
@@ -275,36 +278,287 @@ func repositoryOf(artifact string) string {
 }
 
 func (o *ORASProvider) Search(registry, filters string) ([][]byte, error) {
-	// ORAS doesn't have a built-in search command for OCI registries
-	// We delegate to external registry tools like the OCI Distribution Spec
-	// or use oras discover/manifest commands as available
-	// For now, we use oras manifest fetch as a baseline, but in production
-	// this would integrate with registry APIs that support filtering
+	// For zot registries (which have the search extension enabled),
+	// try using the zot search API first. If that fails, fall back to
+	// the OCI Distribution Spec approach which works with any registry.
+	
+	// Check if this might be a zot registry by trying the search extension
+	if manifests, err := tryZotSearch(registry, filters); err == nil {
+		return manifests, nil
+	}
+	
+	// Fall back to OCI Distribution Spec approach: catalog -> tags/list -> manifest fetch
+	// This works with any OCI-compliant registry
+	return searchOCIDistribution(registry, filters)
+}
 
-	// Build the search command using oras discover if available
-	// oras discover can list artifacts in a repository
-	args := []string{"discover", "--artifact-type", "application/vnd.cncf.ai.model"}
+// tryZotSearch attempts to use zot's search extension API
+func tryZotSearch(registry, filters string) ([][]byte, error) {
+	// Try the zot search extension endpoint
+	// Zot's search extension uses HTTP GET with query parameters
+	// Format: /v2/_zot/ext/search?n=<name>&a=<artifact-type>&l=<label>=<value>
+	
+	url := fmt.Sprintf("http://%s/v2/_zot/ext/search", registry)
+	
+	// Build query parameters from filters
+	// Filters are in format "key=value&key2=value2"
+	params := make(map[string]string)
+	
+	// Parse the filter string
 	if filters != "" {
-		// ORAS doesn't directly support filter strings in discover
-		// but we can fetch all and filter client-side
-		// For registries that support it, we'd use their native search API
-		args = append(args, "--output", "json")
+		for _, pair := range strings.Split(filters, "&") {
+			if pair != "" {
+				kv := strings.SplitN(pair, "=", 2)
+				if len(kv) == 2 {
+					key, value := kv[0], kv[1]
+					// Map filter keys to zot search parameters
+					// Zot uses: n=name, t=tag, a=artifact-type, l=label/annotation
+					if key == AnnotationArtifactType {
+						// This is the artifact type
+						params["a"] = "application/vnd.cncf.ai." + value
+					} else if strings.HasPrefix(key, "ai.") {
+						// AI annotations - zot uses l=label format
+						params["l"] = key + "=" + value
+					} else {
+						// Other annotations
+						params["l"] = key + "=" + value
+					}
+				}
+			}
+		}
 	}
-
-	cmd := exec.Command("oras", args...)
-	cmd.Args = append(cmd.Args, registry)
-
-	output, err := cmd.Output()
+	
+	// If no artifact type filter, search for all AI artifact types
+	if _, ok := params["a"]; !ok {
+		params["a"] = "application/vnd.cncf.ai.%"
+	}
+	
+	// Build the URL with query parameters
+	queryString := ""
+	for k, v := range params {
+		if queryString == "" {
+			queryString = "?" + k + "=" + v
+		} else {
+			queryString += "&" + k + "=" + v
+		}
+	}
+	
+	fullURL := url + queryString
+	
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Get(fullURL)
 	if err != nil {
-		// Try a simpler approach - fetch manifests from known references
-		// This is a fallback for registries without discover support
-		// In production, this would be replaced with proper registry API calls
-		return nil, fmt.Errorf("registry search not fully supported by ORAS CLI. Use a registry with search API (e.g., ghcr.io, docker.io) or use client-side filtering")
+		return nil, fmt.Errorf("failed to query zot search API: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("zot search API returned status %d", resp.StatusCode)
 	}
 
-	// Parse and return the results
-	// For now, return the raw output - parsing happens in the workflow layer
-	return [][]byte{output}, nil
+	// Parse the response - zot returns a list of repositories with artifacts
+	var result zotSearchResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to parse zot search response: %v", err)
+	}
+
+	// Fetch manifests for all found artifacts
+	var manifests [][]byte
+	for _, repo := range result.Repositories {
+		for _, artifact := range repo.Artifacts {
+			manifest, err := fetchManifest(registry, repo.Name, artifact.Digest)
+			if err != nil {
+				continue
+			}
+			manifests = append(manifests, manifest)
+		}
+	}
+
+	return manifests, nil
+}
+
+// zotSearchResponse represents the response from zot's search extension API
+type zotSearchResponse struct {
+	Repositories []struct {
+		Name      string `json:"name"`
+		Artifacts []struct {
+			Digest    string `json:"digest"`
+			MediaType string `json:"mediaType"`
+			Size      int64  `json:"size"`
+		} `json:"artifacts"`
+	} `json:"repositories"`
+}
+
+// searchOCIDistribution performs a search using OCI Distribution Spec
+// This works with any registry that exposes the catalog endpoint
+func searchOCIDistribution(registry, filters string) ([][]byte, error) {
+	// Step 1: Fetch the catalog from /v2/_catalog
+	catalog, err := fetchCatalog(registry)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch catalog: %v", err)
+	}
+
+	// Step 2: For each repository, fetch tags/list
+	var manifests [][]byte
+	for _, repo := range catalog.Repositories {
+		tags, err := fetchTags(registry, repo)
+		if err != nil {
+			continue // Skip repos we can't fetch tags for
+		}
+
+		// Step 3: For each tag, fetch the manifest
+		for _, tag := range tags.Tags {
+			manifest, err := fetchManifest(registry, repo, tag.Digest)
+			if err != nil {
+				continue // Skip manifests we can't fetch
+			}
+
+			// Filter by artifact type if specified
+			if filters != "" && !matchesFilter(manifest, filters) {
+				continue
+			}
+
+			manifests = append(manifests, manifest)
+		}
+	}
+
+	return manifests, nil
+}
+
+// fetchCatalog fetches the repository catalog from /v2/_catalog
+type catalogResponse struct {
+	Repositories []string `json:"repositories"`
+}
+
+func fetchCatalog(registry string) (*catalogResponse, error) {
+	url := fmt.Sprintf("http://%s/v2/_catalog", registry)
+	client := &http.Client{Timeout: 30 * time.Second}
+
+	// First, try with no auth (for zot and local registries)
+	resp, err := client.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch catalog: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		// Try with empty auth (some registries require this)
+		req, _ := http.NewRequest("GET", url, nil)
+		req.SetBasicAuth("", "")
+		resp, err = client.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch catalog with auth: %v", err)
+		}
+		defer resp.Body.Close()
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("catalog request returned status %d", resp.StatusCode)
+	}
+
+	var catalog catalogResponse
+	if err := json.NewDecoder(resp.Body).Decode(&catalog); err != nil {
+		return nil, fmt.Errorf("failed to parse catalog response: %v", err)
+	}
+
+	return &catalog, nil
+}
+
+// fetchTags fetches the tags list from /v2/<repo>/tags/list
+type tagsListResponse struct {
+	Name string   `json:"name"`
+	Tags []tagInfo `json:"tags"`
+}
+
+type tagInfo struct {
+	Name   string `json:"name"`
+	Digest string `json:"digest"`
+	Size   int64  `json:"size"`
+}
+
+func fetchTags(registry, repo string) (*tagsListResponse, error) {
+	url := fmt.Sprintf("http://%s/v2/%s/tags/list", registry, repo)
+	client := &http.Client{Timeout: 30 * time.Second}
+
+	// Try with no auth first
+	resp, err := client.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch tags for %s: %v", repo, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		// Try with empty auth
+		req, _ := http.NewRequest("GET", url, nil)
+		req.SetBasicAuth("", "")
+		resp, err = client.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch tags for %s with auth: %v", repo, err)
+		}
+		defer resp.Body.Close()
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("tags list request for %s returned status %d", repo, resp.StatusCode)
+	}
+
+	var tags tagsListResponse
+	if err := json.NewDecoder(resp.Body).Decode(&tags); err != nil {
+		return nil, fmt.Errorf("failed to parse tags list for %s: %v", repo, err)
+	}
+
+	return &tags, nil
+}
+
+// fetchManifest fetches a manifest from /v2/<repo>/manifests/<digest>
+func fetchManifest(registry, repo, digest string) ([]byte, error) {
+	url := fmt.Sprintf("http://%s/v2/%s/manifests/%s", registry, repo, digest)
+	client := &http.Client{Timeout: 30 * time.Second}
+
+	// Try with no auth first
+	resp, err := client.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch manifest %s: %v", digest, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		// Try with empty auth
+		req, _ := http.NewRequest("GET", url, nil)
+		req.SetBasicAuth("", "")
+		resp, err = client.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch manifest %s with auth: %v", digest, err)
+		}
+		defer resp.Body.Close()
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("manifest request for %s returned status %d", digest, resp.StatusCode)
+	}
+
+	return io.ReadAll(resp.Body)
+}
+
+// matchesFilter checks if a manifest matches the given filter
+func matchesFilter(manifest []byte, filters string) bool {
+	// Parse the manifest to check annotations
+	var manifestData map[string]interface{}
+	if err := json.Unmarshal(manifest, &manifestData); err != nil {
+		return false
+	}
+
+	// Check for AI artifact type annotation
+	if at, ok := manifestData["annotations"].(map[string]interface{})[AnnotationArtifactType]; ok {
+		if atStr, ok := at.(string); ok {
+			if strings.Contains(filters, atStr) {
+				return true
+			}
+		}
+	}
+
+	// If no specific filter match, include it
+	return true
 }
 
 func (o *ORASProvider) FetchManifestAnnotations(artifactRef string) (map[string]string, error) {

@@ -242,3 +242,70 @@ func TestPushAttachesProvenanceReferrer(t *testing.T) {
 		t.Errorf("fetched attestation is invalid: %v", err)
 	}
 }
+
+func TestSearchFindsPushedArtifacts(t *testing.T) {
+	modelDir := newModelDir(t)
+	artifact := "e2e/search-test-model:" + uniqueTag()
+	ref := registry + "/" + artifact
+
+	// Package and push a model
+	out, err := runCLI(t, filepath.Dir(modelDir), "package",
+		"--model", "test-model", "--model-path", modelDir, "--artifact", artifact,
+		"--registry", "oras", "--registry-url", registry,
+		"--runtime", "vllm", "--accelerator", "cpu")
+	if err != nil {
+		t.Fatalf("package failed: %v", err)
+	}
+	if !strings.Contains(out, "Local parity VERIFIED") {
+		t.Errorf("package output lacks a passing parity check")
+	}
+
+	// Search for the pushed model
+	out, err = runCLI(t, t.TempDir(), "search",
+		"--destination", registry,
+		"--type", "model",
+		"--registry-tool", "oras",
+		"--non-interactive")
+	if err != nil {
+		t.Fatalf("search failed: %v", err)
+	}
+
+	// Verify the pushed artifact is in the search results
+	if !strings.Contains(out, "e2e/search-test-model") {
+		t.Errorf("search results don't contain pushed artifact, got:\n%s", out)
+	}
+
+	// Also test with --output json
+	out, err = runCLI(t, t.TempDir(), "search",
+		"--destination", registry,
+		"--type", "model",
+		"--registry-tool", "oras",
+		"--output", "json",
+		"--non-interactive")
+	if err != nil {
+		t.Fatalf("search with json output failed: %v", err)
+	}
+
+	// Parse the JSON output to verify structure
+	var results workflow.SearchResults
+	if err := json.Unmarshal([]byte(out), &results); err != nil {
+		t.Fatalf("failed to parse search results JSON: %v", err)
+	}
+
+	// Verify we got at least one result
+	if len(results.Results) == 0 {
+		t.Error("search returned no results")
+	}
+
+	// Verify at least one result has the expected artifact type
+	foundModel := false
+	for _, result := range results.Results {
+		if result.ArtifactType == "model" {
+			foundModel = true
+			break
+		}
+	}
+	if !foundModel {
+		t.Error("search results don't contain any model artifacts")
+	}
+}
