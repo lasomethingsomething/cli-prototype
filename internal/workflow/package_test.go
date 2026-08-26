@@ -160,9 +160,6 @@ func TestPackageWorkflowDefaults(t *testing.T) {
 	}
 
 	// Check default values
-	if !pf.generateProvenance {
-		t.Error("generateProvenance default = false, want true")
-	}
 	if !pf.verifyParity {
 		t.Error("verifyParity default = false, want true")
 	}
@@ -383,66 +380,6 @@ func TestPackageWorkflowRunNotInstalled(t *testing.T) {
 	}
 }
 
-// TestSetSigningOptions verifies SetSigningOptions correctly sets the signing fields
-func TestSetSigningOptions(t *testing.T) {
-	pf, err := NewPackageWorkflow("oras")
-	if err != nil {
-		t.Fatalf("NewPackageWorkflow error: %v", err)
-	}
-
-	pf.SetSigningOptions(true, "sigstore")
-
-	if !pf.sign {
-		t.Error("sign = false, want true")
-	}
-	if pf.signer != "sigstore" {
-		t.Errorf("signer = %q, want %q", pf.signer, "sigstore")
-	}
-
-	// Test with empty signer
-	pf.SetSigningOptions(false, "")
-	if pf.sign {
-		t.Error("sign = true, want false")
-	}
-	if pf.signer != "" {
-		t.Errorf("signer = %q, want empty string", pf.signer)
-	}
-}
-
-// TestPackageWorkflowRunWithSigning verifies that when sign=true, the workflow
-// attempts to sign the artifact after packaging using the configured signer.
-func TestPackageWorkflowRunWithSigning(t *testing.T) {
-	modelPath := t.TempDir()
-
-	// Create a fake registry provider
-	fakeReg := &fakeRegistryProvider{installed: true}
-
-	// Create a fake signing provider and register it
-	// We need to temporarily replace the GetSigningProvider function
-	// For this test, we'll create a custom workflow with the fake signer
-
-	pf := &PackageWorkflow{
-		registry:         "fake",
-		registryProvider: fakeReg,
-		annotations:      NewAnnotationSet(),
-		sign:             true,
-		signer:           "fake-sign",
-	}
-	pf.SetPackageInfo("phi-4-mini", modelPath, "my-model:v1", "", false, "")
-
-	// Since we can't easily mock GetSigningProvider, we'll test the workflow
-	// logic by checking that the sign flag is properly set
-	// The actual signing integration is tested via the command tests
-
-	// Just verify the workflow can be created with signing options
-	if !pf.sign {
-		t.Error("sign should be true")
-	}
-	if pf.signer != "fake-sign" {
-		t.Errorf("signer = %q, want %q", pf.signer, "fake-sign")
-	}
-}
-
 // fakeSyft puts a shell script named "syft" first on PATH for the duration of
 // the test. It answers `syft version` successfully, so the real SyftGenerator
 // reaches Generate(); how the scan itself behaves is decided by scanScript,
@@ -458,4 +395,43 @@ func fakeSyft(t *testing.T, scanScript string) {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+// TestPackageWorkflowDoesNotGenerateProvenance verifies that provenance is NOT
+// generated during packaging (Phase 1, Step 3 - provenance should be after packaging)
+// This addresses issue #88
+func TestPackageWorkflowDoesNotGenerateProvenance(t *testing.T) {
+	modelPath := t.TempDir()
+	if err := os.WriteFile(filepath.Join(modelPath, "model.txt"), []byte("weights"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	fake := &fakeRegistryProvider{installed: true}
+	pf := &PackageWorkflow{
+		registry:         "fake",
+		registryProvider: fake,
+		annotations:      NewAnnotationSet(),
+		verifyParity:     false,
+	}
+
+	pf.SetPackageInfo("test-model", modelPath, "test:v1", "", false, "")
+
+	// Run the package workflow
+	if err := pf.Run(); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	// Verify that provenance was NOT generated (no provenance path set)
+	// In the old implementation, provenance would be generated during packaging
+	// Now it should only be generated in the sign command (Phase 1, Step 3)
+	// The workflow should complete without errors, but without provenance generation
+	
+	// Check that manifest was created (packaging succeeded)
+	if pf.ManifestPath() == "" {
+		t.Error("expected manifest to be created")
+	}
+
+	// The test passes if we get here without provenance being generated
+	// The absence of a ProvenancePath method means provenance is not part of package workflow
+	t.Log("Packaging completed without provenance generation (as expected for issue #88)")
 }

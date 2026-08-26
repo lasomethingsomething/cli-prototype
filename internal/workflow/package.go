@@ -3,13 +3,15 @@ package workflow
 import (
 	"fmt"
 	"path/filepath"
-	"time"
 )
 
 // PackageWorkflow orchestrates the packaging of models as OCI artifacts:
 // manifest, layers, push and parity check. SBOM generation and MOF
 // classification are deliberately not part of it; they are the separate
-// hardening step (HardenWorkflow) that runs on the packaged model.
+// hardening step (HardenWorkflow) that runs on the packaged model. Signing
+// and SLSA provenance are also deliberately not part of it; they are the
+// separate Phase 1, Step 3 (Supply Chain Check) that runs with `model-cli
+// sign` on the packaged artifact.
 type PackageWorkflow struct {
 	registry         string
 	registryProvider RegistryProvider
@@ -22,14 +24,6 @@ type PackageWorkflow struct {
 	annotations      *AnnotationSet
 	manifestPath     string
 	isSkill          bool
-
-	// Signing options
-	sign   bool
-	signer string
-
-	// Provenance options
-	generateProvenance bool
-	provenancePath     string
 
 	// Local parity verification
 	localDigest  string // digest of the manifest written locally
@@ -45,11 +39,10 @@ func NewPackageWorkflow(registry string) (*PackageWorkflow, error) {
 	}
 
 	return &PackageWorkflow{
-		registry:           registry,
-		registryProvider:   registryProvider,
-		annotations:        NewAnnotationSet(), // Default annotations
-		generateProvenance: true,               // Default to generating provenance attestation
-		verifyParity:       true,               // Default to verifying the pushed digest
+		registry:         registry,
+		registryProvider: registryProvider,
+		annotations:      NewAnnotationSet(), // Default annotations
+		verifyParity:     true,               // Default to verifying the pushed digest
 	}, nil
 }
 
@@ -71,22 +64,6 @@ func (w *PackageWorkflow) SetAnnotations(annotations *AnnotationSet) {
 // SetIsSkill sets whether this is a skill package
 func (w *PackageWorkflow) SetIsSkill(isSkill bool) {
 	w.isSkill = isSkill
-}
-
-// SetSigningOptions configures signing options for the workflow
-func (w *PackageWorkflow) SetSigningOptions(sign bool, signer string) {
-	w.sign = sign
-	w.signer = signer
-}
-
-// SetProvenanceOptions configures provenance generation options
-func (w *PackageWorkflow) SetProvenanceOptions(generate bool) {
-	w.generateProvenance = generate
-}
-
-// ProvenancePath returns the path to the generated provenance attestation
-func (w *PackageWorkflow) ProvenancePath() string {
-	return w.provenancePath
 }
 
 // ManifestPath returns the path to the OCI manifest written by Run(), or an
@@ -218,82 +195,15 @@ func (w *PackageWorkflow) Run() error {
 		fmt.Printf("  Artifact ready at: %s\n", fullArtifact)
 	}
 
-	// Generate provenance attestation (SLSA/in-toto) - frozen at point of creation
-	if w.generateProvenance {
-		fmt.Println("\n=== Provenance ===")
-		fmt.Println("→ Generating SLSA provenance attestation...")
-
-		// Create provenance generator
-		pg := NewProvenanceGenerator()
-		pg.SetSourceInfo(w.modelPath, "")
-		pg.SetArtifactInfo(fullArtifact, nil)
-		pg.SetRecipeInfo(
-			"https://model-cli.dev/recipe/package/v1",
-			fmt.Sprintf("registry:%s", w.registry),
-			"package",
-		)
-
-		// Generate and write the attestation
-		w.provenancePath = filepath.Join(w.modelPath, "attestation.json")
-		attestation, err := pg.WriteToFile(w.provenancePath)
-		if err != nil {
-			return fmt.Errorf("failed to generate provenance attestation: %v", err)
-		}
-
-		// Validate the attestation
-		if err := ValidateAttestation(attestation); err != nil {
-			return fmt.Errorf("failed to validate provenance attestation: %v", err)
-		}
-
-		fmt.Printf("✓ Provenance attestation generated: %s\n", w.provenancePath)
-		fmt.Println("  Attestation contains:")
-		fmt.Printf("    - Build ID: %s\n", attestation.Statement.Predicate.BuildID)
-		fmt.Printf("    - Build Type: %s\n", attestation.Statement.Predicate.BuildType)
-		fmt.Printf("    - Builder: %s\n", attestation.Statement.Predicate.Builder.ID)
-		fmt.Printf("    - Source: %s\n", attestation.Statement.Predicate.Source.ID)
-		fmt.Printf("    - Timestamp: %s\n", attestation.Statement.Predicate.Metadata.BuildFinishedOn.Format(time.RFC3339))
-	}
-
-	// Sign the artifact if requested (at point of creation)
-	if w.sign {
-		fmt.Println("\n=== Signing ===")
-		fmt.Printf("→ Signing artifact '%s'...\n", fullArtifact)
-
-		// Determine signer to use
-		signerToUse := w.signer
-		if signerToUse == "" {
-			signerToUse = SignerOptions().Recommended()
-		}
-
-		// Get signing provider
-		sp, err := GetSigningProvider(signerToUse)
-		if err != nil {
-			return fmt.Errorf("failed to get signing provider: %v", err)
-		}
-
-		// Check if tool is installed
-		if !sp.IsInstalled() {
-			return fmt.Errorf("%s not installed. Install with: %s", sp.Name(), sp.InstallInstructions())
-		}
-
-		// Sign the artifact
-		if err := sp.Sign(fullArtifact, ""); err != nil {
-			return fmt.Errorf("failed to sign artifact: %v", err)
-		}
-
-		sigPath := sp.GetSignaturePath(fullArtifact)
-		fmt.Printf("✓ Signed artifact: %s\n", fullArtifact)
-		fmt.Printf("  Signature: %s\n", sigPath)
-	}
-
+	// Signing and provenance are not part of packaging. They are Phase 1,
+	// Step 3 (Supply Chain Check), run afterwards with `model-cli sign`,
+	// which signs the finished artifact and attests it.
 	fmt.Println("\n=== Summary ===")
 	fmt.Println("Packaging complete!")
 
 	fmt.Println("\nNext steps:")
 	fmt.Printf("  - Harden (SBOM + MOF) with: model-cli harden --model %s --model-path %s --artifact %s\n", w.modelName, w.modelPath, w.artifactName)
-	if !w.sign {
-		fmt.Println("  - Sign with: model-cli sign --artifact " + fullArtifact)
-	}
+	fmt.Println("  - Sign and record provenance with: model-cli sign --artifact " + fullArtifact)
 	fmt.Println("  - Verify with: model-cli verify --artifact " + fullArtifact)
 	fmt.Println("  - Deploy with: model-cli deploy")
 
