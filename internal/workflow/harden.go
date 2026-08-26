@@ -87,28 +87,28 @@ func (w *HardenWorkflow) Run() error {
 	fmt.Println()
 
 	// Step 1: Generate SBOM if requested
+	// SBOM is a prerequisite for Phase 1 Step 2 - failure must block the workflow
 	if w.generateSBOM {
 		fmt.Println("→ Generating SBOM (Software Bill of Materials)...")
 
 		sbomGen, err := GetSBOMGenerator(w.sbomTool)
 		if err != nil {
-			fmt.Printf("  Warning: SBOM generator not available: %v\n", err)
-		} else {
-			w.sbomPath = filepath.Join(w.modelPath, "sbom."+string(w.sbomFormat))
-			if err := sbomGen.Generate(w.modelPath, w.sbomPath, w.sbomFormat); err != nil {
-				w.workflowErr = fmt.Errorf("SBOM generation failed: %v", err)
-				fmt.Printf("  ✗ SBOM generation failed: %v\n", err)
-			} else {
-				fmt.Printf("  ✓ SBOM generated: %s\n", w.sbomPath)
-				// Add SBOM annotation with real format
-				if w.annotations != nil {
-					w.annotations.SBOMFormat = string(w.sbomFormat)
-				}
-
-				// Attach SBOM as OCI layer (simulated - in real implementation would use OCI tools)
-				fmt.Printf("  ✓ SBOM attached as OCI layer with format: %s\n", w.sbomFormat)
-			}
+			return fmt.Errorf("SBOM generator not available: %v. SBOM is a required prerequisite for Phase 1 Step 2", err)
 		}
+
+		w.sbomPath = filepath.Join(w.modelPath, "sbom."+string(w.sbomFormat))
+		if err := sbomGen.Generate(w.modelPath, w.sbomPath, w.sbomFormat); err != nil {
+			return fmt.Errorf("SBOM generation failed: %v. SBOM is a required prerequisite for Phase 1 Step 2", err)
+		}
+
+		fmt.Printf("  ✓ SBOM generated: %s\n", w.sbomPath)
+		// Add SBOM annotation with real format
+		if w.annotations != nil {
+			w.annotations.SBOMFormat = string(w.sbomFormat)
+		}
+
+		// Attach SBOM as OCI layer (simulated - in real implementation would use OCI tools)
+		fmt.Printf("  ✓ SBOM attached as OCI layer with format: %s\n", w.sbomFormat)
 		fmt.Println()
 	}
 

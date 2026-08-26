@@ -185,6 +185,8 @@ func TestPackageWorkflowRunWritesManifestWithAnnotations(t *testing.T) {
 		registryProvider: fake,
 		annotations:      NewAnnotationSet(),
 		verifyParity:     false, // Disable for tests that don't set up matching digests
+		generateSBOM:     false, // Disable SBOM for this test - testing manifest generation only
+		includeMOF:       false, // Disable MOF for this test
 	}
 	pf.annotations.Runtime = "vllm"
 	pf.annotations.Accelerator = "nvidia-gpu"
@@ -420,4 +422,36 @@ func TestPackageWorkflowAppliesMOFClassification(t *testing.T) {
 			t.Errorf("explicit MOF annotations were overwritten: class=%q components=%q", m.Annotations[AnnotationMOFClass], m.Annotations[AnnotationMOFComponents])
 		}
 	})
+}
+
+// TestSBOMFailureBlocksWorkflow verifies that SBOM generation failure blocks the workflow
+// as required by Phase 1 Step 2 (Issue #89)
+func TestSBOMFailureBlocksWorkflow(t *testing.T) {
+	modelPath := t.TempDir()
+	if err := os.WriteFile(filepath.Join(modelPath, "model.txt"), []byte("weights"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	fake := &fakeRegistryProvider{installed: true}
+	pf := &PackageWorkflow{
+		registry:         "fake",
+		registryProvider: fake,
+		annotations:      NewAnnotationSet(),
+		verifyParity:     false,
+		generateSBOM:     true, // Enable SBOM generation
+		includeMOF:       false,
+		sbomTool:         "nonexistent-tool", // Use a non-existent tool to trigger failure
+	}
+
+	pf.SetPackageInfo("test-model", modelPath, "test:v1", "", false, "")
+
+	err := pf.Run()
+	if err == nil {
+		t.Fatal("expected SBOM generation to fail and block workflow, got nil")
+	}
+
+	// Verify the error message mentions SBOM is a prerequisite
+	if !strings.Contains(err.Error(), "SBOM") || !strings.Contains(err.Error(), "prerequisite") {
+		t.Errorf("expected error to mention SBOM prerequisite, got: %v", err)
+	}
 }
