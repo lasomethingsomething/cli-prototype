@@ -22,15 +22,23 @@ This includes:
 The hardening workflow ensures your model meets compliance requirements
 before it's shared or deployed.
 
+Supported SBOM tools (mutually exclusive):
+  • Syft - RECOMMENDED
+  • Trivy
+  • cdxgen
+
 Examples:
-  # Harden with defaults (CC-BY-4.0 license)
+  # Harden with defaults (CC-BY-4.0 license, Syft for SBOM)
   model-cli harden --model-path ./models --model phi-4-mini --artifact my-model:v1
 
   # Harden with custom license
   model-cli harden --model-path ./models --model phi-4-mini --artifact my-model:v1 --license MIT
 
   # Harden with specific SBOM tool
-  model-cli harden --model-path ./models --model phi-4-mini --artifact my-model:v1 --sbom-tool syft --sbom-format spdx-json`,
+  model-cli harden --model-path ./models --model phi-4-mini --artifact my-model:v1 --sbom-tool syft --sbom-format spdx-json
+
+  # Harden with Trivy
+  model-cli harden --model-path ./models --model phi-4-mini --artifact my-model:v1 --sbom-tool trivy --sbom-format cyclonedx-json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Get flags
 		modelName, _ := cmd.Flags().GetString("model")
@@ -105,7 +113,7 @@ func init() {
 	hardenCmd.Flags().String("license", "CC-BY-4.0", "License for MOF metadata (default: CC-BY-4.0)")
 
 	// SBOM options
-	hardenCmd.Flags().String("sbom-tool", "syft", "SBOM generation tool (syft, trivy, cdxgen)")
+	hardenCmd.Flags().String("sbom-tool", "syft", "SBOM generation tool: syft (RECOMMENDED), trivy, or cdxgen")
 	hardenCmd.Flags().String("sbom-format", "spdx-json", "SBOM format (spdx-json, cyclonedx, spdx)")
 
 	// Mark required flags

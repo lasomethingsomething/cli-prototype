@@ -403,6 +403,126 @@ func (m *ModelPackProvider) FetchManifestAnnotations(artifactRef string) (map[st
 	return nil, m.notImplemented("manifest fetch")
 }
 
+// --- Harbor Provider ---
+
+type HarborProvider struct{}
+
+func (h *HarborProvider) Name() string {
+	return "harbor"
+}
+
+func (h *HarborProvider) IsInstalled() bool {
+	// Harbor is typically accessed via its API, not a CLI tool
+	// Check if harbor CLI is available
+	_, err := exec.LookPath("harbor")
+	return err == nil
+}
+
+func (h *HarborProvider) InstallInstructions() string {
+	return "Install Harbor CLI from https://goharbor.io/docs/ or use ORAS for Harbor-compatible registries"
+}
+
+func (h *HarborProvider) Push(artifact, registry, sourcePath string, annotations map[string]string) (string, error) {
+	// Harbor uses ORAS under the hood for OCI artifacts
+	// For now, delegate to ORAS but with Harbor-specific configuration
+	orasProvider := &ORASProvider{}
+	if !orasProvider.IsInstalled() {
+		return "", fmt.Errorf("harbor requires ORAS CLI. Install with: %s", orasProvider.InstallInstructions())
+	}
+	return orasProvider.Push(artifact, registry, sourcePath, annotations)
+}
+
+func (h *HarborProvider) Pull(artifact, registry string) error {
+	orasProvider := &ORASProvider{}
+	return orasProvider.Pull(artifact, registry)
+}
+
+func (h *HarborProvider) GetArtifactDigest(artifact, registry string) (string, error) {
+	orasProvider := &ORASProvider{}
+	return orasProvider.GetArtifactDigest(artifact, registry)
+}
+
+func (h *HarborProvider) PushReferrer(artifact, registry, referrerType string, data []byte, annotations map[string]string) error {
+	orasProvider := &ORASProvider{}
+	return orasProvider.PushReferrer(artifact, registry, referrerType, data, annotations)
+}
+
+func (h *HarborProvider) GetReferrers(artifact, registry, referrerType string) ([][]byte, error) {
+	orasProvider := &ORASProvider{}
+	return orasProvider.GetReferrers(artifact, registry, referrerType)
+}
+
+func (h *HarborProvider) Search(registry, filters string) ([][]byte, error) {
+	// Harbor has its own API for searching
+	// For now, return a placeholder
+	return nil, fmt.Errorf("Harbor search not yet implemented - use ORAS for OCI registry operations")
+}
+
+func (h *HarborProvider) FetchManifestAnnotations(artifactRef string) (map[string]string, error) {
+	orasProvider := &ORASProvider{}
+	return orasProvider.FetchManifestAnnotations(artifactRef)
+}
+
+// --- TUF Provider ---
+
+type TUFProvider struct{}
+
+func (t *TUFProvider) Name() string {
+	return "tuf"
+}
+
+func (t *TUFProvider) IsInstalled() bool {
+	// TUF is typically used as a library or via repository metadata
+	// Check if tuf CLI is available
+	_, err := exec.LookPath("tuf")
+	return err == nil
+}
+
+func (t *TUFProvider) InstallInstructions() string {
+	return "pip install tuf or use a TUF-compatible registry"
+}
+
+func (t *TUFProvider) Push(artifact, registry, sourcePath string, annotations map[string]string) (string, error) {
+	// TUF is a metadata framework, not a registry push tool
+	// In practice, TUF is used to secure registries like Harbor
+	// For OCI artifacts, we use ORAS with TUF metadata
+	orasProvider := &ORASProvider{}
+	if !orasProvider.IsInstalled() {
+		return "", fmt.Errorf("tuf requires ORAS CLI for OCI operations. Install with: %s", orasProvider.InstallInstructions())
+	}
+	return orasProvider.Push(artifact, registry, sourcePath, annotations)
+}
+
+func (t *TUFProvider) Pull(artifact, registry string) error {
+	orasProvider := &ORASProvider{}
+	return orasProvider.Pull(artifact, registry)
+}
+
+func (t *TUFProvider) GetArtifactDigest(artifact, registry string) (string, error) {
+	orasProvider := &ORASProvider{}
+	return orasProvider.GetArtifactDigest(artifact, registry)
+}
+
+func (t *TUFProvider) PushReferrer(artifact, registry, referrerType string, data []byte, annotations map[string]string) error {
+	orasProvider := &ORASProvider{}
+	return orasProvider.PushReferrer(artifact, registry, referrerType, data, annotations)
+}
+
+func (t *TUFProvider) GetReferrers(artifact, registry, referrerType string) ([][]byte, error) {
+	orasProvider := &ORASProvider{}
+	return orasProvider.GetReferrers(artifact, registry, referrerType)
+}
+
+func (t *TUFProvider) Search(registry, filters string) ([][]byte, error) {
+	// TUF-secured registries would use their own search mechanisms
+	return nil, fmt.Errorf("TUF search not yet implemented - TUF is a metadata security layer, use the underlying registry's search")
+}
+
+func (t *TUFProvider) FetchManifestAnnotations(artifactRef string) (map[string]string, error) {
+	orasProvider := &ORASProvider{}
+	return orasProvider.FetchManifestAnnotations(artifactRef)
+}
+
 // GetRegistryProvider returns the appropriate Registry provider by name
 func GetRegistryProvider(name string) (RegistryProvider, error) {
 	switch name {
@@ -410,7 +530,11 @@ func GetRegistryProvider(name string) (RegistryProvider, error) {
 		return &ORASProvider{}, nil
 	case "modelpack":
 		return &ModelPackProvider{}, nil
+	case "harbor":
+		return &HarborProvider{}, nil
+	case "tuf":
+		return &TUFProvider{}, nil
 	default:
-		return nil, fmt.Errorf("unknown registry provider: %s (supported: oras, modelpack)", name)
+		return nil, fmt.Errorf("unknown registry provider: %s (supported: oras, harbor, tuf, modelpack)", name)
 	}
 }

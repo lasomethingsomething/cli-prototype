@@ -43,6 +43,8 @@ func TestGetRegistryProvider(t *testing.T) {
 	}{
 		{"oras", "oras", false},
 		{"modelpack", "modelpack", false},
+		{"harbor", "harbor", false},
+		{"tuf", "tuf", false},
 		{"invalid", "invalid-registry", true},
 		{"empty", "", true},
 	}
@@ -73,6 +75,7 @@ func TestGetSigningProvider(t *testing.T) {
 		{"notary", "notary", false},
 		{"notaryv2", "notaryv2", false},
 		{"notation", "notation", false},
+		{"in-toto", "in-toto", false},
 		{"invalid", "invalid-signer", true},
 		{"empty", "", true},
 	}
@@ -126,6 +129,8 @@ func TestGetSBOMGenerator(t *testing.T) {
 		wantErr bool
 	}{
 		{"syft", "syft", false},
+		{"trivy", "trivy", false},
+		{"cdxgen", "cdxgen", false},
 		{"invalid", "invalid-sbom", true},
 		{"empty", "", true},
 	}
@@ -155,8 +160,11 @@ func TestProviderNames(t *testing.T) {
 		{"Flux", func() (interface{}, error) { return GetGitOpsProvider("flux") }, "flux"},
 		{"ORAS", func() (interface{}, error) { return GetRegistryProvider("oras") }, "oras"},
 		{"ModelPack", func() (interface{}, error) { return GetRegistryProvider("modelpack") }, "modelpack"},
+		{"Harbor", func() (interface{}, error) { return GetRegistryProvider("harbor") }, "harbor"},
+		{"TUF", func() (interface{}, error) { return GetRegistryProvider("tuf") }, "tuf"},
 		{"Sigstore", func() (interface{}, error) { return GetSigningProvider("sigstore") }, "sigstore"},
 		{"Notary", func() (interface{}, error) { return GetSigningProvider("notary") }, "notaryv2"},
+		{"InToto", func() (interface{}, error) { return GetSigningProvider("in-toto") }, "in-toto"},
 		{"vLLM", func() (interface{}, error) { return GetRuntimeProvider("vllm") }, "vllm"},
 		{"KServe", func() (interface{}, error) { return GetRuntimeProvider("kserve") }, "kserve"},
 	}
@@ -202,6 +210,7 @@ func TestInstallInstructions(t *testing.T) {
 		{"Flux", func() (interface{}, error) { return GetGitOpsProvider("flux") }, "brew install fluxcd"},
 		{"ORAS", func() (interface{}, error) { return GetRegistryProvider("oras") }, "brew install oras"},
 		{"Sigstore", func() (interface{}, error) { return GetSigningProvider("sigstore") }, "brew install sigstore"},
+		{"InToto", func() (interface{}, error) { return GetSigningProvider("in-toto") }, "pip install in-toto"},
 		{"vLLM", func() (interface{}, error) { return GetRuntimeProvider("vllm") }, "pip install vllm"},
 	}
 
@@ -256,6 +265,7 @@ func TestAllProvidersIsInstalledNoPanic(t *testing.T) {
 		{"ModelPack", func() bool { p, _ := GetRegistryProvider("modelpack"); return p.IsInstalled() }},
 		{"Sigstore", func() bool { p, _ := GetSigningProvider("sigstore"); return p.IsInstalled() }},
 		{"NotaryV2", func() bool { p, _ := GetSigningProvider("notary"); return p.IsInstalled() }},
+		{"InToto", func() bool { p, _ := GetSigningProvider("in-toto"); return p.IsInstalled() }},
 		{"vLLM", func() bool { p, _ := GetRuntimeProvider("vllm"); return p.IsInstalled() }},
 		{"KServe", func() bool { p, _ := GetRuntimeProvider("kserve"); return p.IsInstalled() }},
 	}
@@ -288,6 +298,7 @@ func TestProviderNameConsistency(t *testing.T) {
 		{"Registry", "modelpack", func() (interface{}, error) { return GetRegistryProvider("modelpack") }, "modelpack"},
 		{"Signing", "sigstore", func() (interface{}, error) { return GetSigningProvider("sigstore") }, "sigstore"},
 		{"Signing", "notary", func() (interface{}, error) { return GetSigningProvider("notary") }, "notaryv2"},
+		{"Signing", "in-toto", func() (interface{}, error) { return GetSigningProvider("in-toto") }, "in-toto"},
 		{"Runtime", "vllm", func() (interface{}, error) { return GetRuntimeProvider("vllm") }, "vllm"},
 		{"Runtime", "kserve", func() (interface{}, error) { return GetRuntimeProvider("kserve") }, "kserve"},
 	}
@@ -397,6 +408,7 @@ func TestGetSignaturePath(t *testing.T) {
 	}{
 		{"sigstore", "sigstore", "my-model:v1", "my-model:v1.sig"},
 		{"notary", "notary", "my-model:v1", "my-model:v1.notation"},
+		{"in-toto", "in-toto", "my-model:v1", "my-model:v1.in-toto"},
 	}
 
 	for _, tt := range tests {
@@ -422,6 +434,7 @@ func TestIsInstalledDoesNotPanic(t *testing.T) {
 	t.Run("ModelPack", func(t *testing.T) { p, _ := GetRegistryProvider("modelpack"); _ = p.IsInstalled() })
 	t.Run("Sigstore", func(t *testing.T) { p, _ := GetSigningProvider("sigstore"); _ = p.IsInstalled() })
 	t.Run("NotaryV2", func(t *testing.T) { p, _ := GetSigningProvider("notary"); _ = p.IsInstalled() })
+	t.Run("InToto", func(t *testing.T) { p, _ := GetSigningProvider("in-toto"); _ = p.IsInstalled() })
 	t.Run("Syft", func(t *testing.T) { p, _ := GetSBOMGenerator("syft"); _ = p.IsInstalled() })
 	t.Run("vLLM", func(t *testing.T) { p, _ := GetRuntimeProvider("vllm"); _ = p.IsInstalled() })
 	t.Run("KServe", func(t *testing.T) { p, _ := GetRuntimeProvider("kserve"); _ = p.IsInstalled() })

@@ -22,15 +22,27 @@ The registry receives and stores OCI-aligned layers, enabling manifest-level
 validation and relationship mapping without downloading large binaries.
 
 The command also supports automatic signing at the point of push using
-Sigstore (cosign) or Notary v2 (notation) for supply chain security, and
-generates SLSA provenance attestations by default for immutable provenance tracking.
+multiple signing tools for supply chain security, and generates SLSA provenance
+attestations by default for immutable provenance tracking.
+
+Supported registry tools (mutually exclusive):
+  • ORAS - RECOMMENDED
+  • Harbor
+  • TUF
+
+Supported signing tools (mutually exclusive):
+  • cosign (Sigstore) - RECOMMENDED
+  • Notary v2
+  • in-toto
+
+Note: KubeFlow = platform (not registry). SPIFFE/SPIRE = identity (not signing).
 
 Examples:
   model-cli push
   model-cli push --artifact my-model:latest --registry oras --destination ghcr.io/my-org
-  model-cli push --artifact my-model:latest --registry modelpack
-  model-cli push --artifact my-model:latest --sign --signer sigstore
-  model-cli push --artifact my-model:latest --generate-provenance --sign --signer sigstore`,
+  model-cli push --artifact my-model:latest --registry harbor
+  model-cli push --artifact my-model:latest --sign --signer cosign
+  model-cli push --artifact my-model:latest --generate-provenance --sign --signer cosign`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := config.Load()
 
@@ -86,7 +98,7 @@ Examples:
 			}
 		}
 
-		if err := askSelectIfEmpty(cmd, "registry", &cfg.Registry, "Select Registry tool:", "Choose how to push your artifact", []string{"oras", "modelpack"}); err != nil {
+		if err := askSelectIfEmpty(cmd, "registry", &cfg.Registry, "Select Registry tool:", "Choose how to push your artifact", []string{"oras", "harbor", "tuf", "modelpack"}); err != nil {
 			return err
 		}
 		registry := cfg.Registry
@@ -512,11 +524,11 @@ func init() {
 	rootCmd.AddCommand(pushCmd)
 	pushCmd.Flags().String("artifact", "", "OCI artifact reference to push (e.g., my-model:latest)")
 	pushCmd.Flags().String("target", "", "Full target reference (e.g., registry.example.com/my-model:v1) - combines destination and artifact")
-	pushCmd.Flags().String("registry", "", "Registry tool: oras or modelpack")
+	pushCmd.Flags().String("registry", "", "Registry tool: oras (RECOMMENDED), harbor, tuf, or modelpack")
 	pushCmd.Flags().String("destination", "", "Destination registry (e.g., ghcr.io/my-org)")
 	pushCmd.Flags().String("manifest", "", "Path to the OCI manifest.json produced by 'model-cli package', used to attach CNCF AI annotations")
 	pushCmd.Flags().Bool("sign", false, "Sign the artifact automatically after pushing")
-	pushCmd.Flags().String("signer", "", "Signing tool: sigstore or notary (default: sigstore)")
+	pushCmd.Flags().String("signer", "", "Signing tool: cosign (RECOMMENDED), notary, or in-toto (default: cosign)")
 	pushCmd.Flags().Bool("generate-provenance", true, "Generate SLSA provenance attestation (default: true)")
 	pushCmd.Flags().String("model-path", "", "Path to the model directory (for provenance source info)")
 	pushCmd.Flags().String("artifact-type", "", "Type of AI artifact: model, skill, or pipeline")

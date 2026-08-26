@@ -431,11 +431,16 @@ func (m *Model) renderSBOMPanel() string {
 	sb.WriteString("  ✓ Compliance requirements\n")
 	sb.WriteString("  ✓ Attached to OCI artifact layers\n\n")
 
+	sb.WriteString("Supported SBOM tools (mutually exclusive):\n")
+	sb.WriteString("  • Syft - RECOMMENDED\n")
+	sb.WriteString("  • Trivy\n")
+	sb.WriteString("  • cdxgen\n\n")
+
 	checkbox := "[x]"
 	if !m.generateSBOM {
 		checkbox = "[ ]"
 	}
-	sb.WriteString(fmt.Sprintf("  %s Generate SBOM (using Syft)\n", checkbox))
+	sb.WriteString(fmt.Sprintf("  %s Generate SBOM\n", checkbox))
 
 	return sb.String()
 }

@@ -14,13 +14,20 @@ var signCmd = &cobra.Command{
 	Long: `Sign your OCI model artifact to establish provenance and trust.
 
 This command supports the OpenSSF Model Signing Specification (OMS) and
-integrates with Sigstore (cosign) and Notary v2 (notation) for signing
-AI/ML model artifacts.
+integrates with multiple signing tools for AI/ML model artifacts.
+
+Supported signing tools (mutually exclusive):
+  • cosign (Sigstore) - RECOMMENDED
+  • Notary v2 (notation)
+  • in-toto
+
+Note: SPIFFE/SPIRE is for identity, not signing.
 
 Examples:
   model-cli sign
-  model-cli sign --artifact my-model:latest --signer sigstore
-  model-cli sign --artifact my-model:latest --signer notary --key my-key`,
+  model-cli sign --artifact my-model:latest --signer cosign
+  model-cli sign --artifact my-model:latest --signer notary --key my-key
+  model-cli sign --artifact my-model:latest --signer in-toto`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := config.Load()
 
@@ -33,7 +40,7 @@ Examples:
 			return err
 		}
 
-		if err := askSelectIfEmpty(cmd, "signer", &cfg.Signer, "Select signing tool:", "Choose a signing provider (aligns with OSSF Model Signing Spec)", []string{"sigstore", "notary"}); err != nil {
+		if err := askSelectIfEmpty(cmd, "signer", &cfg.Signer, "Select signing tool:", "Choose a signing provider (aligns with OSSF Model Signing Spec)", []string{"cosign", "notary", "in-toto"}); err != nil {
 			return err
 		}
 		signer := cfg.Signer
@@ -95,7 +102,7 @@ Examples:
 func init() {
 	rootCmd.AddCommand(signCmd)
 	signCmd.Flags().String("artifact", "", "OCI artifact reference to sign (e.g., my-registry/my-model:latest)")
-	signCmd.Flags().String("signer", "", "Signing tool: sigstore or notary")
+	signCmd.Flags().String("signer", "", "Signing tool: cosign (RECOMMENDED), notary, or in-toto")
 	signCmd.Flags().String("key", "", "Key reference for signing")
 	signCmd.Flags().Bool("use-key", false, "Use a specific key for signing")
 }
