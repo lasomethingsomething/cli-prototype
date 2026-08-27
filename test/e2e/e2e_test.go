@@ -258,6 +258,29 @@ func TestPackageThenValidateAgainstRegistry(t *testing.T) {
 				t.Errorf("hardened manifest annotation %s = %q, want %q", key, got, want)
 			}
 		}
+
+		// push --manifest ships the hardened manifest: the registry ends up
+		// with the annotations package and harden wrote, not with push's
+		// generated defaults (issue #98).
+		t.Run("push", func(t *testing.T) {
+			pushedArtifact := repo + ":" + uniqueTag() + "-hardened"
+			if _, err := runCLI(t, filepath.Dir(modelDir), "push",
+				"--artifact", pushedArtifact, "--destination", registry, "--registry", "oras",
+				"--model-path", modelDir, "--manifest", filepath.Join(modelDir, "manifest.json"),
+				"--generate-provenance=false"); err != nil {
+				t.Fatalf("push failed: %v", err)
+			}
+			var pushed pushedManifest
+			orasJSON(t, &pushed, "manifest", "fetch", registry+"/"+pushedArtifact)
+			for key, want := range hardened.Annotations {
+				if key == "org.opencontainers.image.title" {
+					continue // ORAS sets its own title
+				}
+				if got := pushed.Annotations[key]; got != want {
+					t.Errorf("annotation %s: local %q, registry %q", key, want, got)
+				}
+			}
+		})
 	})
 }
 
