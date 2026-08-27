@@ -21,9 +21,9 @@ Commands (cobra)
   |
   v
 Workflows (internal/workflow)
-  - DeployWorkflow, PackageWorkflow
-  - SignWorkflow, VerifyWorkflow
-  - HardenWorkflow (SBOM + MOF classification)
+  - PackageWorkflow (manifest + layers + push + parity; no SBOM/MOF)
+  - HardenWorkflow (SBOM + MOF classification, recorded in the packaged manifest)
+  - DeployWorkflow, SignWorkflow, VerifyWorkflow
   - AdmissionWebhook (Story #59: Enforce Metadata Contract)
   - MetadataContractValidation (Story #62: Validate Pushes)
   - SearchWorkflow (Story #61: Cross-Reference Assets)

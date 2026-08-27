@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/charmbracelet/huh"
 	"github.com/lasomethingsomething/cli-prototype/config"
 	"github.com/lasomethingsomething/cli-prototype/internal/workflow"
 	"github.com/spf13/cobra"
@@ -33,6 +32,9 @@ Supported signing tools (mutually exclusive):
 
 Note: KubeFlow = platform (not registry). SPIFFE/SPIRE = identity (not signing).
 
+SBOM generation and MOF classification are a separate step: run
+'model-cli harden' on the same --model-path after packaging.
+
 Examples:
   # Package a model
   model-cli package
@@ -46,10 +48,7 @@ Examples:
   model-cli package --model phi-4-mini --artifact my-model:latest --sign --signer cosign
 
   # Package without provenance (disable with flag)
-  model-cli package --model phi-4-mini --artifact my-model:latest --generate-provenance=false
-
-  # Package without an SBOM (by default the SBOM is required and its failure aborts packaging)
-  model-cli package --model phi-4-mini --artifact my-model:latest --generate-sbom=false`,
+  model-cli package --model phi-4-mini --artifact my-model:latest --generate-provenance=false`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := config.Load()
 
@@ -58,7 +57,6 @@ Examples:
 		signFlag, _ := cmd.Flags().GetBool("sign")
 		signerFlag, _ := cmd.Flags().GetString("signer")
 		provenanceFlag, _ := cmd.Flags().GetBool("generate-provenance")
-		sbomFlag, _ := cmd.Flags().GetBool("generate-sbom")
 		// Node requirement flags for infrastructure orchestration (Story #68)
 		// Runtime execution flags for Story #69
 
@@ -154,20 +152,6 @@ Examples:
 			}
 		}
 
-		// MOF classification
-		if err := askSelectLabeled(cmd, "mof-class", &annotations.MOFClass, "MOF Class:", "Model Openness Framework classification (auto = detect from the model files)", []huh.Option[string]{
-			huh.NewOption("auto", ""),
-			huh.NewOption("I - open weights, code, training data, docs and license", "I"),
-			huh.NewOption("II - open weights plus code, data or docs", "II"),
-			huh.NewOption("III - weights only", "III"),
-		}); err != nil {
-			return err
-		}
-
-		if err := askString(cmd, "mof-components", &annotations.MOFComponents, "MOF Components:", "Comma-separated MOF components (e.g., weights,training-data,code); leave empty to detect"); err != nil {
-			return err
-		}
-
 		if err := requireValues("model", modelName, "model-path", modelPath, "artifact", artifactName); err != nil {
 			return err
 		}
@@ -197,10 +181,6 @@ Examples:
 		// Set provenance options (enabled by default, can be disabled with --generate-provenance=false)
 		pf.SetProvenanceOptions(provenanceFlag)
 
-		// SBOM is a required prerequisite (Phase 1 Step 2): generation failure aborts
-		// packaging. Opt out with --generate-sbom=false. MOF classification stays on.
-		pf.SetSecurityOptions(sbomFlag, true)
-
 		artifactType := "model"
 		if isSkillFlag {
 			artifactType = "skill"
@@ -224,8 +204,6 @@ func init() {
 	packageCmd.Flags().String("accelerator", "", "Hardware accelerator: nvidia-gpu, amd-gpu, intel-gpu, cpu, or none")
 	packageCmd.Flags().String("cuda-min", "", "Minimum CUDA version (e.g., 12.1)")
 	packageCmd.Flags().String("memory-min", "", "Minimum memory (e.g., 24GiB)")
-	packageCmd.Flags().String("mof-class", "", "MOF Class: I, II, or III (default: detected from the model files)")
-	packageCmd.Flags().String("mof-components", "", "MOF components, comma-separated (default: detected from the model files)")
 	// Node requirement flags for infrastructure orchestration (Story #68)
 	packageCmd.Flags().String("gpu-type", "", "Specific GPU type (e.g., nvidia-a100, nvidia-h100)")
 	packageCmd.Flags().String("vram-min", "", "Minimum vRAM per GPU (e.g., 40GiB, 80GiB)")
@@ -239,5 +217,4 @@ func init() {
 	packageCmd.Flags().Bool("sign", false, "Sign the artifact automatically after packaging")
 	packageCmd.Flags().String("signer", "", "Signing tool: "+workflow.SignerOptions().Summary()+" (default: "+workflow.SignerOptions().Recommended()+")")
 	packageCmd.Flags().Bool("generate-provenance", true, "Generate SLSA provenance attestation (default: true)")
-	packageCmd.Flags().Bool("generate-sbom", true, "Generate an SBOM with syft; failure aborts packaging")
 }

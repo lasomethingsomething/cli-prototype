@@ -43,17 +43,11 @@ type Model struct {
 	includeRAG   bool
 	ragPath      string
 
-	// SBOM is a required prerequisite (Phase 1 Step 2); its failure aborts packaging.
-	// Defaults to true; opt out only when syft is unavailable.
-	generateSBOM bool
-
 	// Annotation conventions (CNCF AI Interoperability Profile)
-	runtime       string
-	accelerator   string
-	cudaMin       string
-	memoryMin     string
-	mofClass      string
-	mofComponents string
+	runtime     string
+	accelerator string
+	cudaMin     string
+	memoryMin   string
 
 	// State
 	loading   bool
@@ -86,22 +80,19 @@ const (
 // New creates a new package TUI model
 func New(registry string) *Model {
 	m := &Model{
-		panel:        PanelIntro,
-		registry:     registry,
-		width:        80,
-		height:       24,
-		logs:         make([]string, 0),
-		includeRAG:   false,
-		generateSBOM: true,
-		currentStep:  0,
+		panel:       PanelIntro,
+		registry:    registry,
+		width:       80,
+		height:      24,
+		logs:        make([]string, 0),
+		includeRAG:  false,
+		currentStep: 0,
 		steps: []Step{
 			{Label: "Collect model information", State: StepPending},
 			{Label: "Configure annotation conventions", State: StepPending},
 			{Label: "Review configuration", State: StepPending},
 			{Label: "Package as OCI artifact", State: StepPending},
 			{Label: "Inject annotations", State: StepPending},
-			{Label: "Generate SBOM", State: StepPending},
-			{Label: "Apply MOF classification", State: StepPending},
 		},
 	}
 	return m
@@ -270,7 +261,6 @@ func (m *Model) startPackaging() tea.Cmd {
 	return func() tea.Msg {
 		// Set up the workflow with collected info
 		m.workflow.SetPackageInfo(m.modelName, m.modelPath, m.artifactName, "", m.includeRAG, m.ragPath)
-		m.workflow.SetSecurityOptions(m.generateSBOM, true)
 
 		// Set annotations
 		annotations := workflow.NewAnnotationSet()
@@ -285,12 +275,6 @@ func (m *Model) startPackaging() tea.Cmd {
 		}
 		if m.memoryMin != "" {
 			annotations.MemoryMin = m.memoryMin
-		}
-		if m.mofClass != "" {
-			annotations.MOFClass = m.mofClass
-		}
-		if m.mofComponents != "" {
-			annotations.MOFComponents = m.mofComponents
 		}
 		m.workflow.SetAnnotations(annotations)
 
@@ -309,8 +293,6 @@ func (m *Model) startPackaging() tea.Cmd {
 			m.steps[3].State = StepDone
 			m.steps[3].Detail = "Packaging completed"
 			m.steps[4].State = StepDone
-			m.steps[5].State = StepDone
-			m.steps[6].State = StepDone
 			m.logs = append(m.logs, "Model packaged successfully as OCI artifact")
 			m.logs = append(m.logs, fmt.Sprintf("Artifact: %s", m.artifactName))
 		}
@@ -468,7 +450,6 @@ func (m *Model) renderComplete() string {
 	sb.WriteString(fmt.Sprintf("  Accelerator:   %s\n", m.accelerator))
 	sb.WriteString(fmt.Sprintf("  CUDA Min:     %s\n", m.cudaMin))
 	sb.WriteString(fmt.Sprintf("  Memory Min:   %s\n", m.memoryMin))
-	sb.WriteString(fmt.Sprintf("  MOF Class:    %s\n", m.mofClass))
 
 	if len(m.logs) > 0 {
 		sb.WriteString("\n")
@@ -479,7 +460,7 @@ func (m *Model) renderComplete() string {
 	}
 
 	sb.WriteString("\n")
-	sb.WriteString("Next: Step 2 - Harden & Sign\n")
+	sb.WriteString("Next: Step 2 - Harden (SBOM + MOF classification) & Sign\n")
 
 	return sb.String()
 }
@@ -532,7 +513,6 @@ func (m *Model) renderModelInfoForm() string {
 	sb.WriteString(fmt.Sprintf("Model Path:    %s\n", m.modelPath))
 	sb.WriteString(fmt.Sprintf("Artifact:      %s\n", m.artifactName))
 	sb.WriteString(fmt.Sprintf("Include RAG:   %v\n", m.includeRAG))
-	sb.WriteString(fmt.Sprintf("Generate SBOM: %v\n", m.generateSBOM))
 
 	if m.includeRAG && m.ragPath != "" {
 		sb.WriteString(fmt.Sprintf("RAG Path:      %s\n", m.ragPath))
@@ -558,11 +538,6 @@ func (m *Model) renderAnnotationsForm() string {
 	sb.WriteString(fmt.Sprintf("  Memory Min:   %s\n", m.memoryMin))
 
 	sb.WriteString("\n")
-	sb.WriteString("MOF Classification:\n")
-	sb.WriteString(fmt.Sprintf("  MOF Class:    %s\n", m.mofClass))
-	sb.WriteString(fmt.Sprintf("  Components:   %s\n", m.mofComponents))
-
-	sb.WriteString("\n")
 	sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#888888")).Render("Press Enter to continue"))
 
 	return sb.String()
@@ -584,10 +559,6 @@ func (m *Model) renderReviewSummary() string {
 	sb.WriteString("Annotations:\n")
 	sb.WriteString(fmt.Sprintf("  Runtime:    %s\n", m.runtime))
 	sb.WriteString(fmt.Sprintf("  Accelerator: %s\n", m.accelerator))
-
-	sb.WriteString("\n")
-	sb.WriteString("Security:\n")
-	sb.WriteString(fmt.Sprintf("  Generate SBOM: %v\n", m.generateSBOM))
 
 	sb.WriteString("\n")
 	sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF88")).Render("✓ Ready to package"))
@@ -612,10 +583,6 @@ func (m *Model) renderPackagingProgress() string {
 			sb.WriteString("→ Adding RAG context...\n")
 		}
 		sb.WriteString("→ Packaging model files...\n")
-		if m.generateSBOM {
-			sb.WriteString("→ Generating SBOM...\n")
-		}
-		sb.WriteString("→ Applying MOF classification...\n")
 	} else if m.err != nil {
 		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#FF5555")).Render("✗ Error: "+m.err.Error()) + "\n")
 	} else if m.completed {
@@ -652,21 +619,12 @@ func (m *Model) SetModelInfo(name, path, artifact string, includeRAG bool, ragPa
 	m.ragPath = ragPath
 }
 
-// SetGenerateSBOM enables or disables SBOM generation. The SBOM is a required
-// prerequisite (Phase 1 Step 2) and its failure aborts packaging, so this
-// defaults to true; disable only if syft is unavailable.
-func (m *Model) SetGenerateSBOM(generate bool) {
-	m.generateSBOM = generate
-}
-
 // SetAnnotations sets the annotation conventions
-func (m *Model) SetAnnotations(runtime, accelerator, cudaMin, memoryMin, mofClass, mofComponents string) {
+func (m *Model) SetAnnotations(runtime, accelerator, cudaMin, memoryMin string) {
 	m.runtime = runtime
 	m.accelerator = accelerator
 	m.cudaMin = cudaMin
 	m.memoryMin = memoryMin
-	m.mofClass = mofClass
-	m.mofComponents = mofComponents
 }
 
 // AddLog adds a log message

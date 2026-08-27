@@ -399,7 +399,8 @@ func (m *Model) renderIntro() string {
 	sb.WriteString("Local Hardening & Compliance\n")
 	sb.WriteString(strings.Repeat("─", 40) + "\n\n")
 
-	sb.WriteString("This step performs local hardening:\n\n")
+	sb.WriteString("This step runs on a packaged model (Step 1) and records\n")
+	sb.WriteString("its results in the manifest.json written there:\n\n")
 
 	infoStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#8888FF"))
 	sb.WriteString(infoStyle.Render("  • SBOM Generation\n"))
