@@ -42,8 +42,8 @@ func TestFullWorkflowIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to get signing provider: %v", err)
 	}
-	if signingProvider.Name() != "sigstore" {
-		t.Errorf("Signing provider name = %q, want %q", signingProvider.Name(), "sigstore")
+	if signingProvider.Name() != "cosign" {
+		t.Errorf("Signing provider name = %q, want %q", signingProvider.Name(), "cosign")
 	}
 
 	// Phase 4: Deploy

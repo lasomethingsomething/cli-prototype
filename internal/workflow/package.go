@@ -353,7 +353,7 @@ func (w *PackageWorkflow) Run() error {
 		// Determine signer to use
 		signerToUse := w.signer
 		if signerToUse == "" {
-			signerToUse = "sigstore" // Default to sigstore
+			signerToUse = SignerOptions().Recommended()
 		}
 
 		// Get signing provider

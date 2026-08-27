@@ -7,6 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/lasomethingsomething/cli-prototype/internal/workflow"
 )
 
 // Tab represents a tab in the context panel
@@ -39,6 +40,10 @@ type ContextModel struct {
 	// Hardening options
 	GenerateSBOM bool
 	IncludeMOF   bool
+
+	// SBOM tool and output format in use
+	SBOMTool   string
+	SBOMFormat string
 
 	// Results
 	SBOMPath string
@@ -75,6 +80,8 @@ func NewHardenContextModel() *ContextModel {
 		height:       15,
 		GenerateSBOM: true,
 		IncludeMOF:   true,
+		SBOMTool:     workflow.SBOMToolOptions().Recommended(),
+		SBOMFormat:   string(workflow.SPDXJSON),
 	}
 }
 
@@ -292,8 +299,8 @@ func (m *ContextModel) renderSBOMTab() string {
 
 	infoStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#888888"))
 	sb.WriteString("\n")
-	sb.WriteString(infoStyle.Render("Tool: Syft\n"))
-	sb.WriteString(infoStyle.Render("Format: SPDX-JSON\n"))
+	sb.WriteString(infoStyle.Render(fmt.Sprintf("Tool: %s\n", m.SBOMTool)))
+	sb.WriteString(infoStyle.Render(fmt.Sprintf("Format: %s\n", m.SBOMFormat)))
 
 	return sb.String()
 }
@@ -414,6 +421,12 @@ func (m *ContextModel) SetModelInfo(name, path, artifact string) {
 func (m *ContextModel) SetOptions(generateSBOM, includeMOF bool) {
 	m.GenerateSBOM = generateSBOM
 	m.IncludeMOF = includeMOF
+}
+
+// SetSBOMTool sets the SBOM generator and output format shown in the SBOM tab
+func (m *ContextModel) SetSBOMTool(tool, format string) {
+	m.SBOMTool = tool
+	m.SBOMFormat = format
 }
 
 // SetSBOMPath sets the SBOM path

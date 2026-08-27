@@ -60,7 +60,7 @@ func (am *AttestationManager) AttestAndPush(artifactName string, pg *ProvenanceG
 
 	// If we have a signer, add signing framework annotation
 	if am.signer != nil {
-		attestationAnnotations[AnnotationSigningFramework] = am.signer.Name()
+		attestationAnnotations[AnnotationSigningFramework] = signingFrameworkAnnotation(am.signer)
 	}
 
 	// Push the attestation as a referrer to the registry
@@ -191,4 +191,17 @@ func (am *AttestationManager) ValidateAndVerify(attestation *ProvenanceAttestati
 	}
 
 	return nil
+}
+
+// signingFrameworkAnnotation maps a signing provider to the value documented
+// for AnnotationSigningFramework ("sigstore-cosign", "notation").
+func signingFrameworkAnnotation(sp SigningProvider) string {
+	switch sp.(type) {
+	case *SigstoreProvider:
+		return "sigstore-cosign"
+	case *NotaryV2Provider:
+		return "notation"
+	default:
+		return sp.Name()
+	}
 }

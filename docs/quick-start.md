@@ -25,7 +25,7 @@ model-cli wizard
 ```
 
 The wizard will guide you through:
-1. **Setup Preferences** - Choose your tools (registry: ORAS or ModelPack, GitOps, signing)
+1. **Setup Preferences** - Choose your tools (registry, GitOps, signing - one recommended option per category)
 2. **Model Details** - Enter your model information
 3. **Kubernetes Setup** - Configure deployment options
 4. **Package** - Create OCI artifact with standardized annotations
@@ -112,19 +112,23 @@ This is the "orchestrate and hand off" design. The CLI doesn't crash when tools 
 
 ## Tool Requirements
 
-Model CLI only requires Go. The tools it integrates with are checked at runtime:
+Model CLI only requires Go. No specific tool is required: each category offers several tools, one of them recommended and used as the default. Tools within a category are mutually exclusive. They are checked at runtime:
 
-| Tool | Purpose | Install | Required for |
-|------|---------|---------|---------------|
-| oras | OCI registry | `brew install oras` | Package/Push |
-| modelpack | OCI registry | `brew install modelpack` | Package/Push |
-| argocd | GitOps (UI) | `brew install argoproj/tap/argocd` | Deploy |
-| flux | GitOps (agents) | `brew install fluxcd/tap/flux` | Deploy |
-| cosign | Signing (Sigstore) | `brew install sigstore/tap/cosign` | Sign/Verify |
-| notation | Signing (Notary v2/CNCF) | `brew install notation` | Sign/Verify |
-| syft | SBOM generation (SPDX) | `brew install anchore/syft/syft` | Supply chain |
+| Category | Option | Tool | Install | Required for |
+|----------|--------|------|---------|--------------|
+| Registry | `oras` (recommended) | ORAS - any OCI registry: Harbor, GHCR, zot, ... | `brew install oras` | Package/Push |
+| Registry | `modelpack` | ModelPack (planned, not implemented yet) | - | Package/Push |
+| GitOps | `flux` (recommended) | Flux (agents) | `brew install fluxcd/tap/flux` | Deploy |
+| GitOps | `argocd` | Argo CD (UI) | `brew install argoproj/tap/argocd` | Deploy |
+| Signing | `cosign` (recommended) | cosign (Sigstore) | `brew install sigstore/tap/cosign` | Sign/Verify |
+| Signing | `notary` | notation (Notary v2/CNCF) | `brew install notation` | Sign/Verify |
+| SBOM | `syft` (recommended) | Syft (SPDX, CycloneDX) | `brew install anchore/syft/syft` | Harden |
+| SBOM | `trivy` | Trivy (CycloneDX, SPDX) | `brew install trivy` | Harden |
+| SBOM | `cdxgen` | cdxgen (CycloneDX) | `npm install -g @cyclonedx/cdxgen` | Harden |
 
-**Note:** The CLI will tell you exactly how to install any missing tool when you need it. Model CLI supports SPDX format for SBOM generation.
+Harbor or any other OCI registry: `--registry oras --registry-url <harbor-host>/<project>` (`--destination` for `push`).
+
+**Note:** The CLI will tell you exactly how to install any missing tool when you need it.
 
 ## Configuration
 
@@ -132,10 +136,10 @@ Model CLI saves your preferences to `~/.model-cli.yaml`. After running the wizar
 
 Example config:
 ```yaml
-gitops: flux
+gitops: flux  # or argocd
 registry: oras  # or modelpack
-signer: sigstore  # or notation
-runtime: vllm
+signer: cosign  # or notary
+runtime: vllm  # or kserve
 ```
 
 Override at any time with command-line flags.

@@ -16,11 +16,22 @@ var packageCmd = &cobra.Command{
 
 This command helps you package models, prompts, RAG context, or agentic skills
 (conforming to agentskills.io standard format) into a single OCI artifact that can be
-stored in registries and deployed anywhere.
+stored in registries and deployed anywhere. No specific tool requirement - uses OCI Image Spec standard.
 
 The command also supports automatic signing at the point of creation using
-Sigstore (cosign) or Notary v2 (notation) for supply chain security, and
-generates SLSA provenance attestations by default for immutable provenance tracking.
+multiple signing tools for supply chain security, and generates SLSA provenance
+attestations by default for immutable provenance tracking.
+
+Supported registry tools (mutually exclusive):
+` + workflow.RegistryOptions().Bullets() + `
+
+Harbor and other OCI registries are used through oras:
+--registry oras --registry-url <harbor-host>/<project>
+
+Supported signing tools (mutually exclusive):
+` + workflow.SignerOptions().Bullets() + `
+
+Note: KubeFlow = platform (not registry). SPIFFE/SPIRE = identity (not signing).
 
 Examples:
   # Package a model
@@ -32,7 +43,7 @@ Examples:
   model-cli package --skill --model-path ./my-skill --artifact my-org/my-skill:v1
 
   # Package and sign automatically
-  model-cli package --model phi-4-mini --artifact my-model:latest --sign --signer sigstore
+  model-cli package --model phi-4-mini --artifact my-model:latest --sign --signer cosign
 
   # Package without provenance (disable with flag)
   model-cli package --model phi-4-mini --artifact my-model:latest --generate-provenance=false`,
@@ -48,7 +59,7 @@ Examples:
 		// Runtime execution flags for Story #69
 
 		// Interactive prompts if not set in config or via flags
-		if err := askSelectIfEmpty(cmd, "registry", &cfg.Registry, "Select Registry tool:", "Choose how you want to package your model", []string{"oras", "modelpack"}); err != nil {
+		if err := askSelectToolIfEmpty(cmd, "registry", &cfg.Registry, "Select Registry tool:", "Choose how you want to package your model", workflow.RegistryOptions()); err != nil {
 			return err
 		}
 
@@ -172,7 +183,7 @@ Examples:
 		pf.SetIsSkill(isSkillFlag)
 
 		// Set signing options
-		// Determine signer: use flag, then config, then default to empty (will default to sigstore in workflow)
+		// Determine signer: use flag, then config, then default to empty (the workflow falls back to the recommended signer)
 		signerToUse := signerFlag
 		if signerToUse == "" {
 			signerToUse = cfg.Signer
@@ -194,7 +205,7 @@ Examples:
 
 func init() {
 	rootCmd.AddCommand(packageCmd)
-	packageCmd.Flags().String("registry", "", "Registry tool: oras or modelpack")
+	packageCmd.Flags().String("registry", "", "Registry tool: "+workflow.RegistryOptions().Summary())
 	packageCmd.Flags().String("model", "", "Model name (e.g., phi-4-mini)")
 	packageCmd.Flags().String("model-path", "", "Path to model files or directory")
 	packageCmd.Flags().String("artifact", "", "OCI artifact name (e.g., my-org/my-model:latest)")
@@ -218,6 +229,6 @@ func init() {
 	packageCmd.Flags().String("skill-refs", "", "Comma-separated list of skill references")
 	packageCmd.Flags().Bool("skill", false, "Package as an agentic skill (agentskills.io format)")
 	packageCmd.Flags().Bool("sign", false, "Sign the artifact automatically after packaging")
-	packageCmd.Flags().String("signer", "", "Signing tool: sigstore or notary (default: sigstore)")
+	packageCmd.Flags().String("signer", "", "Signing tool: "+workflow.SignerOptions().Summary()+" (default: "+workflow.SignerOptions().Recommended()+")")
 	packageCmd.Flags().Bool("generate-provenance", true, "Generate SLSA provenance attestation (default: true)")
 }

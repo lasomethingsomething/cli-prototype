@@ -125,7 +125,7 @@ The full guided journey with 7 steps:
 Packages a model as an OCI artifact.
 
 **Interactive prompts:**
-- Registry tool (oras/modelpack)
+- Registry tool (oras recommended, or modelpack)
 - Model name
 - Model path
 - Artifact name
@@ -161,7 +161,7 @@ Signs an OCI artifact.
 
 **Interactive prompts:**
 - Artifact to sign
-- Signing tool (sigstore/notary)
+- Signing tool (cosign recommended, or notary)
 - Use specific key
 - Key reference
 
@@ -169,7 +169,7 @@ Signs an OCI artifact.
 ```bash
 model-cli sign \
   --artifact my-model:v1 \
-  --signer sigstore \
+  --signer cosign \
   --key cosign-key.pub
 ```
 
@@ -185,7 +185,7 @@ Verifies an artifact signature.
 ```bash
 model-cli verify \
   --artifact my-model:v1 \
-  --signer sigstore
+  --signer cosign
 ```
 
 ### deploy
@@ -193,8 +193,8 @@ model-cli verify \
 Deploys to Kubernetes using GitOps.
 
 **Interactive prompts:**
-- GitOps tool (argo/flux)
-- Registry tool (oras/modelpack)
+- GitOps tool (flux recommended, or argocd)
+- Registry tool (oras recommended, or modelpack)
 - Model name
 - Has Kubernetes cluster
 - Git repository URL
@@ -203,7 +203,7 @@ Deploys to Kubernetes using GitOps.
 **Non-interactive flags:**
 ```bash
 model-cli deploy \
-  --gitops argo \
+  --gitops flux \
   --registry oras \
   --model my-model \
   --repo https://github.com/org/manifests \
@@ -216,8 +216,8 @@ Pushes an OCI artifact to a registry.
 
 **Interactive prompts:**
 - Artifact to push
-- Registry tool (oras/modelpack)
-- Destination registry
+- Registry tool (oras recommended, or modelpack)
+- Destination registry (Harbor, GHCR, zot or any OCI registry)
 
 **Non-interactive flags:**
 ```bash

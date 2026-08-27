@@ -16,7 +16,7 @@ import (
 // addArtifactFlags registers the flags every registry-backed validation takes.
 func addArtifactFlags(c *cobra.Command) {
 	c.Flags().String("artifact", "", "OCI artifact reference to validate (e.g., ghcr.io/my-org/my-model:latest)")
-	c.Flags().String("registry", "", "Registry tool: oras or modelpack")
+	c.Flags().String("registry", "", "Registry tool: "+workflow.RegistryOptions().Summary())
 }
 
 // addOutputFlags registers the output flags every validation takes.
@@ -49,7 +49,7 @@ func resolveArtifact(cmd *cobra.Command) (string, workflow.RegistryProvider, err
 		return "", nil, err
 	}
 	cfg := config.Load()
-	if err := askSelectIfEmpty(cmd, "registry", &cfg.Registry, "Registry tool:", "Choose how to fetch the artifact manifest", []string{"oras", "modelpack"}); err != nil {
+	if err := askSelectToolIfEmpty(cmd, "registry", &cfg.Registry, "Registry tool:", "Choose how to fetch the artifact manifest", workflow.RegistryOptions()); err != nil {
 		return "", nil, err
 	}
 	warnIfSaveFails(config.Save(cfg))

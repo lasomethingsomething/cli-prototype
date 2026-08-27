@@ -76,6 +76,12 @@ func (w *HardenWorkflow) SetSBOMTool(tool string, format SBOMFormat) {
 	w.sbomFormat = format
 }
 
+// SBOMTool returns the name of the SBOM generator in use.
+func (w *HardenWorkflow) SBOMTool() string { return w.sbomTool }
+
+// SBOMFormat returns the SBOM output format in use.
+func (w *HardenWorkflow) SBOMFormat() SBOMFormat { return w.sbomFormat }
+
 // SetAnnotations sets the annotation set to update
 func (w *HardenWorkflow) SetAnnotations(annotations *AnnotationSet) {
 	w.annotations = annotations
