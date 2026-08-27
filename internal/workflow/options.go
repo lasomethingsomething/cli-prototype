@@ -75,7 +75,7 @@ func (opts ToolOptions) Bullets() string {
 func RegistryOptions() ToolOptions {
 	return ToolOptions{
 		{Name: "oras", Description: "any OCI registry (Harbor, GHCR, zot, ...)", Recommended: true},
-		{Name: "modelpack", Description: "ML-optimized packaging (planned, not implemented yet)"},
+		{Name: "modelpack", Description: "CNCF ModelPack Model Spec artifacts via modctl (needs oras too)"},
 	}
 }
 

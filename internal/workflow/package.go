@@ -111,11 +111,16 @@ func (w *PackageWorkflow) Run() error {
 
 	fmt.Println("\n=== Packaging ===")
 
-	// Display annotations that will be included
-	if w.annotations != nil {
-		w.annotations.Print()
-		fmt.Println()
+	// The packaging format is a fact about this run, not a user choice: it
+	// is whatever the registry tool produces (issue #102).
+	if w.annotations == nil {
+		w.annotations = NewAnnotationSet()
 	}
+	w.annotations.PackagingFormat = w.registryProvider.PackagingFormat()
+
+	// Display annotations that will be included
+	w.annotations.Print()
+	fmt.Println()
 
 	// Create OCI artifact manifest
 	fmt.Println("→ Creating OCI artifact manifest...")
@@ -124,12 +129,7 @@ func (w *PackageWorkflow) Run() error {
 	// and write it to disk alongside the packaged model files.
 	fmt.Println("→ Injecting CNCF AI Interoperability Profile annotations...")
 
-	var manifestAnnotations map[string]string
-	if w.annotations != nil {
-		manifestAnnotations = w.annotations.ToMap()
-	} else {
-		manifestAnnotations = make(map[string]string)
-	}
+	manifestAnnotations := w.annotations.ToMap()
 
 	artifactType := ArtifactTypeModel
 	if w.isSkill {

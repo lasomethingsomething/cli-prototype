@@ -33,6 +33,7 @@ type fakeReferrer struct {
 func (f *fakeRegistryProvider) Name() string                         { return "fake" }
 func (f *fakeRegistryProvider) IsInstalled() bool                    { return f.installed }
 func (f *fakeRegistryProvider) InstallInstructions() string          { return "n/a" }
+func (f *fakeRegistryProvider) PackagingFormat() string              { return "fake-format" }
 func (f *fakeRegistryProvider) Pull(artifact, registry string) error { return nil }
 func (f *fakeRegistryProvider) Push(artifact, registry, sourcePath string, annotations map[string]string) (string, error) {
 	f.pushCalled = true
@@ -276,6 +277,17 @@ func TestPackageWorkflowRunWritesManifestWithAnnotations(t *testing.T) {
 	}
 	if fake.pushedAnnotations[AnnotationRuntime] != "vllm" {
 		t.Errorf("Push() annotations[%s] = %q, want %q", AnnotationRuntime, fake.pushedAnnotations[AnnotationRuntime], "vllm")
+	}
+
+	// The packaging format records what the registry tool produced, not a
+	// default (issue #102).
+	for name, got := range map[string]string{
+		"manifest": manifest.Annotations[AnnotationPackagingFormat],
+		"Push()":   fake.pushedAnnotations[AnnotationPackagingFormat],
+	} {
+		if got != "fake-format" {
+			t.Errorf("%s annotation %s = %q, want the provider's %q", name, AnnotationPackagingFormat, got, "fake-format")
+		}
 	}
 
 	// Verify local digest was computed
