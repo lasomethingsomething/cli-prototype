@@ -18,6 +18,16 @@ type fakeRegistryProvider struct {
 	pushCalled        bool
 	// For local parity testing: store the artifact digest
 	artifactDigest map[string]string // maps artifact name to its digest
+	// Referrers attached with PushReferrer, in order; referrerErr makes it fail.
+	referrers   []fakeReferrer
+	referrerErr error
+}
+
+// fakeReferrer records one PushReferrer call.
+type fakeReferrer struct {
+	artifact, registry, referrerType string
+	data                             []byte
+	annotations                      map[string]string
 }
 
 func (f *fakeRegistryProvider) Name() string                         { return "fake" }
@@ -45,12 +55,20 @@ func fakeDigest(artifact string) string {
 	return fmt.Sprintf("sha256:%064x", len(artifact))
 }
 func (f *fakeRegistryProvider) PushReferrer(artifact, registry, referrerType string, data []byte, annotations map[string]string) error {
-	// For testing, we don't need to do anything with referrers
+	if f.referrerErr != nil {
+		return f.referrerErr
+	}
+	f.referrers = append(f.referrers, fakeReferrer{artifact, registry, referrerType, data, annotations})
 	return nil
 }
 func (f *fakeRegistryProvider) GetReferrers(artifact, registry, referrerType string) ([][]byte, error) {
-	// For testing, return empty referrers
-	return nil, nil
+	var out [][]byte
+	for _, r := range f.referrers {
+		if r.artifact == artifact && r.registry == registry && r.referrerType == referrerType {
+			out = append(out, r.data)
+		}
+	}
+	return out, nil
 }
 func (f *fakeRegistryProvider) GetArtifactDigest(artifact, registry string) (string, error) {
 	if digest, ok := f.artifactDigest[artifact]; ok {
@@ -425,7 +443,7 @@ func TestPackageWorkflowDoesNotGenerateProvenance(t *testing.T) {
 	// In the old implementation, provenance would be generated during packaging
 	// Now it should only be generated in the sign command (Phase 1, Step 3)
 	// The workflow should complete without errors, but without provenance generation
-	
+
 	// Check that manifest was created (packaging succeeded)
 	if pf.ManifestPath() == "" {
 		t.Error("expected manifest to be created")
