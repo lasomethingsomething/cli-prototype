@@ -234,6 +234,42 @@ func TestPackageWorkflowRunWritesManifestWithAnnotations(t *testing.T) {
 	}
 }
 
+// TestPackageWorkflowRunTwiceKeepsLayers verifies that the files package
+// writes next to the model (manifest.json, config.json) do not become layers
+// when the same directory is packaged again.
+func TestPackageWorkflowRunTwiceKeepsLayers(t *testing.T) {
+	modelPath := t.TempDir()
+	if err := os.WriteFile(filepath.Join(modelPath, "model.txt"), []byte("weights"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	run := func() *UnifiedOCIManifest {
+		pf := &PackageWorkflow{registry: "fake", registryProvider: &fakeRegistryProvider{installed: true}, annotations: NewAnnotationSet()}
+		pf.SetPackageInfo("phi-4-mini", modelPath, "my-model:v1", "ghcr.io/my-org", false, "")
+		if err := pf.Run(); err != nil {
+			t.Fatalf("Run() error = %v", err)
+		}
+		m, err := ReadUnifiedOCIManifest(pf.ManifestPath())
+		if err != nil {
+			t.Fatalf("ReadUnifiedOCIManifest() error = %v", err)
+		}
+		return m
+	}
+
+	first := run()
+	if _, err := os.Stat(filepath.Join(modelPath, "config.json")); err != nil {
+		t.Fatalf("package should write config.json next to the model: %v", err)
+	}
+	second := run()
+
+	if len(first.Layers) != 1 || len(second.Layers) != 1 {
+		t.Fatalf("layers after first run = %d, after second run = %d, want 1 and 1 (generated files must not become layers)", len(first.Layers), len(second.Layers))
+	}
+	if first.Layers[0].Digest != second.Layers[0].Digest {
+		t.Errorf("layer digest changed between runs: %s vs %s", first.Layers[0].Digest, second.Layers[0].Digest)
+	}
+}
+
 // TestPackageWorkflowRunVerifiesLocalParity verifies that Run() compares the
 // digest reported by Push with the digest stored in the registry.
 func TestPackageWorkflowRunVerifiesLocalParity(t *testing.T) {

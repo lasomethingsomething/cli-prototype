@@ -247,9 +247,14 @@ func hasAnySuffix(filename string, suffixes []string) bool {
 }
 
 // isGeneratedArtifact reports whether a file was produced by model-cli itself
-// (manifest, attestation, SBOM) and should not influence classification.
+// (manifest, config blob, attestation, SBOM) and should neither influence
+// classification nor become a layer of the artifact.
 func isGeneratedArtifact(filename string) bool {
-	return filename == "manifest.json" || filename == "attestation.json" || strings.HasPrefix(filename, "sbom.")
+	switch filename {
+	case "manifest.json", "config.json", "attestation.json":
+		return true
+	}
+	return strings.HasPrefix(filename, "sbom.")
 }
 
 // isTrainingDataFile checks if a filename is training data
