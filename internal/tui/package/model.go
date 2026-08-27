@@ -43,6 +43,10 @@ type Model struct {
 	includeRAG   bool
 	ragPath      string
 
+	// SBOM is a required prerequisite (Phase 1 Step 2); its failure aborts packaging.
+	// Defaults to true; opt out only when syft is unavailable.
+	generateSBOM bool
+
 	// Annotation conventions (CNCF AI Interoperability Profile)
 	runtime       string
 	accelerator   string
@@ -82,13 +86,14 @@ const (
 // New creates a new package TUI model
 func New(registry string) *Model {
 	m := &Model{
-		panel:       PanelIntro,
-		registry:    registry,
-		width:       80,
-		height:      24,
-		logs:        make([]string, 0),
-		includeRAG:  false,
-		currentStep: 0,
+		panel:        PanelIntro,
+		registry:     registry,
+		width:        80,
+		height:       24,
+		logs:         make([]string, 0),
+		includeRAG:   false,
+		generateSBOM: true,
+		currentStep:  0,
 		steps: []Step{
 			{Label: "Collect model information", State: StepPending},
 			{Label: "Configure annotation conventions", State: StepPending},
@@ -265,6 +270,7 @@ func (m *Model) startPackaging() tea.Cmd {
 	return func() tea.Msg {
 		// Set up the workflow with collected info
 		m.workflow.SetPackageInfo(m.modelName, m.modelPath, m.artifactName, "", m.includeRAG, m.ragPath)
+		m.workflow.SetSecurityOptions(m.generateSBOM, true)
 
 		// Set annotations
 		annotations := workflow.NewAnnotationSet()
@@ -526,6 +532,7 @@ func (m *Model) renderModelInfoForm() string {
 	sb.WriteString(fmt.Sprintf("Model Path:    %s\n", m.modelPath))
 	sb.WriteString(fmt.Sprintf("Artifact:      %s\n", m.artifactName))
 	sb.WriteString(fmt.Sprintf("Include RAG:   %v\n", m.includeRAG))
+	sb.WriteString(fmt.Sprintf("Generate SBOM: %v\n", m.generateSBOM))
 
 	if m.includeRAG && m.ragPath != "" {
 		sb.WriteString(fmt.Sprintf("RAG Path:      %s\n", m.ragPath))
@@ -579,6 +586,10 @@ func (m *Model) renderReviewSummary() string {
 	sb.WriteString(fmt.Sprintf("  Accelerator: %s\n", m.accelerator))
 
 	sb.WriteString("\n")
+	sb.WriteString("Security:\n")
+	sb.WriteString(fmt.Sprintf("  Generate SBOM: %v\n", m.generateSBOM))
+
+	sb.WriteString("\n")
 	sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF88")).Render("✓ Ready to package"))
 
 	sb.WriteString("\n\n")
@@ -601,7 +612,9 @@ func (m *Model) renderPackagingProgress() string {
 			sb.WriteString("→ Adding RAG context...\n")
 		}
 		sb.WriteString("→ Packaging model files...\n")
-		sb.WriteString("→ Generating SBOM...\n")
+		if m.generateSBOM {
+			sb.WriteString("→ Generating SBOM...\n")
+		}
 		sb.WriteString("→ Applying MOF classification...\n")
 	} else if m.err != nil {
 		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#FF5555")).Render("✗ Error: "+m.err.Error()) + "\n")
@@ -637,6 +650,13 @@ func (m *Model) SetModelInfo(name, path, artifact string, includeRAG bool, ragPa
 	m.artifactName = artifact
 	m.includeRAG = includeRAG
 	m.ragPath = ragPath
+}
+
+// SetGenerateSBOM enables or disables SBOM generation. The SBOM is a required
+// prerequisite (Phase 1 Step 2) and its failure aborts packaging, so this
+// defaults to true; disable only if syft is unavailable.
+func (m *Model) SetGenerateSBOM(generate bool) {
+	m.generateSBOM = generate
 }
 
 // SetAnnotations sets the annotation conventions
