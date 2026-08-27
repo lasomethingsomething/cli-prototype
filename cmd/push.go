@@ -186,15 +186,7 @@ Examples:
 			existingAnnotations = existingManifest.Annotations
 		}
 
-		// Merge annotations from unified manifest with existing annotations
-		// Unified manifest annotations take precedence
-		mergedAnnotations := make(map[string]string)
-		for k, v := range existingAnnotations {
-			mergedAnnotations[k] = v
-		}
-		for k, v := range unifiedManifest.Annotations {
-			mergedAnnotations[k] = v
-		}
+		mergedAnnotations := mergeManifestAnnotations(existingAnnotations, unifiedManifest.Annotations)
 
 		fmt.Printf("\nPushing '%s' to '%s' using %s...\n", artifact, destination, registry)
 
@@ -368,6 +360,22 @@ func parseRelationships(relationships []string) map[string][]string {
 }
 
 // createUnifiedOCIManifest creates a unified OCI manifest based on artifact type and configuration
+// mergeManifestAnnotations combines the annotations read from --manifest with
+// the ones push generates. The manifest file is what package and harden
+// wrote about the actual model (accelerator, MOF class, components, ...), so
+// its values win; the generated ones are placeholders that only fill keys the
+// file does not have (issue #98).
+func mergeManifestAnnotations(fromManifest, generated map[string]string) map[string]string {
+	merged := make(map[string]string, len(fromManifest)+len(generated))
+	for k, v := range generated {
+		merged[k] = v
+	}
+	for k, v := range fromManifest {
+		merged[k] = v
+	}
+	return merged
+}
+
 func createUnifiedOCIManifest(artifactType workflow.ArtifactType, artifactName, modelType, skillType, pipelineType string, relationships map[string][]string) (*workflow.UnifiedOCIManifest, error) {
 	// Create the manifest with appropriate layers
 	// For now, we create an empty layer list - in production this would contain
