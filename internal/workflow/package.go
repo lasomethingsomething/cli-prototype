@@ -188,24 +188,24 @@ func (w *PackageWorkflow) Run() error {
 
 	// === Security & Supply Chain Steps ===
 
-	// 1. Generate SBOM if requested
+	// 1. Generate SBOM - SBOM is a prerequisite for Phase 1 Step 2, failure must block workflow
 	if w.generateSBOM {
 		fmt.Println("\n=== Supply Chain Security ===")
 		fmt.Println("✓ Generating SBOM (Software Bill of Materials)...")
 
 		sbomGen, err := GetSBOMGenerator(w.sbomTool)
 		if err != nil {
-			fmt.Printf("  Note: SBOM generation skipped: %v\n", err)
-		} else {
-			sbomPath := filepath.Join(w.modelPath, "sbom."+string(w.sbomFormat))
-			if err := sbomGen.Generate(w.modelPath, sbomPath, w.sbomFormat); err != nil {
-				fmt.Printf("  Warning: SBOM generation failed: %v\n", err)
-			} else {
-				fmt.Printf("  SBOM generated: %s (format: %s)\n", sbomPath, w.sbomFormat)
-				// Attach SBOM as OCI layer
-				fmt.Printf("  SBOM attached as OCI layer with format: %s\n", w.sbomFormat)
-			}
+			return fmt.Errorf("SBOM generator not available: %v. SBOM is a required prerequisite for Phase 1 Step 2", err)
 		}
+
+		sbomPath := filepath.Join(w.modelPath, "sbom."+string(w.sbomFormat))
+		if err := sbomGen.Generate(w.modelPath, sbomPath, w.sbomFormat); err != nil {
+			return fmt.Errorf("SBOM generation failed: %v. SBOM is a required prerequisite for Phase 1 Step 2", err)
+		}
+
+		fmt.Printf("  SBOM generated: %s (format: %s)\n", sbomPath, w.sbomFormat)
+		// Attach SBOM as OCI layer
+		fmt.Printf("  SBOM attached as OCI layer with format: %s\n", w.sbomFormat)
 	}
 
 	// 2. MOF classification: fill in what the user left empty, and warn when
