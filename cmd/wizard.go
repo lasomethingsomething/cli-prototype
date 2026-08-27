@@ -242,6 +242,17 @@ Examples:
 			}
 		}
 
+		// SBOM is a required prerequisite (Phase 1 Step 2): its failure aborts packaging.
+		// Default to yes; the opt-out exists only for environments without syft.
+		generateSBOM := true
+		if err := huh.NewConfirm().
+			Title("Generate SBOM?").
+			Description("Required prerequisite; disable only if syft is unavailable (brew install anchore/syft/syft)").
+			Value(&generateSBOM).
+			Run(); err != nil {
+			return err
+		}
+
 		fmt.Println(successStyle.Render("✓ Model details collected"))
 		fmt.Println()
 
@@ -308,6 +319,7 @@ Examples:
 				return err
 			}
 			pf.SetPackageInfo(modelName, modelPath, artifactName, "", includeRAG, ragPath)
+			pf.SetSecurityOptions(generateSBOM, true)
 
 			if err := pf.Run(); err != nil {
 				return err
