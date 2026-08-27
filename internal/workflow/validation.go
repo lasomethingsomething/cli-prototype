@@ -175,14 +175,18 @@ func EvaluateEnvironmentPolicy(r *ValidationReport, annotations map[string]strin
 		r.Pass(SectionEnvironment, "environment", policy.Environment)
 
 	case "air-gapped":
-		if format, ok := annotations[AnnotationPackagingFormat]; ok {
-			if format == "modelpack" {
-				r.Pass(SectionEnvironment, AnnotationPackagingFormat, format+" (supports air-gapped deployment)")
-			} else {
-				r.Warn(SectionEnvironment, AnnotationPackagingFormat, format+" may not support air-gapped deployment; consider modelpack")
-			}
-		} else {
+		// Both formats model-cli produces are self-contained OCI artifacts
+		// that can be mirrored into an air-gapped registry; anything else
+		// is unknown to us and worth a look.
+		switch format, ok := annotations[AnnotationPackagingFormat]; {
+		case !ok:
 			r.Warn(SectionEnvironment, AnnotationPackagingFormat, "missing; cannot confirm air-gapped packaging")
+		case format == PackagingFormatModelPack:
+			r.Pass(SectionEnvironment, AnnotationPackagingFormat, format+" (Model Spec artifact; mirror with `modctl pull`/`push` into the air-gapped registry)")
+		case format == PackagingFormatOCI:
+			r.Pass(SectionEnvironment, AnnotationPackagingFormat, format+" (plain OCI artifact; mirror with `oras copy` into the air-gapped registry)")
+		default:
+			r.Warn(SectionEnvironment, AnnotationPackagingFormat, format+" is not a format model-cli produces; confirm it can be mirrored into the air-gapped registry")
 		}
 		if format, ok := annotations[AnnotationSBOMFormat]; ok {
 			r.Pass(SectionEnvironment, AnnotationSBOMFormat, format+" (available for air-gapped compliance)")

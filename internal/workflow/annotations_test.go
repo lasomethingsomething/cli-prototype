@@ -33,6 +33,11 @@ func TestNewAnnotationSet(t *testing.T) {
 	if annotations.CUDAMin != "12.1" {
 		t.Errorf("CUDAMin = %q, want %q", annotations.CUDAMin, "12.1")
 	}
+	// Only the registry tool that packages the artifact knows the format
+	// (issue #102); a default would let a manifest claim one not used.
+	if annotations.PackagingFormat != "" {
+		t.Errorf("PackagingFormat = %q, want empty until a registry tool sets it", annotations.PackagingFormat)
+	}
 }
 
 // Test AnnotationSet ToMap conversion
@@ -40,6 +45,7 @@ func TestAnnotationSetToMap(t *testing.T) {
 	annotations := NewAnnotationSet()
 	annotations.MOFClass = "I"
 	annotations.MOFComponents = "weights,training-data"
+	annotations.PackagingFormat = PackagingFormatOCI
 
 	m := annotations.ToMap()
 

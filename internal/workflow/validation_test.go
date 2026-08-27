@@ -9,6 +9,7 @@ import (
 func fullAnnotations() map[string]string {
 	a := NewAnnotationSet()
 	a.MOFClass = "II"
+	a.PackagingFormat = PackagingFormatOCI
 	return a.ToMap()
 }
 
@@ -74,20 +75,42 @@ func TestEvaluateEnvironmentPolicyHybridCloud(t *testing.T) {
 }
 
 func TestEvaluateEnvironmentPolicyAirGapped(t *testing.T) {
-	ann := fullAnnotations()
-	ann[AnnotationPackagingFormat] = "oras"
-	r := EvaluateArtifact("gitops", "m:v1", ann, Policy{Environment: "air-gapped"})
-	if !r.Passed {
-		t.Errorf("air-gapped checks are advisory, got failure: %v", r.Missing)
-	}
-	found := false
-	for _, w := range r.Warnings {
-		if strings.Contains(w, "modelpack") {
-			found = true
-		}
-	}
-	if !found {
-		t.Errorf("want a warning suggesting modelpack, got %v", r.Warnings)
+	// Both formats model-cli produces are mirrorable OCI artifacts, so
+	// neither draws a warning; a format we do not know, or none, does.
+	for _, tc := range []struct {
+		name     string
+		format   string // "" removes the annotation
+		wantWarn string
+	}{
+		{"oci passes", PackagingFormatOCI, ""},
+		{"modelpack passes", PackagingFormatModelPack, ""},
+		{"unknown format warns", "oras", "oras is not a format model-cli produces"},
+		{"missing warns", "", "missing"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ann := fullAnnotations()
+			if tc.format == "" {
+				delete(ann, AnnotationPackagingFormat)
+			} else {
+				ann[AnnotationPackagingFormat] = tc.format
+			}
+			r := EvaluateArtifact("gitops", "m:v1", ann, Policy{Environment: "air-gapped"})
+			if !r.Passed {
+				t.Errorf("air-gapped checks are advisory, got failure: %v", r.Missing)
+			}
+			var formatWarnings []string
+			for _, w := range r.Warnings {
+				if strings.Contains(w, AnnotationPackagingFormat) {
+					formatWarnings = append(formatWarnings, w)
+				}
+			}
+			switch {
+			case tc.wantWarn == "" && len(formatWarnings) != 0:
+				t.Errorf("want no packaging-format warning, got %v", formatWarnings)
+			case tc.wantWarn != "" && (len(formatWarnings) != 1 || !strings.Contains(formatWarnings[0], tc.wantWarn)):
+				t.Errorf("want one warning containing %q, got %v", tc.wantWarn, formatWarnings)
+			}
+		})
 	}
 }
 

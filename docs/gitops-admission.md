@@ -129,7 +129,7 @@ The `validate gitops` command supports environment-specific safety policy valida
 #### Air-Gapped Environments
 
 Validates that artifacts are suitable for air-gapped deployment:
-- Checks packaging format (recommends `modelpack` for air-gapped)
+- Checks the packaging format is one model-cli produces (`oci` via ORAS or `modelpack` via modctl), both of which can be mirrored into an air-gapped registry
 - Verifies SBOM is present for compliance
 - Reminds to pre-load dependencies
 
