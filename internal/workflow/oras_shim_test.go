@@ -21,11 +21,35 @@ func installFakeOras(t *testing.T, stdout string, exitCode int) func() []string 
 // response, so a single-element slice answers every call the same way.
 func installFakeOrasSequence(t *testing.T, responses []string, exitCode int) func() []string {
 	t.Helper()
+	fakes := make([]fakeOrasResponse, len(responses))
+	for i, r := range responses {
+		fakes[i] = fakeOrasResponse{stdout: r, exitCode: exitCode}
+	}
+	return installFakeOrasResponses(t, fakes)
+}
+
+// fakeOrasResponse is what the fake oras prints and exits with for one call.
+type fakeOrasResponse struct {
+	stdout   string
+	exitCode int
+}
+
+// installFakeOrasResponses answers the n-th oras invocation with
+// responses[n], each with its own stdout and exit code. Invocations beyond
+// the slice reuse the last response.
+func installFakeOrasResponses(t *testing.T, responses []fakeOrasResponse) func() []string {
+	t.Helper()
+	if len(responses) == 0 {
+		t.Fatal("installFakeOrasResponses needs at least one response")
+	}
 	dir := t.TempDir()
 	logFile := filepath.Join(dir, "calls.log")
 	counterFile := filepath.Join(dir, "counter")
 	for i, r := range responses {
-		if err := os.WriteFile(filepath.Join(dir, "stdout."+itoa(i)), []byte(r), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "stdout."+itoa(i)), []byte(r.stdout), 0644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "exit."+itoa(i)), []byte(itoa(r.exitCode)), 0644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -36,8 +60,10 @@ func installFakeOrasSequence(t *testing.T, responses []string, exitCode int) fun
 		"echo $((n+1)) > \"" + counterFile + "\"\n" +
 		"f=\"" + dir + "/stdout.$n\"\n" +
 		"[ -f \"$f\" ] || f=\"" + dir + "/stdout." + last + "\"\n" +
+		"e=\"" + dir + "/exit.$n\"\n" +
+		"[ -f \"$e\" ] || e=\"" + dir + "/exit." + last + "\"\n" +
 		"cat \"$f\"\n" +
-		"exit " + itoa(exitCode) + "\n"
+		"exit $(cat \"$e\")\n"
 	if err := os.WriteFile(filepath.Join(dir, "oras"), []byte(script), 0755); err != nil {
 		t.Fatal(err)
 	}

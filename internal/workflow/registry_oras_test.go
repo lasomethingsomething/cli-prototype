@@ -218,3 +218,148 @@ func TestParseDiscoverOutputAcceptsBothKeys(t *testing.T) {
 		t.Errorf("empty: refs=%v err=%v", refs, err)
 	}
 }
+
+const (
+	searchDigestModel    = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	searchDigestPipeline = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	searchDigestPlain    = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+)
+
+// installSearchRegistry fakes a registry with three repositories as the
+// ORAS CLI reports them: e2e/model has a model (v1) and a pipeline (v2),
+// e2e/broken cannot list its tags, and plain holds a manifest without
+// annotations. It returns the recorded oras invocations.
+func installSearchRegistry(t *testing.T) func() []string {
+	t.Helper()
+	ok := func(stdout string) fakeOrasResponse { return fakeOrasResponse{stdout: stdout} }
+	return installFakeOrasResponses(t, []fakeOrasResponse{
+		ok("e2e/model\ne2e/broken\nplain\n"), // repo ls
+		ok("v1\nv2\n"),                       // repo tags e2e/model
+		ok(`{"mediaType":"application/vnd.oci.image.manifest.v1+json","digest":"` + searchDigestModel + `","size":1}`),
+		ok(`{"schemaVersion":2,"artifactType":"application/vnd.cncf.ai.model","annotations":{"` + AnnotationArtifactType + `":"model","ai.model.type":"llm","` + AnnotationRuntime + `":"vllm"}}`),
+		ok(`{"mediaType":"application/vnd.oci.image.manifest.v1+json","digest":"` + searchDigestPipeline + `","size":1}`),
+		ok(`{"schemaVersion":2,"artifactType":"application/vnd.cncf.ai.pipeline","annotations":{"` + AnnotationArtifactType + `":"pipeline","ai.pipeline.type":"inference"}}`),
+		{stdout: "", exitCode: 1}, // repo tags e2e/broken
+		ok("latest\n"),            // repo tags plain
+		ok(`{"mediaType":"application/vnd.oci.image.manifest.v1+json","digest":"` + searchDigestPlain + `","size":1}`),
+		ok(`{"schemaVersion":2,"layers":[]}`), // no annotations at all
+	})
+}
+
+func TestORASSearchWalksRegistryWithORAS(t *testing.T) {
+	calls := installSearchRegistry(t)
+
+	got, err := (&ORASProvider{}).Search("localhost:5000", NewSearchQuery())
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+
+	want := []ManifestCandidate{
+		{Reference: "localhost:5000/e2e/model:v1", Digest: searchDigestModel, ArtifactType: "model"},
+		{Reference: "localhost:5000/e2e/model:v2", Digest: searchDigestPipeline, ArtifactType: "pipeline"},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("Search() returned %d candidates, want %d: %+v", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i].Reference != want[i].Reference || got[i].Digest != want[i].Digest || got[i].ArtifactType != want[i].ArtifactType {
+			t.Errorf("candidate %d = {%s %s %s}, want {%s %s %s}", i,
+				got[i].Reference, got[i].Digest, got[i].ArtifactType,
+				want[i].Reference, want[i].Digest, want[i].ArtifactType)
+		}
+	}
+	if got[0].Annotations[AnnotationRuntime] != "vllm" || len(got[0].Manifest) == 0 {
+		t.Errorf("candidate 0 lost its annotations or manifest: %+v", got[0])
+	}
+
+	wantArgs := []string{
+		"repo ls localhost:5000",
+		"repo tags localhost:5000/e2e/model",
+		"manifest fetch --descriptor localhost:5000/e2e/model:v1",
+		"manifest fetch localhost:5000/e2e/model:v1",
+		"manifest fetch --descriptor localhost:5000/e2e/model:v2",
+		"manifest fetch localhost:5000/e2e/model:v2",
+		"repo tags localhost:5000/e2e/broken",
+		"repo tags localhost:5000/plain",
+		"manifest fetch --descriptor localhost:5000/plain:latest",
+		"manifest fetch localhost:5000/plain:latest",
+	}
+	recorded := calls()
+	if len(recorded) != len(wantArgs) {
+		t.Fatalf("expected %d oras invocations, got %d: %v", len(wantArgs), len(recorded), recorded)
+	}
+	for i, want := range wantArgs {
+		_, args, _ := strings.Cut(recorded[i], "\t")
+		if args != want {
+			t.Errorf("call %d args = %q, want %q", i, args, want)
+		}
+	}
+}
+
+func TestORASSearchAppliesQueryFilters(t *testing.T) {
+	cases := []struct {
+		name  string
+		query func(q *SearchQuery)
+		want  []string
+	}{
+		{"type model", func(q *SearchQuery) { q.ArtifactType = "model" }, []string{"localhost:5000/e2e/model:v1"}},
+		{"type pipeline", func(q *SearchQuery) { q.ArtifactType = "pipeline" }, []string{"localhost:5000/e2e/model:v2"}},
+		{"type without matches", func(q *SearchQuery) { q.ArtifactType = "skill" }, nil},
+		{"metadata match", func(q *SearchQuery) { q.MetadataFilters["ai.model.type"] = "llm" }, []string{"localhost:5000/e2e/model:v1"}},
+		{"metadata value mismatch", func(q *SearchQuery) { q.MetadataFilters["ai.model.type"] = "embedding" }, nil},
+		{"all metadata pairs must match", func(q *SearchQuery) {
+			q.MetadataFilters["ai.model.type"] = "llm"
+			q.MetadataFilters["ai.pipeline.type"] = "inference"
+		}, nil},
+		{"type and metadata", func(q *SearchQuery) {
+			q.ArtifactType = "model"
+			q.MetadataFilters[AnnotationRuntime] = "vllm"
+		}, []string{"localhost:5000/e2e/model:v1"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			installSearchRegistry(t)
+			query := NewSearchQuery()
+			tc.query(query)
+
+			got, err := (&ORASProvider{}).Search("localhost:5000", query)
+			if err != nil {
+				t.Fatalf("Search() error = %v", err)
+			}
+			var refs []string
+			for _, c := range got {
+				refs = append(refs, c.Reference)
+			}
+			if strings.Join(refs, ",") != strings.Join(tc.want, ",") {
+				t.Errorf("Search() = %v, want %v", refs, tc.want)
+			}
+		})
+	}
+}
+
+func TestORASSearchFailsWhenRepositoriesCannotBeListed(t *testing.T) {
+	installFakeOras(t, "", 1)
+	_, err := (&ORASProvider{}).Search("localhost:5000", NewSearchQuery())
+	if err == nil || !strings.Contains(err.Error(), "failed to list repositories of localhost:5000") {
+		t.Errorf("Search() error = %v, want a repository listing failure", err)
+	}
+}
+
+func TestORASSearchSkipsUnfetchableManifest(t *testing.T) {
+	ok := func(stdout string) fakeOrasResponse { return fakeOrasResponse{stdout: stdout} }
+	installFakeOrasResponses(t, []fakeOrasResponse{
+		ok("e2e/model\n"),
+		ok("v1\nv2\n"),
+		{stdout: "", exitCode: 1}, // descriptor of v1 fails
+		ok(`{"digest":"` + searchDigestPipeline + `"}`),
+		ok(`{"annotations":{"` + AnnotationArtifactType + `":"pipeline"}}`),
+	})
+
+	got, err := (&ORASProvider{}).Search("localhost:5000", NewSearchQuery())
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if len(got) != 1 || got[0].Reference != "localhost:5000/e2e/model:v2" {
+		t.Errorf("Search() = %+v, want only e2e/model:v2", got)
+	}
+}

@@ -363,7 +363,7 @@ func TestModelPackProviderIsNotImplemented(t *testing.T) {
 		"GetArtifactDigest":        func() error { _, err := p.GetArtifactDigest("my-model:v1", "ghcr.io/my-org"); return err },
 		"PushReferrer":             func() error { return p.PushReferrer("my-model:v1", "ghcr.io/my-org", "t", nil, nil) },
 		"GetReferrers":             func() error { _, err := p.GetReferrers("my-model:v1", "ghcr.io/my-org", "t"); return err },
-		"Search":                   func() error { _, err := p.Search("ghcr.io/my-org", ""); return err },
+		"Search":                   func() error { _, err := p.Search("ghcr.io/my-org", NewSearchQuery()); return err },
 		"FetchManifestAnnotations": func() error { _, err := p.FetchManifestAnnotations("ghcr.io/my-org/my-model:v1"); return err },
 	}
 	for name, op := range ops {

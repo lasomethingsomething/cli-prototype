@@ -129,44 +129,27 @@ func (q *SearchQuery) String() string {
 	return strings.Join(parts, ", ")
 }
 
-// ToFilterString converts the query to a registry filter string
-// This follows the OCI Distribution Spec filtering format
-func (q *SearchQuery) ToFilterString() string {
-	var filters []string
-
-	// Filter by artifact type
-	if q.ArtifactType != "" {
-		filters = append(filters, fmt.Sprintf("%s=%s", AnnotationArtifactType, q.ArtifactType))
+// MatchesAnnotations reports whether a manifest with the given annotations
+// satisfies the query's annotation filters: the artifact type (if set) must
+// equal the org.cncf.ai.artifact.type annotation, and every metadata filter
+// must be present with exactly that value. Relationship filters are not
+// evaluated here; see SearchResults.FilterByRelationship.
+func (q *SearchQuery) MatchesAnnotations(annotations map[string]string) bool {
+	if q.ArtifactType != "" && annotations[AnnotationArtifactType] != q.ArtifactType {
+		return false
 	}
-
-	// Add metadata filters
-	for k, v := range q.MetadataFilters {
-		// Handle special AI metadata paths
-		if strings.HasPrefix(k, "ai.") {
-			// These are in the ai.assets annotation
-			filters = append(filters, fmt.Sprintf("%s=%s", k, v))
-		} else {
-			filters = append(filters, fmt.Sprintf("%s=%s", k, v))
+	for key, want := range q.MetadataFilters {
+		if got, ok := annotations[key]; !ok || got != want {
+			return false
 		}
 	}
+	return true
+}
 
-	// Add relationship filters
-	// These are more complex and may require client-side filtering
-	// since not all registries support complex relationship queries
-	if q.Model != "" {
-		filters = append(filters, fmt.Sprintf("ai.model.ref=%s", q.Model))
-	}
-	if q.Skill != "" {
-		filters = append(filters, fmt.Sprintf("ai.skill.ref=%s", q.Skill))
-	}
-	if q.Pipeline != "" {
-		filters = append(filters, fmt.Sprintf("ai.pipeline.ref=%s", q.Pipeline))
-	}
-	if q.Dataset != "" {
-		filters = append(filters, fmt.Sprintf("ai.dataset.ref=%s", q.Dataset))
-	}
-
-	return strings.Join(filters, "&")
+// hasRelationshipFilter reports whether the query filters on the
+// relationship graph, which only results that carry one can satisfy.
+func (q *SearchQuery) hasRelationshipFilter() bool {
+	return q.UsesModel != "" || q.UsesSkill != "" || q.RequiresModel != "" || q.UsedBy != ""
 }
 
 // NewSearchResults creates a new search results container
@@ -270,9 +253,12 @@ func (r *SearchResults) FilterByRelationship(query *SearchQuery) *SearchResults 
 	filtered := NewSearchResults(query, r.Registry)
 
 	for _, result := range r.Results {
-		// If no relationship graph, include it (can't filter)
+		// Without a relationship graph a result cannot satisfy a
+		// relationship filter; otherwise fall back to the annotations.
 		if result.RelationshipGraph == nil {
-			// Check if annotations contain the relationship info
+			if query.hasRelationshipFilter() {
+				continue
+			}
 			if r.matchesAnnotationQuery(result, query) {
 				filtered.AddResult(result)
 			}
@@ -416,57 +402,76 @@ func (r *SearchResults) matchesAnnotationQuery(result SearchResult, query *Searc
 	return false
 }
 
-// ParseSearchResultsFromManifests parses search results from a list of manifest bytes
-func ParseSearchResultsFromManifests(manifests [][]byte) (*SearchResults, error) {
+// ManifestCandidate is one tagged manifest found by RegistryProvider.Search,
+// identified by its reference and digest, with the annotations that the
+// search filters and results are built from.
+type ManifestCandidate struct {
+	// Reference is the full artifact reference (registry/repository:tag).
+	Reference string
+
+	// Digest is the manifest digest as stored in the registry.
+	Digest string
+
+	// ArtifactType is the org.cncf.ai.artifact.type annotation, or "" if
+	// the manifest does not declare one.
+	ArtifactType string
+
+	// Annotations are the manifest-level OCI annotations (nil if none).
+	Annotations map[string]string
+
+	// Manifest is the raw manifest JSON.
+	Manifest []byte
+}
+
+// NewManifestCandidate builds a candidate from a manifest fetched from the
+// registry, reading the manifest-level annotations. A manifest without
+// annotations yields a candidate with nil Annotations, not an error.
+func NewManifestCandidate(reference, digest string, manifest []byte) (ManifestCandidate, error) {
+	var parsed struct {
+		Annotations map[string]string `json:"annotations"`
+	}
+	if err := json.Unmarshal(manifest, &parsed); err != nil {
+		return ManifestCandidate{}, fmt.Errorf("failed to parse manifest %s: %v", reference, err)
+	}
+	return ManifestCandidate{
+		Reference:    reference,
+		Digest:       digest,
+		ArtifactType: parsed.Annotations[AnnotationArtifactType],
+		Annotations:  parsed.Annotations,
+		Manifest:     manifest,
+	}, nil
+}
+
+// SearchResultsFromCandidates turns the manifests a provider found into
+// search results, parsing the relationship graph and AI metadata out of
+// each manifest's annotations. Results keep the provider's order.
+func SearchResultsFromCandidates(candidates []ManifestCandidate) *SearchResults {
 	results := &SearchResults{
 		Results: []SearchResult{},
 	}
 
-	for _, manifestBytes := range manifests {
-		var manifestData map[string]interface{}
-		if err := json.Unmarshal(manifestBytes, &manifestData); err != nil {
-			continue // Skip malformed manifests
-		}
-
+	for _, candidate := range candidates {
 		result := SearchResult{
-			Annotations: make(map[string]string),
+			Reference:    candidate.Reference,
+			Digest:       candidate.Digest,
+			ArtifactType: candidate.ArtifactType,
+			Annotations:  make(map[string]string, len(candidate.Annotations)),
+		}
+		for k, v := range candidate.Annotations {
+			result.Annotations[k] = v
 		}
 
-		// Extract reference
-		if ref, ok := manifestData["reference"].(string); ok {
-			result.Reference = ref
-		}
-
-		// Extract annotations
-		if annotations, ok := manifestData["annotations"].(map[string]interface{}); ok {
-			for k, v := range annotations {
-				if vStr, ok := v.(string); ok {
-					result.Annotations[k] = vStr
-				}
-			}
-		}
-
-		// Extract artifact type
-		if at, ok := manifestData[AnnotationArtifactType].(string); ok {
-			result.ArtifactType = at
-		}
-
-		// Parse relationship graph if present
-		if relGraph, ok := manifestData[AnnotationRelationshipGraph].(string); ok {
-			graph, err := ParseRelationshipGraphFromAnnotation(relGraph)
-			if err == nil {
+		if relGraph, ok := result.Annotations[AnnotationRelationshipGraph]; ok {
+			if graph, err := ParseRelationshipGraphFromAnnotation(relGraph); err == nil {
 				result.RelationshipGraph = graph
 			}
 		}
-
-		// Parse metadata from annotations
 		result.Metadata = parseMetadataFromAnnotations(result.Annotations)
 
-		results.Results = append(results.Results, result)
-		results.TotalCount++
+		results.AddResult(result)
 	}
 
-	return results, nil
+	return results
 }
 
 // parseMetadataFromAnnotations extracts metadata from annotations
@@ -497,33 +502,4 @@ func parseMetadataFromAnnotations(annotations map[string]string) map[string]inte
 	}
 
 	return metadata
-}
-
-// BuildOCIFilter builds an OCI-compliant filter string for registry queries
-func BuildOCIFilter(query *SearchQuery) string {
-	var filters []string
-
-	// Artifact type filter
-	if query.ArtifactType != "" {
-		filters = append(filters, fmt.Sprintf("%s=%s", AnnotationArtifactType, query.ArtifactType))
-	}
-
-	// Metadata filters
-	for k, v := range query.MetadataFilters {
-		filters = append(filters, fmt.Sprintf("%s=%s", k, v))
-	}
-
-	// Relationship filters (these may need client-side filtering)
-	// We'll add them as annotation filters for registries that support it
-	if query.Model != "" {
-		filters = append(filters, fmt.Sprintf("ai.model.ref=%s", query.Model))
-	}
-	if query.Skill != "" {
-		filters = append(filters, fmt.Sprintf("ai.skill.ref=%s", query.Skill))
-	}
-	if query.Pipeline != "" {
-		filters = append(filters, fmt.Sprintf("ai.pipeline.ref=%s", query.Pipeline))
-	}
-
-	return strings.Join(filters, "&")
 }

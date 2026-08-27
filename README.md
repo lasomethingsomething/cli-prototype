@@ -90,7 +90,8 @@ Start with `model-cli wizard` - the guided, end-to-end tour. Everything it does 
 - `serve` - hand off to vLLM or KServe
 - `schedule` - pick a node that satisfies the artifact's hardware requirements
 - `enforce` - run the metadata contract as an admission webhook
-- `map`, `search` - embed and query model → skill → pipeline relationships
+- `map` - embed model → skill → pipeline relationships in a manifest
+- `search` - list the AI artifacts in a registry, filtered by `--type`, `--metadata key=value` (exact annotation match) or relationship (`--uses-model`); `--output json` prints only the result document, for scripts
 
 Every command takes flags and prompts for anything you leave out - never without a terminal, see the non-interactive note above. Tool choices are remembered in `~/.model-cli.yaml`. The wizard is the one command that is prompt-only.
 

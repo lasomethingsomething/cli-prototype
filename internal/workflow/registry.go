@@ -33,9 +33,12 @@ type RegistryProvider interface {
 	PushReferrer(artifact, registry, referrerType string, data []byte, annotations map[string]string) error
 	// GetReferrers fetches all referrers of a given type for an artifact from the registry
 	GetReferrers(artifact, registry, referrerType string) ([][]byte, error)
-	// Search queries the registry for artifacts matching the given filters
-	// Returns manifest bytes for matching artifacts, which can be parsed for metadata
-	Search(registry, filters string) ([][]byte, error)
+	// Search lists the tagged manifests in registry that carry annotations
+	// matching query's artifact-type and metadata filters (see
+	// SearchQuery.MatchesAnnotations); a provider may evaluate those
+	// filters server-side. Relationship filters are applied afterwards by
+	// SearchResults.FilterByRelationship.
+	Search(registry string, query *SearchQuery) ([]ManifestCandidate, error)
 	// FetchManifestAnnotations fetches the OCI manifest for an artifact and returns its annotations
 	// This is used for GitOps pre-sync validation (Story #65)
 	FetchManifestAnnotations(artifactRef string) (map[string]string, error)
@@ -274,37 +277,96 @@ func repositoryOf(artifact string) string {
 	return artifact
 }
 
-func (o *ORASProvider) Search(registry, filters string) ([][]byte, error) {
-	// ORAS doesn't have a built-in search command for OCI registries
-	// We delegate to external registry tools like the OCI Distribution Spec
-	// or use oras discover/manifest commands as available
-	// For now, we use oras manifest fetch as a baseline, but in production
-	// this would integrate with registry APIs that support filtering
-
-	// Build the search command using oras discover if available
-	// oras discover can list artifacts in a repository
-	args := []string{"discover", "--artifact-type", "application/vnd.cncf.ai.model"}
-	if filters != "" {
-		// ORAS doesn't directly support filter strings in discover
-		// but we can fetch all and filter client-side
-		// For registries that support it, we'd use their native search API
-		args = append(args, "--output", "json")
-	}
-
-	cmd := exec.Command("oras", args...)
-	cmd.Args = append(cmd.Args, registry)
-
-	output, err := cmd.Output()
+// Search walks the registry with the ORAS CLI: `oras repo ls` lists the
+// repositories, `oras repo tags` the tags of each, and every tag's manifest
+// is fetched with `oras manifest fetch`. ORAS has no registry-wide search,
+// so the query's artifact-type and metadata filters are applied client-side
+// to each manifest's annotations. Manifests without annotations are not AI
+// artifacts and are skipped; a repository whose tags cannot be listed (or a
+// tag whose manifest cannot be fetched) is reported on stderr and skipped so
+// that one broken repository does not hide the others.
+//
+// Like every other ORAS call here, authentication, TLS and plain-HTTP for
+// localhost are left to the oras CLI and its own configuration.
+func (o *ORASProvider) Search(registry string, query *SearchQuery) ([]ManifestCandidate, error) {
+	repos, err := orasLines("repo", "ls", registry)
 	if err != nil {
-		// Try a simpler approach - fetch manifests from known references
-		// This is a fallback for registries without discover support
-		// In production, this would be replaced with proper registry API calls
-		return nil, fmt.Errorf("registry search not fully supported by ORAS CLI. Use a registry with search API (e.g., ghcr.io, docker.io) or use client-side filtering")
+		return nil, fmt.Errorf("failed to list repositories of %s with ORAS: %v", registry, err)
 	}
 
-	// Parse and return the results
-	// For now, return the raw output - parsing happens in the workflow layer
-	return [][]byte{output}, nil
+	var candidates []ManifestCandidate
+	for _, repo := range repos {
+		repoRef := registry + "/" + repo
+		tags, err := orasLines("repo", "tags", repoRef)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: skipping %s: failed to list tags with ORAS: %v\n", repoRef, err)
+			continue
+		}
+		for _, tag := range tags {
+			ref := repoRef + ":" + tag
+			candidate, err := o.fetchCandidate(ref)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: skipping %s: %v\n", ref, err)
+				continue
+			}
+			if len(candidate.Annotations) == 0 || !query.MatchesAnnotations(candidate.Annotations) {
+				continue
+			}
+			candidates = append(candidates, candidate)
+		}
+	}
+	return candidates, nil
+}
+
+// fetchCandidate resolves ref to its manifest digest (`oras manifest fetch
+// --descriptor`) and body (`oras manifest fetch`).
+func (o *ORASProvider) fetchCandidate(ref string) (ManifestCandidate, error) {
+	descriptorJSON, err := orasOutput("manifest", "fetch", "--descriptor", ref)
+	if err != nil {
+		return ManifestCandidate{}, fmt.Errorf("failed to fetch manifest descriptor with ORAS: %v", err)
+	}
+	var descriptor struct {
+		Digest string `json:"digest"`
+	}
+	if err := json.Unmarshal(descriptorJSON, &descriptor); err != nil {
+		return ManifestCandidate{}, fmt.Errorf("failed to parse manifest descriptor from ORAS: %v", err)
+	}
+
+	manifest, err := orasOutput("manifest", "fetch", ref)
+	if err != nil {
+		return ManifestCandidate{}, fmt.Errorf("failed to fetch manifest with ORAS: %v", err)
+	}
+	return NewManifestCandidate(ref, descriptor.Digest, manifest)
+}
+
+// orasOutput runs oras with args and returns its stdout. When oras fails,
+// whatever it printed to stderr is included in the error.
+func orasOutput(args ...string) ([]byte, error) {
+	output, err := exec.Command("oras", args...).Output()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {
+			return nil, fmt.Errorf("%v: %s", err, strings.TrimSpace(string(exitErr.Stderr)))
+		}
+		return nil, err
+	}
+	return output, nil
+}
+
+// orasLines runs oras and returns the non-empty lines of its stdout, which is
+// how `oras repo ls` and `oras repo tags` report their results.
+func orasLines(args ...string) ([]string, error) {
+	output, err := orasOutput(args...)
+	if err != nil {
+		return nil, err
+	}
+	var lines []string
+	for _, line := range strings.Split(string(output), "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			lines = append(lines, line)
+		}
+	}
+	return lines, nil
 }
 
 func (o *ORASProvider) FetchManifestAnnotations(artifactRef string) (map[string]string, error) {
@@ -395,7 +457,7 @@ func (m *ModelPackProvider) GetReferrers(artifact, registry, referrerType string
 	return nil, m.notImplemented("referrer fetch")
 }
 
-func (m *ModelPackProvider) Search(registry, filters string) ([][]byte, error) {
+func (m *ModelPackProvider) Search(registry string, query *SearchQuery) ([]ManifestCandidate, error) {
 	return nil, m.notImplemented("search")
 }
 

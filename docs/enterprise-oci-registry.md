@@ -154,9 +154,8 @@ model-cli map --skill my-skill:v1 --used-by my-pipeline:v1
 Query the registry to discover and cross-reference AI assets.
 
 ### Features
-- Registry filtering by metadata annotations
-- CLI search commands with multiple filter options
-- Client-side filtering for complex relationship queries
+- Lists every tagged AI artifact in a registry, with reference, digest and annotations
+- Filters by artifact type, by annotation (`--metadata key=value`) and by relationship
 - Structured results with full metadata
 - Support for JSON, YAML, and table output formats
 
@@ -175,15 +174,16 @@ model-cli search --destination ghcr.io/my-org --type pipeline
 model-cli search --model my-llm --type pipeline
 model-cli search --skill my-skill:v1
 
-# Filter by relationships
-model-cli search --uses-model model:sha256:abc123
+# Filter by relationships (matched against the ai.relationships graph
+# that `map` embeds; artifacts without a graph are never returned)
+model-cli search --uses-model localhost:5000/my-org/my-llm:v1
 model-cli search --uses-skill skill:sha256:def456
 model-cli search --requires-model model:sha256:abc123
 model-cli search --used-by pipeline:sha256:ghi789
 
-# Filter by metadata
+# Filter by metadata: every key=value pair must match a manifest annotation exactly
 model-cli search --metadata ai.model.type=llm
-model-cli search --metadata ai.model.framework=pytorch
+model-cli search --metadata ai.model.framework=pytorch --metadata ai.model.type=llm
 model-cli search --metadata ai.skill.type=rag
 
 # Output formats
@@ -191,14 +191,46 @@ model-cli search --destination ghcr.io/my-org --output json
 model-cli search --destination ghcr.io/my-org --output yaml
 ```
 
-### OCI Filter Support
+### How the Registry Is Searched
 
-The search command generates OCI-compliant filter strings:
+With the ORAS tool, `search` walks the registry with the ORAS CLI: `oras
+repo ls` lists the repositories, `oras repo tags` the tags of each, and every
+tag's manifest is fetched with `oras manifest fetch`. Manifests without
+annotations are not AI artifacts and are skipped; the `--type` and
+`--metadata` filters are then applied to the annotations of the remaining
+manifests, and the relationship filters to their `ai.relationships` graph.
+ORAS handles credentials, TLS and plain HTTP for `localhost` exactly as it
+does for `push`. The registry must implement the OCI catalog API
+(`/v2/_catalog`): zot, `registry:2`, Harbor and most self-hosted registries
+do; ghcr.io and Docker Hub do not.
 
-- `org.cncf.ai.artifact.type=model` - Filter by artifact type
-- `ai.model.type=llm` - Filter by model type
-- `ai.model.framework=pytorch` - Filter by framework
-- `ai.skill.type=rag` - Filter by skill type
+### JSON Output
+
+`--output json` prints nothing but the result document, so it can be piped to
+`jq` or consumed by scripts. Its shape is stable:
+
+```json
+{
+  "query": { "Registry": "localhost:5000", "ArtifactType": "model", "...": "..." },
+  "results": [
+    {
+      "reference": "localhost:5000/my-org/my-llm:v1",
+      "digest": "sha256:...",
+      "artifact_type": "model",
+      "annotations": { "org.cncf.ai.artifact.type": "model", "org.cncf.ai.runtime": "vllm" },
+      "relationships": { "pipeline": { "...": "..." } },
+      "metadata": { "ai.model.type": "llm" }
+    }
+  ],
+  "total_count": 1,
+  "registry": "localhost:5000"
+}
+```
+
+`relationships` is present only when the manifest carries an
+`ai.relationships` annotation; `metadata` collects the `ai.*` annotations and
+the parsed `ai.assets` contract. `--output yaml` prints the same document
+behind a comment line (JSON is valid YAML).
 
 ## Story #62: Validate Pushes Against Metadata Contract
 
@@ -372,14 +404,15 @@ Recommended registries:
 
 ## Troubleshooting
 
-### Registry Search Not Supported
-If your registry doesn't support server-side filtering:
+### Search Fails to List Repositories
 ```
-Note: Registry search with filters failed: registry search not fully supported by ORAS CLI.
-Falling back to client-side filtering...
+failed to search registry: failed to list repositories of ghcr.io/my-org with ORAS: ...
 ```
 
-This is expected. The CLI will fetch all manifests and filter client-side.
+`search` needs the OCI catalog API (`/v2/_catalog`), which ghcr.io and Docker
+Hub do not offer. Point `--destination` at a registry that does (zot,
+`registry:2`, Harbor, ...). A single repository whose tags cannot be listed
+is reported on stderr and skipped; the other repositories are still searched.
 
 ### Missing Metadata Contract
 ```
