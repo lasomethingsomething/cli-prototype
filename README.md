@@ -10,9 +10,9 @@ Specialized tools already exist for each step in the [CNCF ecosystem](https://ww
 
 The workflow in one sentence per phase:
 
-1. **Package** - bundle the model folder into a standard container-style artifact, tag it with metadata, and record a proof of origin (provenance).
+1. **Package** - bundle the model folder into a standard container-style artifact and tag it with metadata.
 2. **Harden** - generate an ingredients list (SBOM) and classify how open the model is (MOF), and record both in the packaged artifact.
-3. **Sign** - stamp it cryptographically so tampering can be detected later.
+3. **Sign** - stamp it cryptographically so tampering can be detected later, and record a proof of origin (provenance) for the finished artifact.
 4. **Push** - upload it to a registry.
 5. **Validate** - check the metadata against your rules locally, at the registry, and at the cluster door, using one shared engine so passing in one place means passing everywhere.
 6. **Deploy** - hand it to Argo CD / Flux and a serving runtime such as vLLM or KServe.
@@ -54,7 +54,6 @@ The CLI asks a few questions (runtime, accelerator, ...). **These are metadata o
 You'll end up with:
 
 - `~/test-model/manifest.json` - an OCI manifest carrying CNCF AI Interoperability Profile annotations
-- `~/test-model/attestation.json` - a SLSA provenance attestation
 
 ```bash
 # 5. Harden it: SBOM + MOF classification, recorded in the manifest from step 4
@@ -69,6 +68,8 @@ This asks which SBOM tool to use (`syft` is recommended) and which MOF class to 
 - the SBOM format and MOF class/components as annotations in `~/test-model/manifest.json`
 
 `harden` refuses to run before `package` (no `manifest.json` yet), so the order is always package, then harden.
+
+Signing and the SLSA provenance attestation are a separate step that runs afterwards: `model-cli sign --artifact test:v1`.
 
 A detailed, annotated walkthrough of this run is in [docs/trial-run-report.md](docs/trial-run-report.md).
 
@@ -85,9 +86,10 @@ Start with `model-cli wizard` - the guided, end-to-end tour. Everything it does 
 
 **Build the artifact**
 
-- `package` - package a model or agentic skill as an OCI artifact: manifest, annotations, provenance, push
+- `package` - package a model or agentic skill as an OCI artifact: manifest, annotations, push
 - `harden` - the step after `package`: generate an SBOM (syft recommended, or trivy / cdxgen), classify the model (MOF), and record both in the packaged manifest
-- `sign`, `verify` - Sigstore (cosign) or Notary v2 (notation)
+- `sign` - the separate step after packaging: sign with cosign (Sigstore, recommended) or Notary v2 (notation) and record a SLSA provenance attestation
+- `verify` - check the signature and the provenance attestation
 - `push` - push to an OCI registry, with the provenance attestation attached as a referrer
 
 **Validate** - one command family, one report format (text, `--quiet`, or `--json-output` for CI)
