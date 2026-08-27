@@ -112,6 +112,7 @@ The Enterprise OCI Registry Integration (Phase 2) follows a **decoupled handoff 
 │  - oras push      │    │  - modelpack push    │
 │  - oras pull      │    │  - modelpack pull    │
 │  - oras discover  │    │  - (stub) search     │
+│  - oras repo ls   │    │                      │
 └───────────────────┘    └─────────────────────┘
         │                           │
         └─────────────┬─────────────┘

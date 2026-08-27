@@ -17,17 +17,21 @@ This command allows you to discover and cross-reference AI assets (models, skill
 in a registry. It supports filtering by metadata annotations and relationships,
 enabling queries like "show all pipelines using model X" or "find all skills of type rag".
 
-The CLI orchestrates the search by delegating to registry tools (ORAS, ModelPack)
-which perform the actual registry queries. The results are then parsed and filtered
-client-side for complex relationship queries.
+With the ORAS tool the registry is walked with "oras repo ls", "oras repo tags"
+and "oras manifest fetch", so the registry must expose the OCI catalog API
+(zot, registry:2, Harbor, ...). --type and --metadata match the manifest
+annotations exactly; relationship filters such as --uses-model are evaluated
+against the ai.relationships graph annotation.
+
+With --output json only the result document is printed, so it can be piped
+to tools like jq.
 
 Examples:
-  model-cli search
-  model-cli search --registry ghcr.io/my-org --type model
-  model-cli search --model my-llm --type pipeline
-  model-cli search --metadata ai.model.type=llm
-  model-cli search --uses-model model:sha256:abc123
-  model-cli search --output json`,
+  model-cli search --destination localhost:5000
+  model-cli search --destination ghcr.io/my-org --type model
+  model-cli search --destination localhost:5000 --metadata ai.model.type=llm
+  model-cli search --destination localhost:5000 --uses-model localhost:5000/my-org/my-llm:v1
+  model-cli search --destination localhost:5000 --type model --output json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := config.Load()
 
@@ -118,41 +122,20 @@ Examples:
 			return fmt.Errorf("%s not installed. Install with: %s", provider.Name(), provider.InstallInstructions())
 		}
 
-		fmt.Printf("Searching %s for AI assets...\n\n", destination)
-
-		// Build filter string for registry query
-		filterString := query.ToFilterString()
-		fmt.Printf("Query: %s\n\n", query.String())
-
-		// Execute search via registry provider
-		// The provider returns raw manifest bytes
-		manifestBytes, err := provider.Search(destination, filterString)
-		if err != nil {
-			// If search fails, try without filters (get all manifests) and filter client-side
-			fmt.Printf("Note: Registry search with filters failed: %v\n", err)
-			fmt.Println("Falling back to client-side filtering...")
-
-			// Try to get all artifacts from the registry
-			// This is a fallback - in production, registries would support filtering natively
-			manifestBytes, err = provider.Search(destination, "")
-			if err != nil {
-				return fmt.Errorf("failed to search registry: %v\n\nHint: Ensure the registry supports OCI artifact discovery (e.g., ghcr.io, docker.io)", err)
-			}
+		// json and yaml print nothing but the document so it can be piped.
+		machineReadable := query.OutputFormat == "json" || query.OutputFormat == "yaml"
+		if !machineReadable {
+			fmt.Printf("Searching %s for AI assets...\n\n", destination)
+			fmt.Printf("Query: %s\n\n", query.String())
 		}
 
-		// Parse search results from manifest bytes
-		// This handles the client-side filtering and parsing
-		searchResults, err := workflow.ParseSearchResultsFromManifests(manifestBytes)
+		// The provider applies the artifact-type and metadata filters
+		// (client-side for ORAS); relationship filters are applied below.
+		candidates, err := provider.Search(destination, query)
 		if err != nil {
-			return fmt.Errorf("failed to parse search results: %v", err)
+			return fmt.Errorf("failed to search registry: %v", err)
 		}
-
-		// Apply relationship filters client-side
-		// The ParseSearchResultsFromManifests already parsed relationship graphs
-		// Now we apply the query's relationship filters
-		filteredResults := searchResults.FilterByRelationship(query)
-
-		// Set the registry name
+		filteredResults := workflow.SearchResultsFromCandidates(candidates).FilterByRelationship(query)
 		filteredResults.Registry = destination
 
 		// Output results
@@ -163,6 +146,7 @@ Examples:
 				return fmt.Errorf("failed to format results as JSON: %v", err)
 			}
 			fmt.Println(jsonOutput)
+			return nil
 		case "yaml":
 			// For YAML output, we'll use JSON and note that YAML is a superset
 			// In production, use a proper YAML library
@@ -172,6 +156,7 @@ Examples:
 			}
 			fmt.Println("# YAML output (JSON is a valid YAML subset)")
 			fmt.Println(jsonOutput)
+			return nil
 		default: // table
 			fmt.Println(filteredResults.String())
 		}

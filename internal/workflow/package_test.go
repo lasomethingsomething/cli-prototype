@@ -57,7 +57,7 @@ func (f *fakeRegistryProvider) GetArtifactDigest(artifact, registry string) (str
 	}
 	return "", fmt.Errorf("artifact %s not found in fake registry", artifact)
 }
-func (f *fakeRegistryProvider) Search(registry, filters string) ([][]byte, error) {
+func (f *fakeRegistryProvider) Search(registry string, query *SearchQuery) ([]ManifestCandidate, error) {
 	// Fake implementation for testing - returns empty results
 	// In real tests, this can be extended to return mock data
 	return nil, nil
