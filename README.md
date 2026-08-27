@@ -145,7 +145,7 @@ The words this README and the docs use, in plain language.
 | **[Sign / verify](https://github.com/ossf/model-signing-spec)** | Cryptographically stamp the artifact so anyone can later check it was not modified. Done by [Cosign](https://www.sigstore.dev/) (Sigstore, recommended) or [Notation](https://github.com/notaryproject/notaryproject) (Notary v2). |
 | **[MOF](https://isitopen.ai/)** (Model Openness Framework) | A classification of how open a model is. Class I is fully open (model, code, data, documentation), Class II is partially open, Class III is the least open. |
 | **[ORAS](https://oras.land/)** | The tool that pushes and pulls OCI artifacts that are not container images. Model CLI uses it for packaging and pushing to any OCI registry, including [Harbor](https://goharbor.io/): `--registry oras --registry-url <harbor-host>/<project>`. |
-| **[ModelPack](https://github.com/modelpack/model-spec)** | An alternative packaging format for models. Planned, not implemented yet. |
+| **[ModelPack](https://github.com/modelpack/model-spec)** | An alternative packaging format for models. Model CLI drives it through the [modctl](https://github.com/modelpack/modctl) CLI with `--registry modelpack`. |
 | **Serving runtime** ([vLLM](https://docs.vllm.ai/), [KServe](https://kserve.github.io/website/)) | The software that loads the model and answers requests once it is deployed. |
 | **Layer deduplication** | An optimization for large models: identical layers are stored once instead of being copied per artifact. |
 | **Skill / Reference Skill DLC endpoint** | An *agentic skill* is a packaged capability an AI agent can load. The DLC endpoint is the URL from which such skills are loaded dynamically at serve time. |
@@ -158,7 +158,7 @@ The words this README and the docs use, in plain language.
 
 | Task | Model CLI role | Options (recommended first) |
 |------|----------------|-----------------------------|
-| Package / push | Build manifest, inject annotations | `oras` - any OCI registry: Harbor, GHCR, zot, ... (`modelpack` planned) |
+| Package / push | Build manifest, inject annotations | `oras` - any OCI registry: Harbor, GHCR, zot, ... ; or `modelpack` via `modctl` (needs `oras` too) |
 | SBOM | Configure format, attach result | `syft`, `trivy`, `cdxgen` |
 | Sign / verify | Configure signer, run it | `cosign` (Sigstore), `notary` (Notation / Notary v2) |
 | Provenance | Generate SLSA v1.0 attestation | built in |
@@ -174,7 +174,7 @@ Standards: [OCI Image Spec](https://specs.opencontainers.org/image-spec/), [OCI 
 
 Honest list of what is scaffolding today:
 
-- **ModelPack provider is not implemented** - tool detection works, but every registry operation returns a clear `not implemented` error. Use `--registry oras`.
+- **ModelPack needs two tools** - `--registry modelpack` builds and pushes with [modctl](https://github.com/modelpack/modctl) (`go install github.com/modelpack/modctl@latest`). modctl cannot set manifest annotations or read referrers, so the CNCF annotations are merged into the pushed manifest with ORAS, and digest checks, manifest reads and provenance referrers go through ORAS too. Both `modctl` and `oras` must be installed.
 - **The AI config is still also inlined in the local `manifest.json`** - `package` writes the AI config to `config.json` next to the manifest and pushes it as the manifest's config blob, so the registry's config descriptor (digest, size, media type) is the one in the local manifest. The same config is still inlined as `aiConfig` for readers of the local file (`enforce`, `validate`, admission checks); those do not yet read the blob back from the registry, which is pending (#84).
 - **No published binaries yet**; build from source or tag a release.
 
