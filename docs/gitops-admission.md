@@ -757,7 +757,7 @@ For full Trust Profile validation with Flux, combine with OPA/Gatekeeper as show
 # Package model with Trust Profile annotations
 model-cli package --model my-model --model-path ./models \
   --model-type llm --framework pytorch \
-  --sign --signer sigstore
+  --sign --signer cosign
 
 # Push to registry (annotations are attached to manifest)
 model-cli push --artifact my-model:v1.0.0 \
@@ -856,7 +856,7 @@ missing required annotation: org.cncf.ai.security.signing.framework
 **Solution:**
 ```bash
 # Re-package with signing enabled
-model-cli package --model my-model --sign --signer sigstore
+model-cli package --model my-model --sign --signer cosign
 
 # Re-push
 model-cli push --artifact my-model:v1.0.0 --registry oras --destination ghcr.io/my-org
@@ -876,7 +876,7 @@ signature verification failed for ghcr.io/my-org/my-model:v1.0.0
 model-cli verify --artifact ghcr.io/my-org/my-model:v1.0.0
 
 # If verification fails, re-sign
-model-cli sign --artifact ghcr.io/my-org/my-model:v1.0.0 --signer sigstore --force
+model-cli sign --artifact ghcr.io/my-org/my-model:v1.0.0 --signer cosign --force
 ```
 
 ### Policy Controller Not Intercepting Requests
@@ -943,7 +943,7 @@ model-cli push --artifact my-model:v1.0.0-kserve
 ### 1. Always Sign Before Pushing
 
 ```bash
-model-cli package --model my-model --sign --signer sigstore
+model-cli package --model my-model --sign --signer cosign
 model-cli push --artifact my-model:v1.0.0
 ```
 
