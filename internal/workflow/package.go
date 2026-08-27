@@ -3,11 +3,13 @@ package workflow
 import (
 	"fmt"
 	"path/filepath"
-	"strings"
 	"time"
 )
 
-// PackageWorkflow orchestrates the packaging of models as OCI artifacts
+// PackageWorkflow orchestrates the packaging of models as OCI artifacts:
+// manifest, layers, push and parity check. SBOM generation and MOF
+// classification are deliberately not part of it; they are the separate
+// hardening step (HardenWorkflow) that runs on the packaged model.
 type PackageWorkflow struct {
 	registry         string
 	registryProvider RegistryProvider
@@ -17,10 +19,6 @@ type PackageWorkflow struct {
 	registryURL      string
 	includeRAG       bool
 	ragPath          string
-	generateSBOM     bool
-	includeMOF       bool
-	sbomTool         string
-	sbomFormat       SBOMFormat
 	annotations      *AnnotationSet
 	manifestPath     string
 	isSkill          bool
@@ -49,10 +47,6 @@ func NewPackageWorkflow(registry string) (*PackageWorkflow, error) {
 	return &PackageWorkflow{
 		registry:           registry,
 		registryProvider:   registryProvider,
-		generateSBOM:       true,               // Default to generating SBOM
-		includeMOF:         true,               // Default to including MOF classification
-		sbomTool:           "syft",             // Default SBOM tool
-		sbomFormat:         SPDXJSON,           // Default SBOM format
 		annotations:        NewAnnotationSet(), // Default annotations
 		generateProvenance: true,               // Default to generating provenance attestation
 		verifyParity:       true,               // Default to verifying the pushed digest
@@ -72,22 +66,6 @@ func (w *PackageWorkflow) SetPackageInfo(modelName, modelPath, artifactName, reg
 // SetAnnotations sets the CNCF AI Interoperability Profile annotations
 func (w *PackageWorkflow) SetAnnotations(annotations *AnnotationSet) {
 	w.annotations = annotations
-}
-
-// SetSecurityOptions configures SBOM and MOF options
-func (w *PackageWorkflow) SetSecurityOptions(generateSBOM, includeMOF bool) {
-	w.generateSBOM = generateSBOM
-	w.includeMOF = includeMOF
-}
-
-// SetSBOMTool sets the SBOM generation tool and format
-func (w *PackageWorkflow) SetSBOMTool(tool string, format SBOMFormat) {
-	w.sbomTool = tool
-	w.sbomFormat = format
-	// Update annotation
-	if w.annotations != nil {
-		w.annotations.SBOMFormat = string(format)
-	}
 }
 
 // SetIsSkill sets whether this is a skill package
@@ -138,40 +116,6 @@ func (w *PackageWorkflow) SetVerifyParity(verify bool) {
 	w.verifyParity = verify
 }
 
-// applyMOFClassification records the detected MOF class and components in
-// the annotations unless the user declared them explicitly. An explicit
-// class that differs from the detected one is kept, with a warning.
-func (w *PackageWorkflow) applyMOFClassification(detectedClass string, result *ClassificationResult) {
-	switch {
-	case w.annotations.MOFClass == "":
-		w.annotations.MOFClass = detectedClass
-		fmt.Printf("  MOF Class: %s (detected)\n", detectedClass)
-	case w.annotations.MOFClass != detectedClass:
-		fmt.Printf("  MOF Class: %s (declared; files suggest %s - %s)\n", w.annotations.MOFClass, detectedClass, result.Explanation)
-	default:
-		fmt.Printf("  MOF Class: %s (declared, matches detection)\n", w.annotations.MOFClass)
-	}
-	if w.annotations.MOFComponents == "" && len(result.Components) > 0 {
-		w.annotations.MOFComponents = strings.Join(canonicalMOFComponents(result.Components), ",")
-		fmt.Printf("  MOF Components: %s (detected)\n", w.annotations.MOFComponents)
-	}
-}
-
-// canonicalMOFComponents orders detected components the way the MOF spec
-// lists them, independent of the order files were encountered on disk.
-func canonicalMOFComponents(components []string) []string {
-	order := []string{"weights", "code", "training-data", "documentation", "license"}
-	var sorted []string
-	for _, want := range order {
-		for _, c := range components {
-			if c == want {
-				sorted = append(sorted, c)
-			}
-		}
-	}
-	return sorted
-}
-
 // Run executes the packaging workflow
 func (w *PackageWorkflow) Run() error {
 	fmt.Printf("Packaging model '%s' from '%s' as '%s'\n", w.modelName, w.modelPath, w.artifactName)
@@ -184,41 +128,6 @@ func (w *PackageWorkflow) Run() error {
 	fullArtifact := w.artifactName
 	if w.registryURL != "" {
 		fullArtifact = w.registryURL + "/" + w.artifactName
-	}
-
-	// === Security & Supply Chain Steps ===
-
-	// 1. Generate SBOM - SBOM is a prerequisite for Phase 1 Step 2, failure must block workflow
-	if w.generateSBOM {
-		fmt.Println("\n=== Supply Chain Security ===")
-		fmt.Println("✓ Generating SBOM (Software Bill of Materials)...")
-
-		sbomGen, err := GetSBOMGenerator(w.sbomTool)
-		if err != nil {
-			return fmt.Errorf("SBOM generator not available: %v. SBOM is a required prerequisite for Phase 1 Step 2", err)
-		}
-
-		sbomPath := filepath.Join(w.modelPath, "sbom."+string(w.sbomFormat))
-		if err := sbomGen.Generate(w.modelPath, sbomPath, w.sbomFormat); err != nil {
-			return fmt.Errorf("SBOM generation failed: %v. SBOM is a required prerequisite for Phase 1 Step 2", err)
-		}
-
-		fmt.Printf("  SBOM generated: %s (format: %s)\n", sbomPath, w.sbomFormat)
-		// Attach SBOM as OCI layer
-		fmt.Printf("  SBOM attached as OCI layer with format: %s\n", w.sbomFormat)
-	}
-
-	// 2. MOF classification: fill in what the user left empty, and warn when
-	//    the declared class disagrees with what the files suggest.
-	if w.includeMOF {
-		fmt.Println("✓ Applying MOF (Model Openness Framework) classification...")
-
-		detectedClass, result, err := ClassifyModelPath(w.modelPath)
-		if err != nil {
-			fmt.Printf("  Warning: MOF classification failed: %v\n", err)
-		} else if w.annotations != nil {
-			w.applyMOFClassification(detectedClass, result)
-		}
 	}
 
 	// === Packaging Steps ===
@@ -380,16 +289,13 @@ func (w *PackageWorkflow) Run() error {
 	fmt.Println("\n=== Summary ===")
 	fmt.Println("Packaging complete!")
 
+	fmt.Println("\nNext steps:")
+	fmt.Printf("  - Harden (SBOM + MOF) with: model-cli harden --model %s --model-path %s --artifact %s\n", w.modelName, w.modelPath, w.artifactName)
 	if !w.sign {
-		fmt.Println("\nNext steps:")
 		fmt.Println("  - Sign with: model-cli sign --artifact " + fullArtifact)
-		fmt.Println("  - Verify with: model-cli verify --artifact " + fullArtifact)
-		fmt.Println("  - Deploy with: model-cli deploy")
-	} else {
-		fmt.Println("\nNext steps:")
-		fmt.Println("  - Verify with: model-cli verify --artifact " + fullArtifact)
-		fmt.Println("  - Deploy with: model-cli deploy")
 	}
+	fmt.Println("  - Verify with: model-cli verify --artifact " + fullArtifact)
+	fmt.Println("  - Deploy with: model-cli deploy")
 
 	return nil
 }

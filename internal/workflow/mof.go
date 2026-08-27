@@ -251,7 +251,7 @@ func hasAnySuffix(filename string, suffixes []string) bool {
 // classification nor become a layer of the artifact.
 func isGeneratedArtifact(filename string) bool {
 	switch filename {
-	case "manifest.json", "config.json", "attestation.json":
+	case "manifest.json", "config.json", "attestation.json", "mof.json":
 		return true
 	}
 	return strings.HasPrefix(filename, "sbom.")

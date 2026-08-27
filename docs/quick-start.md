@@ -59,6 +59,9 @@ model-cli package --model phi-4-mini --model-path ./models --registry oras
 # Package with ModelPack
 model-cli package --model phi-4-mini --model-path ./models --registry modelpack
 
+# Harden the packaged model: SBOM (syft recommended) + MOF classification
+model-cli harden --model phi-4-mini --model-path ./models --artifact my-model:v1 --sbom-tool syft
+
 # Local compliance check
 model-cli validate local --model-path ./models
 
@@ -102,22 +105,22 @@ You may see messages like:
    Install with: brew install cosign
 ```
 
-**This is not a failure - it's a feature!** The CLI:
+**This is not a crash - it's a feature!** The CLI:
 
 1. Checks if required tools are available
 2. Tells you exactly which tool is missing
 3. Gives you the exact command to install it
-4. Continues with the workflow anyway
+4. Continues where the missing piece is optional, and stops with a clear message where it is the point of the step (for example `harden` without an SBOM tool)
 
 This is the "orchestrate and hand off" design. The CLI doesn't crash when tools are missing - it guides you to install them.
 
-The one exception is the SBOM. It is a required prerequisite (Phase 1 Step 2), so `package` and `harden` abort with a non-zero exit code when it cannot be generated:
+The one exception is the SBOM. It is a required prerequisite of `harden` (Phase 1 Step 2), so `harden` aborts with a non-zero exit code when it cannot be generated:
 
 ```
 Error: SBOM generation failed: syft not installed. Install with: brew install anchore/syft/syft. SBOM is a required prerequisite for Phase 1 Step 2
 ```
 
-Nothing after the SBOM step (MOF classification, manifest, push, provenance, signing) runs. Install `syft` to proceed, or opt out explicitly with `--generate-sbom=false`.
+Nothing after the SBOM step (MOF classification, manifest update) runs. Install `syft` to proceed, or opt out explicitly with `--generate-sbom=false`.
 
 ## Tool Requirements
 
@@ -137,7 +140,7 @@ Model CLI only requires Go. No specific tool is required: each category offers s
 
 Harbor or any other OCI registry: `--registry oras --registry-url <harbor-host>/<project>` (`--destination` for `push`).
 
-**Note:** The CLI will tell you exactly how to install any missing tool when you need it.
+**Note:** The CLI will tell you exactly how to install any missing tool when you need it. SBOM generation and MOF classification happen in `model-cli harden`, which runs after `model-cli package` on the same model path.
 
 ## Configuration
 

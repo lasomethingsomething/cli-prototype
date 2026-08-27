@@ -111,7 +111,7 @@ The full guided journey with 7 steps:
 1. **Setup Preferences** - Choose registry, GitOps, and signing tools
 2. **Model Details** - Enter model name, path, artifact name, RAG info
 3. **Kubernetes Setup** - Check for cluster availability
-4. **Package** - Creates OCI artifact with SBOM and MOF
+4. **Package** - Creates OCI artifact with annotations and provenance (SBOM and MOF come from `harden`)
 5. **Sign** - Signs artifact with chosen provider
 6. **Verify** - Validates the signature
 7. **Deploy** - Deploys to Kubernetes (if available)
@@ -136,8 +136,8 @@ Packages a model as an OCI artifact.
 - Accelerator (nvidia-gpu/amd-gpu/intel-gpu/cpu/none)
 - Minimum CUDA version
 - Minimum memory
-- MOF Class (I/II/III)
-- MOF Components
+
+SBOM generation and MOF classification are not part of packaging; run `harden` afterwards.
 
 **Non-interactive flags:**
 ```bash
@@ -150,9 +150,7 @@ model-cli package \
   --runtime vllm \
   --accelerator nvidia-gpu \
   --cuda-min 12.1 \
-  --memory-min 24GiB \
-  --mof-class I \
-  --mof-components "weights,training-data"
+  --memory-min 24GiB
 ```
 
 ### sign
@@ -298,7 +296,15 @@ model-cli schedule \
 
 ### harden
 
-Performs local hardening and compliance checks (SBOM + MOF).
+Performs local hardening and compliance checks (SBOM + MOF) on a packaged
+model. It runs after `package`, on the same `--model-path`, and records its
+results in the `manifest.json` that packaging wrote; without that file it
+stops with "run `model-cli package` first".
+
+**Interactive prompts:**
+- SBOM tool: `syft (recommended)`, `trivy`, or `cdxgen` (mutually exclusive)
+- MOF Class: auto (detected from the model files), I, II, or III
+- MOF Components (leave empty to detect)
 
 **Interactive panels:**
 - Introduction explaining hardening concepts
@@ -308,9 +314,10 @@ Performs local hardening and compliance checks (SBOM + MOF).
 - Progress display during hardening operations
 
 **Features:**
-- Generates SBOM using Syft and attaches to artifact layers
-- Applies MOF classification (Class I, II, or III)
+- Generates SBOM with the chosen tool (Syft by default)
+- Applies MOF classification (Class I, II, or III) and writes `mof.json`
 - Applies security annotations (Sigstore, SLSA)
+- Records SBOM format and MOF class/components in the packaged manifest
 - Context panel with SBOM, MOF, and progress tabs
 
 **Non-interactive flags:**
@@ -319,8 +326,10 @@ model-cli harden \
   --model phi-4-mini \
   --model-path ./models \
   --artifact my-model:v1 \
-  --generate-sbom \
-  --include-mof
+  --sbom-tool syft \
+  --sbom-format spdx-json \
+  --mof-class I \
+  --mof-components "weights,training-data"
 ```
 
 **Interactive TUI tabs (when run interactively):**

@@ -39,4 +39,22 @@ func TestHardenCmd(t *testing.T) {
 			t.Errorf("Required flag '%s' not found", flagName)
 		}
 	}
+
+	// SBOM and MOF are harden's job (issue #87): the tool choice and the
+	// declared MOF class live here, not on package.
+	for flagName, wantDefault := range map[string]string{"sbom-tool": "syft", "mof-class": "", "mof-components": ""} {
+		flag := hardenCmd.Flags().Lookup(flagName)
+		if flag == nil {
+			t.Errorf("flag '%s' not found on harden", flagName)
+			continue
+		}
+		if flag.DefValue != wantDefault {
+			t.Errorf("flag '%s' default = %q, want %q", flagName, flag.DefValue, wantDefault)
+		}
+	}
+	for _, flagName := range []string{"mof-class", "mof-components"} {
+		if packageCmd.Flags().Lookup(flagName) != nil {
+			t.Errorf("flag '%s' is still on package; MOF classification belongs to harden", flagName)
+		}
+	}
 }

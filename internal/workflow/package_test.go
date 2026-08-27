@@ -160,14 +160,48 @@ func TestPackageWorkflowDefaults(t *testing.T) {
 	}
 
 	// Check default values
-	if !pf.generateSBOM {
-		t.Error("generateSBOM default = false, want true")
+	if !pf.generateProvenance {
+		t.Error("generateProvenance default = false, want true")
 	}
-	if !pf.includeMOF {
-		t.Error("includeMOF default = false, want true")
+	if !pf.verifyParity {
+		t.Error("verifyParity default = false, want true")
 	}
 	if pf.annotations == nil {
 		t.Error("annotations default is nil, want non-nil")
+	}
+}
+
+// TestPackageWorkflowLeavesSBOMAndMOFToHarden verifies packaging is only
+// packaging: it neither generates an SBOM nor classifies the model, both of
+// which are the separate hardening step (see HardenWorkflow).
+func TestPackageWorkflowLeavesSBOMAndMOFToHarden(t *testing.T) {
+	modelPath := t.TempDir()
+	for name, content := range map[string]string{"model.safetensors": "weights", "README.md": "# model"} {
+		if err := os.WriteFile(filepath.Join(modelPath, name), []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	pf := &PackageWorkflow{registry: "fake", registryProvider: &fakeRegistryProvider{installed: true}, annotations: NewAnnotationSet()}
+	pf.SetPackageInfo("m", modelPath, "m:v1", "", false, "")
+	if err := pf.Run(); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	if sboms, _ := filepath.Glob(filepath.Join(modelPath, "sbom.*")); len(sboms) != 0 {
+		t.Errorf("package wrote SBOM files %v; SBOM generation belongs to harden", sboms)
+	}
+	if _, err := os.Stat(filepath.Join(modelPath, "mof.json")); !os.IsNotExist(err) {
+		t.Error("package wrote mof.json; MOF classification belongs to harden")
+	}
+	m, err := ReadUnifiedOCIManifest(pf.ManifestPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{AnnotationMOFClass, AnnotationMOFComponents} {
+		if got, ok := m.Annotations[key]; ok {
+			t.Errorf("manifest annotation %s = %q; MOF classification belongs to harden", key, got)
+		}
 	}
 }
 
@@ -186,8 +220,6 @@ func TestPackageWorkflowRunWritesManifestWithAnnotations(t *testing.T) {
 		registryProvider: fake,
 		annotations:      NewAnnotationSet(),
 		verifyParity:     false, // Disable for tests that don't set up matching digests
-		generateSBOM:     false, // Disable SBOM for this test - testing manifest generation only
-		includeMOF:       false, // Disable MOF for this test
 	}
 	pf.annotations.Runtime = "vllm"
 	pf.annotations.Accelerator = "nvidia-gpu"
@@ -411,88 +443,6 @@ func TestPackageWorkflowRunWithSigning(t *testing.T) {
 	}
 }
 
-// TestPackageWorkflowAppliesMOFClassification verifies the detected MOF class
-// and components land in the manifest when the user left them empty, and
-// that an explicit class is kept.
-func TestPackageWorkflowAppliesMOFClassification(t *testing.T) {
-	newModelDir := func(t *testing.T) string {
-		dir := t.TempDir()
-		for name, content := range map[string]string{"model.safetensors": "weights", "README.md": "# model"} {
-			if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0644); err != nil {
-				t.Fatal(err)
-			}
-		}
-		return dir
-	}
-
-	t.Run("detected when empty", func(t *testing.T) {
-		pf := &PackageWorkflow{registry: "fake", registryProvider: &fakeRegistryProvider{installed: true}, annotations: NewAnnotationSet(), includeMOF: true}
-		pf.SetPackageInfo("m", newModelDir(t), "m:v1", "", false, "")
-		if err := pf.Run(); err != nil {
-			t.Fatalf("Run() error = %v", err)
-		}
-		m, err := ReadUnifiedOCIManifest(pf.ManifestPath())
-		if err != nil {
-			t.Fatal(err)
-		}
-		if got := m.Annotations[AnnotationMOFClass]; got != "II" {
-			t.Errorf("MOF class annotation = %q, want detected II", got)
-		}
-		if got := m.Annotations[AnnotationMOFComponents]; got != "weights,documentation" {
-			t.Errorf("MOF components annotation = %q, want weights,documentation", got)
-		}
-	})
-
-	t.Run("explicit class kept", func(t *testing.T) {
-		pf := &PackageWorkflow{registry: "fake", registryProvider: &fakeRegistryProvider{installed: true}, annotations: NewAnnotationSet(), includeMOF: true}
-		pf.annotations.MOFClass = "I"
-		pf.annotations.MOFComponents = "weights,code"
-		pf.SetPackageInfo("m", newModelDir(t), "m:v1", "", false, "")
-		if err := pf.Run(); err != nil {
-			t.Fatalf("Run() error = %v", err)
-		}
-		m, err := ReadUnifiedOCIManifest(pf.ManifestPath())
-		if err != nil {
-			t.Fatal(err)
-		}
-		if m.Annotations[AnnotationMOFClass] != "I" || m.Annotations[AnnotationMOFComponents] != "weights,code" {
-			t.Errorf("explicit MOF annotations were overwritten: class=%q components=%q", m.Annotations[AnnotationMOFClass], m.Annotations[AnnotationMOFComponents])
-		}
-	})
-}
-
-// TestSBOMFailureBlocksWorkflow verifies that SBOM generation failure blocks the workflow
-// as required by Phase 1 Step 2 (Issue #89)
-func TestSBOMFailureBlocksWorkflow(t *testing.T) {
-	modelPath := t.TempDir()
-	if err := os.WriteFile(filepath.Join(modelPath, "model.txt"), []byte("weights"), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	fake := &fakeRegistryProvider{installed: true}
-	pf := &PackageWorkflow{
-		registry:         "fake",
-		registryProvider: fake,
-		annotations:      NewAnnotationSet(),
-		verifyParity:     false,
-		generateSBOM:     true, // Enable SBOM generation
-		includeMOF:       false,
-		sbomTool:         "nonexistent-tool", // Use a non-existent tool to trigger failure
-	}
-
-	pf.SetPackageInfo("test-model", modelPath, "test:v1", "", false, "")
-
-	err := pf.Run()
-	if err == nil {
-		t.Fatal("expected SBOM generation to fail and block workflow, got nil")
-	}
-
-	// Verify the error message mentions SBOM is a prerequisite
-	if !strings.Contains(err.Error(), "SBOM") || !strings.Contains(err.Error(), "prerequisite") {
-		t.Errorf("expected error to mention SBOM prerequisite, got: %v", err)
-	}
-}
-
 // fakeSyft puts a shell script named "syft" first on PATH for the duration of
 // the test. It answers `syft version` successfully, so the real SyftGenerator
 // reaches Generate(); how the scan itself behaves is decided by scanScript,
@@ -508,83 +458,4 @@ func fakeSyft(t *testing.T, scanScript string) {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
-}
-
-// TestSBOMGenerateFailureBlocksWorkflow verifies that a failure inside the SBOM
-// generator itself (tool installed, scan fails) blocks the workflow before the
-// manifest, push, and provenance steps (Issue #89).
-func TestSBOMGenerateFailureBlocksWorkflow(t *testing.T) {
-	fakeSyft(t, "echo 'boom' >&2; exit 1")
-
-	modelPath := t.TempDir()
-	if err := os.WriteFile(filepath.Join(modelPath, "model.txt"), []byte("weights"), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	fake := &fakeRegistryProvider{installed: true}
-	pf := &PackageWorkflow{
-		registry:           "fake",
-		registryProvider:   fake,
-		annotations:        NewAnnotationSet(),
-		generateSBOM:       true,
-		includeMOF:         true,
-		sbomTool:           "syft",
-		sbomFormat:         SPDXJSON,
-		generateProvenance: true,
-	}
-	pf.SetPackageInfo("test-model", modelPath, "test:v1", "registry.example.com", false, "")
-
-	err := pf.Run()
-	if err == nil {
-		t.Fatal("expected SBOM generation failure to block workflow, got nil")
-	}
-	if !strings.Contains(err.Error(), "syft generation failed") || !strings.Contains(err.Error(), "prerequisite") {
-		t.Errorf("error = %v, want SBOM generation failure naming the prerequisite", err)
-	}
-
-	// Nothing after the SBOM step ran.
-	if fake.pushCalled {
-		t.Error("artifact was pushed despite SBOM failure")
-	}
-	if pf.ManifestPath() != "" || pf.ProvenancePath() != "" {
-		t.Errorf("manifest %q / provenance %q were produced despite SBOM failure", pf.ManifestPath(), pf.ProvenancePath())
-	}
-	for _, name := range []string{"manifest.json", "attestation.json", "sbom.spdx-json"} {
-		if _, err := os.Stat(filepath.Join(modelPath, name)); err == nil {
-			t.Errorf("%s was written despite SBOM failure", name)
-		}
-	}
-}
-
-// TestSBOMGenerateSuccessContinuesWorkflow is the counterpart: when the SBOM
-// generator succeeds the workflow carries on and the SBOM sits next to the model.
-func TestSBOMGenerateSuccessContinuesWorkflow(t *testing.T) {
-	fakeSyft(t, `while [ $# -gt 0 ]; do if [ "$1" = --file ]; then echo '{"spdxVersion":"SPDX-2.3"}' > "$2"; fi; shift; done`)
-
-	modelPath := t.TempDir()
-	if err := os.WriteFile(filepath.Join(modelPath, "model.txt"), []byte("weights"), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	fake := &fakeRegistryProvider{installed: true}
-	pf := &PackageWorkflow{
-		registry:         "fake",
-		registryProvider: fake,
-		annotations:      NewAnnotationSet(),
-		generateSBOM:     true,
-		includeMOF:       false,
-		sbomTool:         "syft",
-		sbomFormat:       SPDXJSON,
-	}
-	pf.SetPackageInfo("test-model", modelPath, "test:v1", "", false, "")
-
-	if err := pf.Run(); err != nil {
-		t.Fatalf("Run() error = %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(modelPath, "sbom.spdx-json")); err != nil {
-		t.Errorf("SBOM not written next to the model: %v", err)
-	}
-	if pf.ManifestPath() == "" {
-		t.Error("manifest was not written after a successful SBOM step")
-	}
 }

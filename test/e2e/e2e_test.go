@@ -3,7 +3,7 @@
 // Package e2e drives the built model-cli binary against a real OCI registry.
 //
 // Run locally with a throwaway zot registry and ORAS and syft on PATH
-// (package generates an SBOM with syft and fails without it):
+// (harden generates an SBOM with syft and fails without it):
 //
 //	docker run -d --name zot -p 5000:5000 \
 //	  -v "$PWD/test/e2e/zot-config.json:/etc/zot/config.json:ro" \
@@ -129,11 +129,6 @@ func TestPackageThenValidateAgainstRegistry(t *testing.T) {
 		t.Errorf("package output lacks a passing parity check")
 	}
 
-	// The SBOM is a required prerequisite: package writes it next to the model.
-	if _, err := os.Stat(filepath.Join(modelDir, "sbom.spdx-json")); err != nil {
-		t.Errorf("package did not write an SBOM next to the model: %v", err)
-	}
-
 	// The registry holds a manifest with the CNCF annotations and the
 	// artifact type the CLI declared.
 	var pushed pushedManifest
@@ -146,12 +141,19 @@ func TestPackageThenValidateAgainstRegistry(t *testing.T) {
 		workflow.AnnotationRuntime:        "vllm",
 		workflow.AnnotationAccelerator:    "cpu",
 		workflow.AnnotationMemoryMin:      "1GiB",
-		workflow.AnnotationMOFClass:       "II", // weights + README, detected
 		workflow.AnnotationProfileVersion: "1.0.0",
 	} {
 		if got := pushed.Annotations[key]; got != want {
 			t.Errorf("pushed annotation %s = %q, want %q", key, got, want)
 		}
+	}
+	// Packaging is only packaging: SBOM and MOF classification are the
+	// separate harden step (issue #87), so nothing of them is produced here.
+	if got, ok := pushed.Annotations[workflow.AnnotationMOFClass]; ok {
+		t.Errorf("package pushed a MOF class %q; classification belongs to harden", got)
+	}
+	if sboms, _ := filepath.Glob(filepath.Join(modelDir, "sbom.*")); len(sboms) != 0 {
+		t.Errorf("package wrote SBOM files %v; SBOM generation belongs to harden", sboms)
 	}
 	if len(pushed.Layers) != 1 || pushed.Layers[0].Annotations["org.opencontainers.image.title"] != "test-model" {
 		t.Errorf("pushed layers = %+v, want one layer titled test-model", pushed.Layers)
@@ -239,6 +241,56 @@ func TestPackageThenValidateAgainstRegistry(t *testing.T) {
 			t.Error("validate gitops on a missing artifact should exit non-zero")
 		}
 	})
+
+	// harden is the step after package: it generates the SBOM, classifies
+	// the model and records both in the manifest package wrote.
+	t.Run("harden", func(t *testing.T) {
+		if _, err := exec.LookPath("syft"); err != nil {
+			t.Skip("syft not on PATH; harden e2e needs it")
+		}
+		out, err := runCLI(t, filepath.Dir(modelDir), "harden",
+			"--model", "test-model", "--model-path", modelDir, "--artifact", artifact,
+			"--sbom-tool", "syft", "--sbom-format", "spdx-json")
+		if err != nil {
+			t.Fatalf("harden failed: %v", err)
+		}
+		if !strings.Contains(out, "Manifest updated") {
+			t.Errorf("harden output does not report updating the manifest")
+		}
+		if _, err := os.Stat(filepath.Join(modelDir, "sbom.spdx-json")); err != nil {
+			t.Errorf("expected SBOM next to the model: %v", err)
+		}
+
+		hardened, err := workflow.ReadUnifiedOCIManifest(filepath.Join(modelDir, "manifest.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for key, want := range map[string]string{
+			workflow.AnnotationSBOMFormat:    "spdx-json",
+			workflow.AnnotationMOFClass:      "II", // weights + README, detected
+			workflow.AnnotationMOFComponents: "weights,documentation",
+			workflow.AnnotationMOFVersion:    "1.0",
+			workflow.AnnotationRuntime:       "vllm", // from package, kept
+		} {
+			if got := hardened.Annotations[key]; got != want {
+				t.Errorf("hardened manifest annotation %s = %q, want %q", key, got, want)
+			}
+		}
+	})
+}
+
+func TestHardenRequiresPackage(t *testing.T) {
+	modelDir := newModelDir(t)
+
+	out, err := runCLI(t, filepath.Dir(modelDir), "harden",
+		"--model", "test-model", "--model-path", modelDir, "--artifact", "e2e/unpackaged:"+uniqueTag(),
+		"--generate-sbom=false")
+	if err == nil {
+		t.Fatal("harden on an unpackaged model should exit non-zero")
+	}
+	if !strings.Contains(out, "model-cli package") {
+		t.Errorf("harden output = %q, want it to tell the user to run `model-cli package` first", out)
+	}
 }
 
 func TestPushAttachesProvenanceReferrer(t *testing.T) {
