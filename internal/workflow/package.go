@@ -6,7 +6,10 @@ import (
 	"time"
 )
 
-// PackageWorkflow orchestrates the packaging of models as OCI artifacts
+// PackageWorkflow orchestrates the packaging of models as OCI artifacts:
+// manifest, layers, push and parity check. SBOM generation and MOF
+// classification are deliberately not part of it; they are the separate
+// hardening step (HardenWorkflow) that runs on the packaged model.
 type PackageWorkflow struct {
 	registry         string
 	registryProvider RegistryProvider
@@ -16,9 +19,6 @@ type PackageWorkflow struct {
 	registryURL      string
 	includeRAG       bool
 	ragPath          string
-	generateSBOM     bool
-	sbomTool         string
-	sbomFormat       SBOMFormat
 	annotations      *AnnotationSet
 	manifestPath     string
 	isSkill          bool
@@ -45,13 +45,11 @@ func NewPackageWorkflow(registry string) (*PackageWorkflow, error) {
 	}
 
 	return &PackageWorkflow{
-		registry:         registry,
-		registryProvider: registryProvider,
-		generateSBOM:     true,   // Default to generating SBOM
-		sbomTool:         "syft", // Default SBOM tool
-		sbomFormat:       SPDXJSON, // Default SBOM format
-		annotations:      NewAnnotationSet(),
-		verifyParity:     true, // Default to verifying the pushed digest
+		registry:           registry,
+		registryProvider:   registryProvider,
+		annotations:        NewAnnotationSet(), // Default annotations
+		generateProvenance: true,               // Default to generating provenance attestation
+		verifyParity:       true,               // Default to verifying the pushed digest
 	}, nil
 }
 
@@ -68,21 +66,6 @@ func (w *PackageWorkflow) SetPackageInfo(modelName, modelPath, artifactName, reg
 // SetAnnotations sets the CNCF AI Interoperability Profile annotations
 func (w *PackageWorkflow) SetAnnotations(annotations *AnnotationSet) {
 	w.annotations = annotations
-}
-
-// SetSecurityOptions configures SBOM options
-func (w *PackageWorkflow) SetSecurityOptions(generateSBOM bool) {
-	w.generateSBOM = generateSBOM
-}
-
-// SetSBOMTool sets the SBOM generation tool and format
-func (w *PackageWorkflow) SetSBOMTool(tool string, format SBOMFormat) {
-	w.sbomTool = tool
-	w.sbomFormat = format
-	// Update annotation
-	if w.annotations != nil {
-		w.annotations.SBOMFormat = string(format)
-	}
 }
 
 // SetIsSkill sets whether this is a skill package
@@ -146,29 +129,6 @@ func (w *PackageWorkflow) Run() error {
 	if w.registryURL != "" {
 		fullArtifact = w.registryURL + "/" + w.artifactName
 	}
-
-	// === Security & Supply Chain Steps ===
-
-	// 1. Generate SBOM - SBOM is a prerequisite for Phase 1 Step 2, failure must block workflow
-	if w.generateSBOM {
-		fmt.Println("\n=== Supply Chain Security ===")
-		fmt.Println("✓ Generating SBOM (Software Bill of Materials)...")
-
-		sbomGen, err := GetSBOMGenerator(w.sbomTool)
-		if err != nil {
-			return fmt.Errorf("SBOM generator not available: %v. SBOM is a required prerequisite for Phase 1 Step 2", err)
-		}
-
-		sbomPath := filepath.Join(w.modelPath, "sbom."+string(w.sbomFormat))
-		if err := sbomGen.Generate(w.modelPath, sbomPath, w.sbomFormat); err != nil {
-			return fmt.Errorf("SBOM generation failed: %v. SBOM is a required prerequisite for Phase 1 Step 2", err)
-		}
-
-		fmt.Printf("  SBOM generated: %s (format: %s)\n", sbomPath, w.sbomFormat)
-		// Attach SBOM as OCI layer
-		fmt.Printf("  SBOM attached as OCI layer with format: %s\n", w.sbomFormat)
-	}
-
 
 	// === Packaging Steps ===
 
@@ -329,16 +289,13 @@ func (w *PackageWorkflow) Run() error {
 	fmt.Println("\n=== Summary ===")
 	fmt.Println("Packaging complete!")
 
+	fmt.Println("\nNext steps:")
+	fmt.Printf("  - Harden (SBOM + MOF) with: model-cli harden --model %s --model-path %s --artifact %s\n", w.modelName, w.modelPath, w.artifactName)
 	if !w.sign {
-		fmt.Println("\nNext steps:")
 		fmt.Println("  - Sign with: model-cli sign --artifact " + fullArtifact)
-		fmt.Println("  - Verify with: model-cli verify --artifact " + fullArtifact)
-		fmt.Println("  - Deploy with: model-cli deploy")
-	} else {
-		fmt.Println("\nNext steps:")
-		fmt.Println("  - Verify with: model-cli verify --artifact " + fullArtifact)
-		fmt.Println("  - Deploy with: model-cli deploy")
 	}
+	fmt.Println("  - Verify with: model-cli verify --artifact " + fullArtifact)
+	fmt.Println("  - Deploy with: model-cli deploy")
 
 	return nil
 }

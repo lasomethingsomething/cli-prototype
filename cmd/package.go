@@ -32,6 +32,9 @@ Supported signing tools (mutually exclusive):
 
 Note: KubeFlow = platform (not registry). SPIFFE/SPIRE = identity (not signing).
 
+SBOM generation and MOF classification are a separate step: run
+'model-cli harden' on the same --model-path after packaging.
+
 Examples:
   # Package a model
   model-cli package
@@ -45,10 +48,7 @@ Examples:
   model-cli package --model phi-4-mini --artifact my-model:latest --sign --signer cosign
 
   # Package without provenance (disable with flag)
-  model-cli package --model phi-4-mini --artifact my-model:latest --generate-provenance=false
-
-  # Package without an SBOM (by default the SBOM is required and its failure aborts packaging)
-  model-cli package --model phi-4-mini --artifact my-model:latest --generate-sbom=false`,
+  model-cli package --model phi-4-mini --artifact my-model:latest --generate-provenance=false`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := config.Load()
 
@@ -57,7 +57,6 @@ Examples:
 		signFlag, _ := cmd.Flags().GetBool("sign")
 		signerFlag, _ := cmd.Flags().GetString("signer")
 		provenanceFlag, _ := cmd.Flags().GetBool("generate-provenance")
-		sbomFlag, _ := cmd.Flags().GetBool("generate-sbom")
 		// Node requirement flags for infrastructure orchestration (Story #68)
 		// Runtime execution flags for Story #69
 
@@ -153,7 +152,6 @@ Examples:
 			}
 		}
 
-
 		if err := requireValues("model", modelName, "model-path", modelPath, "artifact", artifactName); err != nil {
 			return err
 		}
@@ -182,10 +180,6 @@ Examples:
 
 		// Set provenance options (enabled by default, can be disabled with --generate-provenance=false)
 		pf.SetProvenanceOptions(provenanceFlag)
-
-		// SBOM is a required prerequisite (Phase 1 Step 2): generation failure aborts
-		// packaging. Opt out with --generate-sbom=false. MOF classification stays on.
-		pf.SetSecurityOptions(sbomFlag, true)
 
 		artifactType := "model"
 		if isSkillFlag {
@@ -223,5 +217,4 @@ func init() {
 	packageCmd.Flags().Bool("sign", false, "Sign the artifact automatically after packaging")
 	packageCmd.Flags().String("signer", "", "Signing tool: "+workflow.SignerOptions().Summary()+" (default: "+workflow.SignerOptions().Recommended()+")")
 	packageCmd.Flags().Bool("generate-provenance", true, "Generate SLSA provenance attestation (default: true)")
-	packageCmd.Flags().Bool("generate-sbom", true, "Generate an SBOM with syft; failure aborts packaging")
 }

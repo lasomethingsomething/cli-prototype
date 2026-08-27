@@ -160,11 +160,48 @@ func TestPackageWorkflowDefaults(t *testing.T) {
 	}
 
 	// Check default values
-	if !pf.generateSBOM {
-		t.Error("generateSBOM default = false, want true")
+	if !pf.generateProvenance {
+		t.Error("generateProvenance default = false, want true")
+	}
+	if !pf.verifyParity {
+		t.Error("verifyParity default = false, want true")
 	}
 	if pf.annotations == nil {
 		t.Error("annotations default is nil, want non-nil")
+	}
+}
+
+// TestPackageWorkflowLeavesSBOMAndMOFToHarden verifies packaging is only
+// packaging: it neither generates an SBOM nor classifies the model, both of
+// which are the separate hardening step (see HardenWorkflow).
+func TestPackageWorkflowLeavesSBOMAndMOFToHarden(t *testing.T) {
+	modelPath := t.TempDir()
+	for name, content := range map[string]string{"model.safetensors": "weights", "README.md": "# model"} {
+		if err := os.WriteFile(filepath.Join(modelPath, name), []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	pf := &PackageWorkflow{registry: "fake", registryProvider: &fakeRegistryProvider{installed: true}, annotations: NewAnnotationSet()}
+	pf.SetPackageInfo("m", modelPath, "m:v1", "", false, "")
+	if err := pf.Run(); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	if sboms, _ := filepath.Glob(filepath.Join(modelPath, "sbom.*")); len(sboms) != 0 {
+		t.Errorf("package wrote SBOM files %v; SBOM generation belongs to harden", sboms)
+	}
+	if _, err := os.Stat(filepath.Join(modelPath, "mof.json")); !os.IsNotExist(err) {
+		t.Error("package wrote mof.json; MOF classification belongs to harden")
+	}
+	m, err := ReadUnifiedOCIManifest(pf.ManifestPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{AnnotationMOFClass, AnnotationMOFComponents} {
+		if got, ok := m.Annotations[key]; ok {
+			t.Errorf("manifest annotation %s = %q; MOF classification belongs to harden", key, got)
+		}
 	}
 }
 
