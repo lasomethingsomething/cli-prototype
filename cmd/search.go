@@ -170,7 +170,9 @@ Examples:
 		}
 
 		fmt.Println("\nPhase 3 Complete: Cross-Reference Assets in Registry")
-		fmt.Println("Next: Use specific artifact references to pull or validate: model-cli pull --artifact <reference>")
+		fmt.Println("Next: Validate or verify a specific artifact reference:")
+		fmt.Println("  model-cli validate gitops --artifact <reference>")
+		fmt.Println("  model-cli verify --artifact <reference>")
 
 		return nil
 	},
