@@ -4,15 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
-	"time"
 )
 
 // RegistryProvider defines the interface for registry tools like ORAS and ModelPack
@@ -36,9 +33,12 @@ type RegistryProvider interface {
 	PushReferrer(artifact, registry, referrerType string, data []byte, annotations map[string]string) error
 	// GetReferrers fetches all referrers of a given type for an artifact from the registry
 	GetReferrers(artifact, registry, referrerType string) ([][]byte, error)
-	// Search queries the registry for artifacts matching the given filters
-	// Returns manifest bytes for matching artifacts, which can be parsed for metadata
-	Search(registry, filters string) ([][]byte, error)
+	// Search lists the tagged manifests in registry that carry annotations
+	// matching query's artifact-type and metadata filters (see
+	// SearchQuery.MatchesAnnotations); a provider may evaluate those
+	// filters server-side. Relationship filters are applied afterwards by
+	// SearchResults.FilterByRelationship.
+	Search(registry string, query *SearchQuery) ([]ManifestCandidate, error)
 	// FetchManifestAnnotations fetches the OCI manifest for an artifact and returns its annotations
 	// This is used for GitOps pre-sync validation (Story #65)
 	FetchManifestAnnotations(artifactRef string) (map[string]string, error)
@@ -277,288 +277,96 @@ func repositoryOf(artifact string) string {
 	return artifact
 }
 
-func (o *ORASProvider) Search(registry, filters string) ([][]byte, error) {
-	// For zot registries (which have the search extension enabled),
-	// try using the zot search API first. If that fails, fall back to
-	// the OCI Distribution Spec approach which works with any registry.
-	
-	// Check if this might be a zot registry by trying the search extension
-	if manifests, err := tryZotSearch(registry, filters); err == nil {
-		return manifests, nil
-	}
-	
-	// Fall back to OCI Distribution Spec approach: catalog -> tags/list -> manifest fetch
-	// This works with any OCI-compliant registry
-	return searchOCIDistribution(registry, filters)
-}
-
-// tryZotSearch attempts to use zot's search extension API
-func tryZotSearch(registry, filters string) ([][]byte, error) {
-	// Try the zot search extension endpoint
-	// Zot's search extension uses HTTP GET with query parameters
-	// Format: /v2/_zot/ext/search?n=<name>&a=<artifact-type>&l=<label>=<value>
-	
-	url := fmt.Sprintf("http://%s/v2/_zot/ext/search", registry)
-	
-	// Build query parameters from filters
-	// Filters are in format "key=value&key2=value2"
-	params := make(map[string]string)
-	
-	// Parse the filter string
-	if filters != "" {
-		for _, pair := range strings.Split(filters, "&") {
-			if pair != "" {
-				kv := strings.SplitN(pair, "=", 2)
-				if len(kv) == 2 {
-					key, value := kv[0], kv[1]
-					// Map filter keys to zot search parameters
-					// Zot uses: n=name, t=tag, a=artifact-type, l=label/annotation
-					if key == AnnotationArtifactType {
-						// This is the artifact type
-						params["a"] = "application/vnd.cncf.ai." + value
-					} else if strings.HasPrefix(key, "ai.") {
-						// AI annotations - zot uses l=label format
-						params["l"] = key + "=" + value
-					} else {
-						// Other annotations
-						params["l"] = key + "=" + value
-					}
-				}
-			}
-		}
-	}
-	
-	// If no artifact type filter, search for all AI artifact types
-	if _, ok := params["a"]; !ok {
-		params["a"] = "application/vnd.cncf.ai.%"
-	}
-	
-	// Build the URL with query parameters
-	queryString := ""
-	for k, v := range params {
-		if queryString == "" {
-			queryString = "?" + k + "=" + v
-		} else {
-			queryString += "&" + k + "=" + v
-		}
-	}
-	
-	fullURL := url + queryString
-	
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Get(fullURL)
+// Search walks the registry with the ORAS CLI: `oras repo ls` lists the
+// repositories, `oras repo tags` the tags of each, and every tag's manifest
+// is fetched with `oras manifest fetch`. ORAS has no registry-wide search,
+// so the query's artifact-type and metadata filters are applied client-side
+// to each manifest's annotations. Manifests without annotations are not AI
+// artifacts and are skipped; a repository whose tags cannot be listed (or a
+// tag whose manifest cannot be fetched) is reported on stderr and skipped so
+// that one broken repository does not hide the others.
+//
+// Like every other ORAS call here, authentication, TLS and plain-HTTP for
+// localhost are left to the oras CLI and its own configuration.
+func (o *ORASProvider) Search(registry string, query *SearchQuery) ([]ManifestCandidate, error) {
+	repos, err := orasLines("repo", "ls", registry)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query zot search API: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("zot search API returned status %d", resp.StatusCode)
+		return nil, fmt.Errorf("failed to list repositories of %s with ORAS: %v", registry, err)
 	}
 
-	// Parse the response - zot returns a list of repositories with artifacts
-	var result zotSearchResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to parse zot search response: %v", err)
-	}
-
-	// Fetch manifests for all found artifacts
-	var manifests [][]byte
-	for _, repo := range result.Repositories {
-		for _, artifact := range repo.Artifacts {
-			manifest, err := fetchManifest(registry, repo.Name, artifact.Digest)
+	var candidates []ManifestCandidate
+	for _, repo := range repos {
+		repoRef := registry + "/" + repo
+		tags, err := orasLines("repo", "tags", repoRef)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: skipping %s: failed to list tags with ORAS: %v\n", repoRef, err)
+			continue
+		}
+		for _, tag := range tags {
+			ref := repoRef + ":" + tag
+			candidate, err := o.fetchCandidate(ref)
 			if err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: skipping %s: %v\n", ref, err)
 				continue
 			}
-			manifests = append(manifests, manifest)
-		}
-	}
-
-	return manifests, nil
-}
-
-// zotSearchResponse represents the response from zot's search extension API
-type zotSearchResponse struct {
-	Repositories []struct {
-		Name      string `json:"name"`
-		Artifacts []struct {
-			Digest    string `json:"digest"`
-			MediaType string `json:"mediaType"`
-			Size      int64  `json:"size"`
-		} `json:"artifacts"`
-	} `json:"repositories"`
-}
-
-// searchOCIDistribution performs a search using OCI Distribution Spec
-// This works with any registry that exposes the catalog endpoint
-func searchOCIDistribution(registry, filters string) ([][]byte, error) {
-	// Step 1: Fetch the catalog from /v2/_catalog
-	catalog, err := fetchCatalog(registry)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch catalog: %v", err)
-	}
-
-	// Step 2: For each repository, fetch tags/list
-	var manifests [][]byte
-	for _, repo := range catalog.Repositories {
-		tags, err := fetchTags(registry, repo)
-		if err != nil {
-			continue // Skip repos we can't fetch tags for
-		}
-
-		// Step 3: For each tag, fetch the manifest
-		for _, tag := range tags.Tags {
-			manifest, err := fetchManifest(registry, repo, tag.Digest)
-			if err != nil {
-				continue // Skip manifests we can't fetch
-			}
-
-			// Filter by artifact type if specified
-			if filters != "" && !matchesFilter(manifest, filters) {
+			if len(candidate.Annotations) == 0 || !query.MatchesAnnotations(candidate.Annotations) {
 				continue
 			}
-
-			manifests = append(manifests, manifest)
+			candidates = append(candidates, candidate)
 		}
 	}
-
-	return manifests, nil
+	return candidates, nil
 }
 
-// fetchCatalog fetches the repository catalog from /v2/_catalog
-type catalogResponse struct {
-	Repositories []string `json:"repositories"`
-}
-
-func fetchCatalog(registry string) (*catalogResponse, error) {
-	url := fmt.Sprintf("http://%s/v2/_catalog", registry)
-	client := &http.Client{Timeout: 30 * time.Second}
-
-	// First, try with no auth (for zot and local registries)
-	resp, err := client.Get(url)
+// fetchCandidate resolves ref to its manifest digest (`oras manifest fetch
+// --descriptor`) and body (`oras manifest fetch`).
+func (o *ORASProvider) fetchCandidate(ref string) (ManifestCandidate, error) {
+	descriptorJSON, err := orasOutput("manifest", "fetch", "--descriptor", ref)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch catalog: %v", err)
+		return ManifestCandidate{}, fmt.Errorf("failed to fetch manifest descriptor with ORAS: %v", err)
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusUnauthorized {
-		// Try with empty auth (some registries require this)
-		req, _ := http.NewRequest("GET", url, nil)
-		req.SetBasicAuth("", "")
-		resp, err = client.Do(req)
-		if err != nil {
-			return nil, fmt.Errorf("failed to fetch catalog with auth: %v", err)
-		}
-		defer resp.Body.Close()
+	var descriptor struct {
+		Digest string `json:"digest"`
+	}
+	if err := json.Unmarshal(descriptorJSON, &descriptor); err != nil {
+		return ManifestCandidate{}, fmt.Errorf("failed to parse manifest descriptor from ORAS: %v", err)
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("catalog request returned status %d", resp.StatusCode)
-	}
-
-	var catalog catalogResponse
-	if err := json.NewDecoder(resp.Body).Decode(&catalog); err != nil {
-		return nil, fmt.Errorf("failed to parse catalog response: %v", err)
-	}
-
-	return &catalog, nil
-}
-
-// fetchTags fetches the tags list from /v2/<repo>/tags/list
-type tagsListResponse struct {
-	Name string   `json:"name"`
-	Tags []tagInfo `json:"tags"`
-}
-
-type tagInfo struct {
-	Name   string `json:"name"`
-	Digest string `json:"digest"`
-	Size   int64  `json:"size"`
-}
-
-func fetchTags(registry, repo string) (*tagsListResponse, error) {
-	url := fmt.Sprintf("http://%s/v2/%s/tags/list", registry, repo)
-	client := &http.Client{Timeout: 30 * time.Second}
-
-	// Try with no auth first
-	resp, err := client.Get(url)
+	manifest, err := orasOutput("manifest", "fetch", ref)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch tags for %s: %v", repo, err)
+		return ManifestCandidate{}, fmt.Errorf("failed to fetch manifest with ORAS: %v", err)
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusUnauthorized {
-		// Try with empty auth
-		req, _ := http.NewRequest("GET", url, nil)
-		req.SetBasicAuth("", "")
-		resp, err = client.Do(req)
-		if err != nil {
-			return nil, fmt.Errorf("failed to fetch tags for %s with auth: %v", repo, err)
-		}
-		defer resp.Body.Close()
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("tags list request for %s returned status %d", repo, resp.StatusCode)
-	}
-
-	var tags tagsListResponse
-	if err := json.NewDecoder(resp.Body).Decode(&tags); err != nil {
-		return nil, fmt.Errorf("failed to parse tags list for %s: %v", repo, err)
-	}
-
-	return &tags, nil
+	return NewManifestCandidate(ref, descriptor.Digest, manifest)
 }
 
-// fetchManifest fetches a manifest from /v2/<repo>/manifests/<digest>
-func fetchManifest(registry, repo, digest string) ([]byte, error) {
-	url := fmt.Sprintf("http://%s/v2/%s/manifests/%s", registry, repo, digest)
-	client := &http.Client{Timeout: 30 * time.Second}
-
-	// Try with no auth first
-	resp, err := client.Get(url)
+// orasOutput runs oras with args and returns its stdout. When oras fails,
+// whatever it printed to stderr is included in the error.
+func orasOutput(args ...string) ([]byte, error) {
+	output, err := exec.Command("oras", args...).Output()
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch manifest %s: %v", digest, err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusUnauthorized {
-		// Try with empty auth
-		req, _ := http.NewRequest("GET", url, nil)
-		req.SetBasicAuth("", "")
-		resp, err = client.Do(req)
-		if err != nil {
-			return nil, fmt.Errorf("failed to fetch manifest %s with auth: %v", digest, err)
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {
+			return nil, fmt.Errorf("%v: %s", err, strings.TrimSpace(string(exitErr.Stderr)))
 		}
-		defer resp.Body.Close()
+		return nil, err
 	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("manifest request for %s returned status %d", digest, resp.StatusCode)
-	}
-
-	return io.ReadAll(resp.Body)
+	return output, nil
 }
 
-// matchesFilter checks if a manifest matches the given filter
-func matchesFilter(manifest []byte, filters string) bool {
-	// Parse the manifest to check annotations
-	var manifestData map[string]interface{}
-	if err := json.Unmarshal(manifest, &manifestData); err != nil {
-		return false
+// orasLines runs oras and returns the non-empty lines of its stdout, which is
+// how `oras repo ls` and `oras repo tags` report their results.
+func orasLines(args ...string) ([]string, error) {
+	output, err := orasOutput(args...)
+	if err != nil {
+		return nil, err
 	}
-
-	// Check for AI artifact type annotation
-	if at, ok := manifestData["annotations"].(map[string]interface{})[AnnotationArtifactType]; ok {
-		if atStr, ok := at.(string); ok {
-			if strings.Contains(filters, atStr) {
-				return true
-			}
+	var lines []string
+	for _, line := range strings.Split(string(output), "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			lines = append(lines, line)
 		}
 	}
-
-	// If no specific filter match, include it
-	return true
+	return lines, nil
 }
 
 func (o *ORASProvider) FetchManifestAnnotations(artifactRef string) (map[string]string, error) {
@@ -649,7 +457,7 @@ func (m *ModelPackProvider) GetReferrers(artifact, registry, referrerType string
 	return nil, m.notImplemented("referrer fetch")
 }
 
-func (m *ModelPackProvider) Search(registry, filters string) ([][]byte, error) {
+func (m *ModelPackProvider) Search(registry string, query *SearchQuery) ([]ManifestCandidate, error) {
 	return nil, m.notImplemented("search")
 }
 
