@@ -54,7 +54,7 @@ You'll end up with:
 
 - `~/test-model/manifest.json` - an OCI manifest carrying CNCF AI Interoperability Profile annotations
 - `~/test-model/attestation.json` - a SLSA provenance attestation
-- an SBOM at `~/test-model/sbom.spdx-json` if `syft` is installed (otherwise a warning, not a failure)
+- an SBOM at `~/test-model/sbom.spdx-json`, generated with `syft` - the SBOM is a required prerequisite, so packaging aborts with a non-zero exit code if `syft` is missing or fails (`brew install anchore/syft/syft`, or pass `--generate-sbom=false` to skip it)
 
 A detailed, annotated walkthrough of this run is in [docs/trial-run-report.md](docs/trial-run-report.md).
 
