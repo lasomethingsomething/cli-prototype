@@ -1,7 +1,9 @@
 package workflow
 
 import (
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -176,6 +178,69 @@ func TestWriteUnifiedOCIManifest(t *testing.T) {
 	}
 }
 
+// TestWriteUnifiedOCIManifestConfigBlobMatchesDescriptor verifies that the
+// config.json written next to the manifest is the blob the manifest's config
+// descriptor describes: same sha256 digest and size, regardless of whether
+// the descriptor was refreshed before the write.
+func TestWriteUnifiedOCIManifestConfigBlobMatchesDescriptor(t *testing.T) {
+	manifest := NewUnifiedOCIManifest(ArtifactTypeModel, "test-model", []OCILayer{})
+	manifest.SetModelConfig(AIModelConfig{ModelType: "text-generation", Runtime: "vllm", Capabilities: []string{"chat"}})
+	if err := manifest.refreshConfigDescriptor(); err != nil {
+		t.Fatal(err)
+	}
+	digestBeforeWrite := manifest.Config.Digest
+
+	// Change the config after the descriptor was computed: Write must not
+	// keep the stale digest.
+	manifest.SetModelConfig(AIModelConfig{ModelType: "embedding"})
+
+	dir := t.TempDir()
+	manifestPath := filepath.Join(dir, "manifest.json")
+	if err := WriteUnifiedOCIManifest(manifest, manifestPath); err != nil {
+		t.Fatalf("WriteUnifiedOCIManifest failed: %v", err)
+	}
+
+	blob, err := os.ReadFile(filepath.Join(dir, ConfigBlobFileName))
+	if err != nil {
+		t.Fatalf("config blob not written: %v", err)
+	}
+	wantDigest := fmt.Sprintf("sha256:%x", sha256.Sum256(blob))
+
+	written, err := ReadUnifiedOCIManifest(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, m := range map[string]*UnifiedOCIManifest{"in-memory": manifest, "written": written} {
+		if m.Config.Digest != wantDigest {
+			t.Errorf("%s manifest config digest = %s, want sha256 of config.json %s", name, m.Config.Digest, wantDigest)
+		}
+		if m.Config.Size != int64(len(blob)) {
+			t.Errorf("%s manifest config size = %d, want len(config.json) %d", name, m.Config.Size, len(blob))
+		}
+	}
+	if manifest.Config.Digest == digestBeforeWrite {
+		t.Error("Write kept the config digest computed before the config changed")
+	}
+
+	var parsed AIModelConfig
+	if err := json.Unmarshal(blob, &parsed); err != nil {
+		t.Fatalf("config.json is not an AI model config: %v", err)
+	}
+	if parsed.ModelType != "embedding" {
+		t.Errorf("config.json ai.model.type = %q, want embedding", parsed.ModelType)
+	}
+}
+
+// withConfigDescriptor fills m's config descriptor and fails the test if
+// that is not possible, so a table entry never silently becomes nil.
+func withConfigDescriptor(t *testing.T, m *UnifiedOCIManifest) *UnifiedOCIManifest {
+	t.Helper()
+	if err := m.refreshConfigDescriptor(); err != nil {
+		t.Fatalf("refreshConfigDescriptor() error = %v", err)
+	}
+	return m
+}
+
 func TestValidateOCIManifest(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -187,10 +252,7 @@ func TestValidateOCIManifest(t *testing.T) {
 			manifest: func() *UnifiedOCIManifest {
 				m := NewUnifiedOCIManifest(ArtifactTypeModel, "test-model", []OCILayer{})
 				m.SetModelConfig(AIModelConfig{ModelType: "text-generation"})
-				if err := m.refreshConfigDescriptor(); err != nil {
-					return nil
-				}
-				return m
+				return withConfigDescriptor(t, m)
 			}(),
 			wantErr: false,
 		},
@@ -199,10 +261,7 @@ func TestValidateOCIManifest(t *testing.T) {
 			manifest: func() *UnifiedOCIManifest {
 				m := NewUnifiedOCIManifest(ArtifactTypeSkill, "test-skill", []OCILayer{})
 				m.SetSkillConfig(AISkillConfig{SkillType: "rag"})
-				if err := m.refreshConfigDescriptor(); err != nil {
-					return nil
-				}
-				return m
+				return withConfigDescriptor(t, m)
 			}(),
 			wantErr: false,
 		},
@@ -211,10 +270,7 @@ func TestValidateOCIManifest(t *testing.T) {
 			manifest: func() *UnifiedOCIManifest {
 				m := NewUnifiedOCIManifest(ArtifactTypePipeline, "test-pipeline", []OCILayer{})
 				m.SetPipelineConfig(AIPipelineConfig{PipelineType: "inference"})
-				if err := m.refreshConfigDescriptor(); err != nil {
-					return nil
-				}
-				return m
+				return withConfigDescriptor(t, m)
 			}(),
 			wantErr: false,
 		},

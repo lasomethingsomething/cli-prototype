@@ -253,42 +253,59 @@ func (m *UnifiedOCIManifest) SetRelationships(relationships map[string][]string)
 	}
 }
 
-// refreshConfigDescriptor fills the config descriptor's digest and size from
-// the inline AI config so the descriptor describes a real blob.
-func (m *UnifiedOCIManifest) refreshConfigDescriptor() error {
+// ConfigBlobFileName is the file next to manifest.json that holds the
+// serialized AI config. It is pushed as the manifest's config blob.
+const ConfigBlobFileName = "config.json"
+
+// configBlob returns the bytes of the AI config blob, or nil when the
+// manifest carries no AI config. This is the single serialization of the
+// config: the config descriptor's digest and size are computed from it, and
+// WriteUnifiedOCIManifest writes exactly these bytes to config.json, so the
+// descriptor always matches the blob that is pushed.
+func (m *UnifiedOCIManifest) configBlob() ([]byte, error) {
 	if m.AIConfig == nil {
-		return nil
+		return nil, nil
 	}
-	data, err := json.Marshal(m.AIConfig)
+	data, err := json.MarshalIndent(m.AIConfig, "", "  ")
 	if err != nil {
-		return fmt.Errorf("failed to marshal AI config: %v", err)
+		return nil, fmt.Errorf("failed to marshal AI config: %v", err)
+	}
+	return data, nil
+}
+
+// refreshConfigDescriptor fills the config descriptor's digest and size from
+// the AI config blob so the descriptor describes a real blob.
+func (m *UnifiedOCIManifest) refreshConfigDescriptor() error {
+	data, err := m.configBlob()
+	if err != nil || data == nil {
+		return err
 	}
 	m.Config.Digest = fmt.Sprintf("sha256:%x", sha256.Sum256(data))
 	m.Config.Size = int64(len(data))
 	return nil
 }
 
-// WriteUnifiedOCIManifest writes the manifest to a file and the AI config as a separate blob
+// WriteUnifiedOCIManifest writes the manifest to path and the AI config blob
+// to config.json in the same directory. The config descriptor is always
+// refreshed first, so the written manifest's config digest and size match
+// the config.json bytes.
 func WriteUnifiedOCIManifest(m *UnifiedOCIManifest, path string) error {
-	// Write the AI config as a separate blob first
-	if m.AIConfig != nil && m.Config.MediaType != "" {
-		configData, err := json.MarshalIndent(m.AIConfig, "", "  ")
-		if err != nil {
-			return fmt.Errorf("failed to marshal AI config: %v", err)
-		}
-		configPath := filepath.Join(filepath.Dir(path), "config.json")
+	if err := m.refreshConfigDescriptor(); err != nil {
+		return err
+	}
+	configData, err := m.configBlob()
+	if err != nil {
+		return err
+	}
+	if configData != nil {
+		configPath := filepath.Join(filepath.Dir(path), ConfigBlobFileName)
 		if err := os.WriteFile(configPath, configData, 0644); err != nil {
-			return fmt.Errorf("failed to write AI config to %s: %v", configPath, err)
+			return fmt.Errorf("failed to write AI config blob to %s: %v", configPath, err)
 		}
-		// Update the config descriptor to reference the actual blob
-		m.Config.Digest = fmt.Sprintf("sha256:%x", sha256.Sum256(configData))
-		m.Config.Size = int64(len(configData))
 	}
 
-	// Remove the inline AIConfig field as it's now a separate blob
-	// (Keep it for now for backward compatibility with local preview)
-
-	// Write the manifest
+	// The AI config stays inlined as aiConfig for readers that inspect the
+	// local manifest without the blob (enforce, admission).
 	data, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal unified OCI manifest: %v", err)
