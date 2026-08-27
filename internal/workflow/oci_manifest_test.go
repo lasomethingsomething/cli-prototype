@@ -1,7 +1,9 @@
 package workflow
 
 import (
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -121,6 +123,43 @@ func TestAddLayer(t *testing.T) {
 	}
 }
 
+// TestConfigDescriptorFollowsAIConfig verifies that constructing a manifest
+// and every way of changing its AI config leave the config descriptor
+// describing the current config, so callers (e.g. `push`) can validate the
+// manifest without an extra step.
+func TestConfigDescriptorFollowsAIConfig(t *testing.T) {
+	m := NewUnifiedOCIManifest(ArtifactTypeModel, "test-model", []OCILayer{})
+	if m.Config.Digest == "" || m.Config.Size == 0 {
+		t.Fatalf("new manifest has no config descriptor: %+v", m.Config)
+	}
+	if err := ValidateOCIManifest(m); err != nil {
+		t.Errorf("new manifest does not validate: %v", err)
+	}
+	initial := m.Config.Digest
+
+	m.SetModelConfig(AIModelConfig{ModelType: "embedding"})
+	afterSet := m.Config.Digest
+	if afterSet == initial {
+		t.Error("SetModelConfig did not update the config digest")
+	}
+
+	m.SetRelationships(map[string][]string{"skills": {"skill:v1"}})
+	if m.Config.Digest == afterSet {
+		t.Error("SetRelationships did not update the config digest")
+	}
+
+	blob, err := m.configBlob()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := fmt.Sprintf("sha256:%x", sha256.Sum256(blob)); m.Config.Digest != want || m.Config.Size != int64(len(blob)) {
+		t.Errorf("descriptor = %+v, want digest %s size %d", m.Config, want, len(blob))
+	}
+	if err := ValidateOCIManifest(m); err != nil {
+		t.Errorf("manifest does not validate after config changes: %v", err)
+	}
+}
+
 func TestSetRelationships(t *testing.T) {
 	manifest := NewUnifiedOCIManifest(ArtifactTypeModel, "test-model", []OCILayer{})
 
@@ -173,6 +212,56 @@ func TestWriteUnifiedOCIManifest(t *testing.T) {
 	}
 	if readManifest.Annotations[AnnotationArtifactType] != manifest.Annotations[AnnotationArtifactType] {
 		t.Errorf("Artifact type annotation = %s, want %s", readManifest.Annotations[AnnotationArtifactType], manifest.Annotations[AnnotationArtifactType])
+	}
+}
+
+// TestWriteUnifiedOCIManifestConfigBlobMatchesDescriptor verifies that the
+// config.json written next to the manifest is the blob the manifest's config
+// descriptor describes: same sha256 digest and size, regardless of whether
+// the descriptor was refreshed before the write.
+func TestWriteUnifiedOCIManifestConfigBlobMatchesDescriptor(t *testing.T) {
+	manifest := NewUnifiedOCIManifest(ArtifactTypeModel, "test-model", []OCILayer{})
+	manifest.SetModelConfig(AIModelConfig{ModelType: "text-generation", Runtime: "vllm", Capabilities: []string{"chat"}})
+	digestBeforeWrite := manifest.Config.Digest
+
+	// Change the config behind the setters' back: Write must still not
+	// keep the stale digest.
+	manifest.AIConfig = AIModelConfig{ModelType: "embedding"}
+
+	dir := t.TempDir()
+	manifestPath := filepath.Join(dir, "manifest.json")
+	if err := WriteUnifiedOCIManifest(manifest, manifestPath); err != nil {
+		t.Fatalf("WriteUnifiedOCIManifest failed: %v", err)
+	}
+
+	blob, err := os.ReadFile(filepath.Join(dir, ConfigBlobFileName))
+	if err != nil {
+		t.Fatalf("config blob not written: %v", err)
+	}
+	wantDigest := fmt.Sprintf("sha256:%x", sha256.Sum256(blob))
+
+	written, err := ReadUnifiedOCIManifest(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, m := range map[string]*UnifiedOCIManifest{"in-memory": manifest, "written": written} {
+		if m.Config.Digest != wantDigest {
+			t.Errorf("%s manifest config digest = %s, want sha256 of config.json %s", name, m.Config.Digest, wantDigest)
+		}
+		if m.Config.Size != int64(len(blob)) {
+			t.Errorf("%s manifest config size = %d, want len(config.json) %d", name, m.Config.Size, len(blob))
+		}
+	}
+	if manifest.Config.Digest == digestBeforeWrite {
+		t.Error("Write kept the config digest computed before the config changed")
+	}
+
+	var parsed AIModelConfig
+	if err := json.Unmarshal(blob, &parsed); err != nil {
+		t.Fatalf("config.json is not an AI model config: %v", err)
+	}
+	if parsed.ModelType != "embedding" {
+		t.Errorf("config.json ai.model.type = %q, want embedding", parsed.ModelType)
 	}
 }
 

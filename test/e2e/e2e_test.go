@@ -13,11 +13,13 @@
 package e2e
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -99,8 +101,9 @@ func newModelDir(t *testing.T) string {
 func uniqueTag() string { return fmt.Sprintf("v%d", time.Now().UnixNano()) }
 
 type pushedManifest struct {
-	ArtifactType string            `json:"artifactType"`
-	Annotations  map[string]string `json:"annotations"`
+	ArtifactType string                 `json:"artifactType"`
+	Config       workflow.OCIDescriptor `json:"config"`
+	Annotations  map[string]string      `json:"annotations"`
 	Layers       []struct {
 		Annotations map[string]string `json:"annotations"`
 	} `json:"layers"`
@@ -108,7 +111,8 @@ type pushedManifest struct {
 
 func TestPackageThenValidateAgainstRegistry(t *testing.T) {
 	modelDir := newModelDir(t)
-	artifact := "e2e/test-model:" + uniqueTag()
+	repo := "e2e/test-model"
+	artifact := repo + ":" + uniqueTag()
 	ref := registry + "/" + artifact
 
 	out, err := runCLI(t, filepath.Dir(modelDir), "package",
@@ -145,11 +149,46 @@ func TestPackageThenValidateAgainstRegistry(t *testing.T) {
 		t.Errorf("pushed layers = %+v, want one layer titled test-model", pushed.Layers)
 	}
 
-	// The local preview manifest carries exactly the annotations that were pushed.
 	local, err := workflow.ReadUnifiedOCIManifest(filepath.Join(modelDir, "manifest.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	// The AI config was pushed as the manifest's config blob (#84): the
+	// registry's config descriptor is the one in the local manifest.json...
+	if pushed.Config.Digest != local.Config.Digest || pushed.Config.Size != local.Config.Size || pushed.Config.MediaType != local.Config.MediaType {
+		t.Errorf("registry config descriptor = %+v, want the local manifest's %+v", pushed.Config, local.Config)
+	}
+	// ...and fetching the blob round-trips the local config.json and the
+	// AI config it holds.
+	localBlob, err := os.ReadFile(filepath.Join(modelDir, workflow.ConfigBlobFileName))
+	if err != nil {
+		t.Fatalf("package did not write %s: %v", workflow.ConfigBlobFileName, err)
+	}
+	blobRef := registry + "/" + repo + "@" + pushed.Config.Digest
+	fetched, err := exec.Command("oras", "blob", "fetch", "--output", "-", blobRef).Output()
+	if err != nil {
+		t.Fatalf("oras blob fetch %s: %v", blobRef, err)
+	}
+	if !bytes.Equal(fetched, localBlob) {
+		t.Errorf("config blob in registry differs from local config.json:\n%s\nvs\n%s", fetched, localBlob)
+	}
+	var fetchedConfig, localConfig workflow.AIModelConfig
+	if err := json.Unmarshal(fetched, &fetchedConfig); err != nil {
+		t.Fatalf("fetched config blob is not an AI model config: %v", err)
+	}
+	inline, err := json.Marshal(local.AIConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(inline, &localConfig); err != nil {
+		t.Fatalf("local aiConfig is not an AI model config: %v", err)
+	}
+	if fetchedConfig.ModelType == "" || !reflect.DeepEqual(fetchedConfig, localConfig) {
+		t.Errorf("fetched AI config = %+v, want the local manifest's %+v", fetchedConfig, localConfig)
+	}
+
+	// The local manifest carries exactly the annotations that were pushed.
 	for key, want := range local.Annotations {
 		if key == "org.opencontainers.image.title" {
 			continue // ORAS sets its own title

@@ -87,6 +87,11 @@ func (o *ORASProvider) Push(artifact, registry, sourcePath string, annotations m
 
 	args := []string{"push", registry + "/" + artifact, "--artifact-type", artifactTypeFor(annotations), "--format", "json"}
 	args = append(args, annotationArgs(annotations)...)
+	configArgs, err := configBlobArgs(absSource)
+	if err != nil {
+		return "", err
+	}
+	args = append(args, configArgs...)
 	// Run from the parent directory and push the base name so that the layer
 	// title ORAS records is the model directory (or file) name, not an
 	// absolute path (which ORAS rejects without --disable-path-validation).
@@ -104,6 +109,32 @@ func (o *ORASProvider) Push(artifact, registry, sourcePath string, annotations m
 		fmt.Printf("Attached %d CNCF AI annotation(s) to the manifest\n", len(annotations))
 	}
 	return digestFromORASOutput(output), nil
+}
+
+// configBlobArgs returns the "--config <file>:<mediatype>" arguments that
+// make ORAS push the AI config blob written by `package` as the manifest's
+// config, so the registry manifest's config descriptor is the real blob and
+// matches the local manifest.json. It returns nil when absSource is not a
+// packaged directory, i.e. it lacks config.json or manifest.json (a model
+// directory may ship its own unrelated config.json). The file path is
+// relative to the parent of absSource, which is where Push runs ORAS.
+func configBlobArgs(absSource string) ([]string, error) {
+	if _, err := os.Stat(filepath.Join(absSource, ConfigBlobFileName)); err != nil {
+		return nil, nil
+	}
+	manifestPath := filepath.Join(absSource, "manifest.json")
+	if _, err := os.Stat(manifestPath); err != nil {
+		return nil, nil
+	}
+	manifest, err := ReadUnifiedOCIManifest(manifestPath)
+	if err != nil {
+		return nil, fmt.Errorf("cannot push config blob: %v", err)
+	}
+	if manifest.Config.MediaType == "" {
+		return nil, fmt.Errorf("cannot push config blob: %s has no config media type", manifestPath)
+	}
+	configRef := filepath.Join(filepath.Base(absSource), ConfigBlobFileName)
+	return []string{"--config", configRef + ":" + manifest.Config.MediaType}, nil
 }
 
 // digestFromORASOutput extracts the manifest digest from `oras ... --format

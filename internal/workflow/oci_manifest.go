@@ -179,29 +179,23 @@ func NewUnifiedOCIManifest(artifactType ArtifactType, name string, layers []OCIL
 	// Set the config based on artifact type
 	switch artifactType {
 	case ArtifactTypeModel:
-		config := AIModelConfig{
+		manifest.SetModelConfig(AIModelConfig{
 			Architecture: "amd64",
 			OS:           "linux",
 			ModelType:    "text-generation", // Default
-		}
-		manifest.AIConfig = config
-		manifest.Config.MediaType = AIModelConfigMediaType
+		})
 	case ArtifactTypeSkill:
-		config := AISkillConfig{
+		manifest.SetSkillConfig(AISkillConfig{
 			Architecture: "amd64",
 			OS:           "linux",
 			SkillType:    "general", // Default
-		}
-		manifest.AIConfig = config
-		manifest.Config.MediaType = AISkillConfigMediaType
+		})
 	case ArtifactTypePipeline:
-		config := AIPipelineConfig{
+		manifest.SetPipelineConfig(AIPipelineConfig{
 			Architecture: "amd64",
 			OS:           "linux",
 			PipelineType: "inference", // Default
-		}
-		manifest.AIConfig = config
-		manifest.Config.MediaType = AIPipelineConfigMediaType
+		})
 	}
 
 	// Set the name annotation
@@ -212,23 +206,31 @@ func NewUnifiedOCIManifest(artifactType ArtifactType, name string, layers []OCIL
 
 // SetModelConfig sets the model-specific configuration
 func (m *UnifiedOCIManifest) SetModelConfig(config AIModelConfig) {
-	m.AIConfig = config
-	m.Config.MediaType = AIModelConfigMediaType
-	m.Annotations[AnnotationArtifactType] = string(ArtifactTypeModel)
+	m.setAIConfig(config, AIModelConfigMediaType, ArtifactTypeModel)
 }
 
 // SetSkillConfig sets the skill-specific configuration
 func (m *UnifiedOCIManifest) SetSkillConfig(config AISkillConfig) {
-	m.AIConfig = config
-	m.Config.MediaType = AISkillConfigMediaType
-	m.Annotations[AnnotationArtifactType] = string(ArtifactTypeSkill)
+	m.setAIConfig(config, AISkillConfigMediaType, ArtifactTypeSkill)
 }
 
 // SetPipelineConfig sets the pipeline-specific configuration
 func (m *UnifiedOCIManifest) SetPipelineConfig(config AIPipelineConfig) {
+	m.setAIConfig(config, AIPipelineConfigMediaType, ArtifactTypePipeline)
+}
+
+// setAIConfig stores the AI config and keeps the config descriptor in sync
+// with it, so a manifest validates and describes the right blob right after
+// its config is set. The config types are plain structs whose JSON
+// serialization cannot fail; should it ever, the descriptor is left empty
+// and ValidateOCIManifest reports the missing digest.
+func (m *UnifiedOCIManifest) setAIConfig(config interface{}, mediaType string, artifactType ArtifactType) {
 	m.AIConfig = config
-	m.Config.MediaType = AIPipelineConfigMediaType
-	m.Annotations[AnnotationArtifactType] = string(ArtifactTypePipeline)
+	m.Config.MediaType = mediaType
+	m.Annotations[AnnotationArtifactType] = string(artifactType)
+	if err := m.refreshConfigDescriptor(); err != nil {
+		m.Config.Digest, m.Config.Size = "", 0
+	}
 }
 
 // AddLayer adds a layer to the manifest
@@ -238,41 +240,72 @@ func (m *UnifiedOCIManifest) AddLayer(layer OCILayer) {
 
 // SetRelationships sets the relationships for a model
 func (m *UnifiedOCIManifest) SetRelationships(relationships map[string][]string) {
-	if m.AIConfig != nil {
-		switch config := m.AIConfig.(type) {
-		case AIModelConfig:
-			config.Relationships = relationships
-			m.AIConfig = config
-		case AISkillConfig:
-			config.Dependencies = relationships
-			m.AIConfig = config
-		case AIPipelineConfig:
-			config.Dependencies = relationships
-			m.AIConfig = config
-		}
+	switch config := m.AIConfig.(type) {
+	case AIModelConfig:
+		config.Relationships = relationships
+		m.SetModelConfig(config)
+	case AISkillConfig:
+		config.Dependencies = relationships
+		m.SetSkillConfig(config)
+	case AIPipelineConfig:
+		config.Dependencies = relationships
+		m.SetPipelineConfig(config)
 	}
 }
 
-// refreshConfigDescriptor fills the config descriptor's digest and size from
-// the inline AI config so the descriptor describes a real blob.
-func (m *UnifiedOCIManifest) refreshConfigDescriptor() error {
+// ConfigBlobFileName is the file next to manifest.json that holds the
+// serialized AI config. It is pushed as the manifest's config blob.
+const ConfigBlobFileName = "config.json"
+
+// configBlob returns the bytes of the AI config blob, or nil when the
+// manifest carries no AI config. This is the single serialization of the
+// config: the config descriptor's digest and size are computed from it, and
+// WriteUnifiedOCIManifest writes exactly these bytes to config.json, so the
+// descriptor always matches the blob that is pushed.
+func (m *UnifiedOCIManifest) configBlob() ([]byte, error) {
 	if m.AIConfig == nil {
-		return nil
+		return nil, nil
 	}
-	data, err := json.Marshal(m.AIConfig)
+	data, err := json.MarshalIndent(m.AIConfig, "", "  ")
 	if err != nil {
-		return fmt.Errorf("failed to marshal AI config: %v", err)
+		return nil, fmt.Errorf("failed to marshal AI config: %v", err)
+	}
+	return data, nil
+}
+
+// refreshConfigDescriptor fills the config descriptor's digest and size from
+// the AI config blob so the descriptor describes a real blob.
+func (m *UnifiedOCIManifest) refreshConfigDescriptor() error {
+	data, err := m.configBlob()
+	if err != nil || data == nil {
+		return err
 	}
 	m.Config.Digest = fmt.Sprintf("sha256:%x", sha256.Sum256(data))
 	m.Config.Size = int64(len(data))
 	return nil
 }
 
-// WriteUnifiedOCIManifest writes the manifest to a file
+// WriteUnifiedOCIManifest writes the manifest to path and the AI config blob
+// to config.json in the same directory. The config descriptor is always
+// refreshed first, so the written manifest's config digest and size match
+// the config.json bytes.
 func WriteUnifiedOCIManifest(m *UnifiedOCIManifest, path string) error {
 	if err := m.refreshConfigDescriptor(); err != nil {
 		return err
 	}
+	configData, err := m.configBlob()
+	if err != nil {
+		return err
+	}
+	if configData != nil {
+		configPath := filepath.Join(filepath.Dir(path), ConfigBlobFileName)
+		if err := os.WriteFile(configPath, configData, 0644); err != nil {
+			return fmt.Errorf("failed to write AI config blob to %s: %v", configPath, err)
+		}
+	}
+
+	// The AI config stays inlined as aiConfig for readers that inspect the
+	// local manifest without the blob (enforce, admission).
 	data, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal unified OCI manifest: %v", err)
@@ -307,6 +340,12 @@ func ValidateOCIManifest(m *UnifiedOCIManifest) error {
 	}
 	if m.Config.MediaType == "" {
 		return fmt.Errorf("config media type is required")
+	}
+	if m.Config.Digest == "" {
+		return fmt.Errorf("config digest is required")
+	}
+	if m.Config.Size <= 0 {
+		return fmt.Errorf("config size must be positive, got %d", m.Config.Size)
 	}
 
 	// Validate artifact type
