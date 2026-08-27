@@ -23,9 +23,7 @@ The hardening workflow ensures your model meets compliance requirements
 before it's shared or deployed.
 
 Supported SBOM tools (mutually exclusive):
-  • Syft - RECOMMENDED
-  • Trivy
-  • cdxgen
+` + workflow.SBOMToolOptions().Bullets() + `
 
 Examples:
   # Harden with defaults (CC-BY-4.0 license, Syft for SBOM)
@@ -113,7 +111,7 @@ func init() {
 	hardenCmd.Flags().String("license", "CC-BY-4.0", "License for MOF metadata (default: CC-BY-4.0)")
 
 	// SBOM options
-	hardenCmd.Flags().String("sbom-tool", "syft", "SBOM generation tool: syft (RECOMMENDED), trivy, or cdxgen")
+	hardenCmd.Flags().String("sbom-tool", workflow.SBOMToolOptions().Recommended(), "SBOM generation tool: "+workflow.SBOMToolOptions().Summary())
 	hardenCmd.Flags().String("sbom-format", "spdx-json", "SBOM format (spdx-json, cyclonedx, spdx)")
 
 	// Mark required flags

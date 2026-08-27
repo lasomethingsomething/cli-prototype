@@ -142,8 +142,8 @@ Examples:
 			var registryTool string
 			if err := huh.NewSelect[string]().
 				Title("How would you like to package your model?").
-				Description(infoStyle.Render("ORAS: Standard OCI registry (recommended for most users) | ModelPack: ML-optimized packaging")).
-				Options(huh.NewOptions("oras", "modelpack")...).
+				Description(infoStyle.Render("Harbor, GHCR, zot and any other OCI registry are used through ORAS")).
+				Options(toolOptions(workflow.RegistryOptions())...).
 				Value(&registryTool).
 				Run(); err != nil {
 				return err
@@ -156,8 +156,8 @@ Examples:
 			var gitOpsTool string
 			if err := huh.NewSelect[string]().
 				Title("How would you like to deploy?").
-				Description(infoStyle.Render("Argo: UI-based GitOps (good for visual workflows) | Flux: Agent-based GitOps (good for automation)")).
-				Options(huh.NewOptions("argo", "flux")...).
+				Description(infoStyle.Render("Flux: good for automation | Argo CD: good for visual workflows")).
+				Options(toolOptions(workflow.GitOpsOptions())...).
 				Value(&gitOpsTool).
 				Run(); err != nil {
 				return err
@@ -170,8 +170,8 @@ Examples:
 			var signerTool string
 			if err := huh.NewSelect[string]().
 				Title("How would you like to sign artifacts?").
-				Description(infoStyle.Render("Sigstore: Free, widely adopted (recommended) | Notary v2: Enterprise-focused, production-grade")).
-				Options(huh.NewOptions("sigstore", "notary")...).
+				Description(infoStyle.Render("cosign: free, widely adopted | Notary v2: enterprise-focused, production-grade")).
+				Options(toolOptions(workflow.SignerOptions())...).
 				Value(&signerTool).
 				Run(); err != nil {
 				return err

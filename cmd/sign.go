@@ -17,17 +17,14 @@ This command supports the OpenSSF Model Signing Specification (OMS) and
 integrates with multiple signing tools for AI/ML model artifacts.
 
 Supported signing tools (mutually exclusive):
-  • cosign (Sigstore) - RECOMMENDED
-  • Notary v2 (notation)
-  • in-toto
+` + workflow.SignerOptions().Bullets() + `
 
 Note: SPIFFE/SPIRE is for identity, not signing.
 
 Examples:
   model-cli sign
   model-cli sign --artifact my-model:latest --signer cosign
-  model-cli sign --artifact my-model:latest --signer notary --key my-key
-  model-cli sign --artifact my-model:latest --signer in-toto`,
+  model-cli sign --artifact my-model:latest --signer notary --key my-key`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := config.Load()
 
@@ -40,7 +37,7 @@ Examples:
 			return err
 		}
 
-		if err := askSelectIfEmpty(cmd, "signer", &cfg.Signer, "Select signing tool:", "Choose a signing provider (aligns with OSSF Model Signing Spec)", []string{"cosign", "notary", "in-toto"}); err != nil {
+		if err := askSelectToolIfEmpty(cmd, "signer", &cfg.Signer, "Select signing tool:", "Choose a signing provider (aligns with OSSF Model Signing Spec)", workflow.SignerOptions()); err != nil {
 			return err
 		}
 		signer := cfg.Signer
@@ -102,7 +99,7 @@ Examples:
 func init() {
 	rootCmd.AddCommand(signCmd)
 	signCmd.Flags().String("artifact", "", "OCI artifact reference to sign (e.g., my-registry/my-model:latest)")
-	signCmd.Flags().String("signer", "", "Signing tool: cosign (RECOMMENDED), notary, or in-toto")
+	signCmd.Flags().String("signer", "", "Signing tool: "+workflow.SignerOptions().Summary())
 	signCmd.Flags().String("key", "", "Key reference for signing")
 	signCmd.Flags().Bool("use-key", false, "Use a specific key for signing")
 }

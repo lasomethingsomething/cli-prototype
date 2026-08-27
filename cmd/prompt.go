@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/huh"
+	"github.com/lasomethingsomething/cli-prototype/internal/workflow"
 	"github.com/spf13/cobra"
 )
 
@@ -81,6 +82,25 @@ func askSelectIfEmpty(cmd *cobra.Command, flag string, dest *string, title, desc
 		return nil
 	}
 	return askSelect(cmd, flag, dest, title, description, options)
+}
+
+// toolOptions converts a tool category into prompt options whose labels carry
+// the description and the "(recommended)" marker; the stored value is the name.
+func toolOptions(opts workflow.ToolOptions) []huh.Option[string] {
+	options := make([]huh.Option[string], 0, len(opts))
+	for _, o := range opts {
+		options = append(options, huh.NewOption(o.Label(), o.Name))
+	}
+	return options
+}
+
+// askSelectToolIfEmpty is askSelectIfEmpty for a tool category such as
+// workflow.SignerOptions(): the choices and their labels come from one place.
+func askSelectToolIfEmpty(cmd *cobra.Command, flag string, dest *string, title, description string, opts workflow.ToolOptions) error {
+	if !cmd.Flags().Changed(flag) && *dest != "" {
+		return nil
+	}
+	return askSelectLabeled(cmd, flag, dest, title, description, toolOptions(opts))
 }
 
 // askConfirm sets *dest from the bool flag if it was given, otherwise asks.

@@ -11,34 +11,23 @@ import (
 var deployCmd = &cobra.Command{
 	Use:   "deploy",
 	Short: "Deploy a model using GitOps",
-	Long: `Deploy a model to your cluster using GitOps tools and registry tools.
+	Long: `Deploy a model to your Kubernetes cluster using a GitOps tool and a registry tool.
 
 This command guides you through the deployment process with interactive prompts.
 
-Phase 2: Publish
-  Supported registry tools (mutually exclusive):
-    • ORAS - RECOMMENDED
-    • Harbor
-    • TUF
+Supported GitOps tools (mutually exclusive):
+` + workflow.GitOpsOptions().Bullets() + `
 
-Phase 3: GitOps & Deployment
-  Supported GitOps tools (mutually exclusive):
-    • Flux - RECOMMENDED
-    • Argo CD
+Supported registry tools (mutually exclusive):
+` + workflow.RegistryOptions().Bullets() + `
 
-  Supported infrastructure (only CNCF option):
-    • Kubernetes
-
-  Supported runtime execution & optimization (can use both):
-    • vLLM
-    • KServe
-
-Note: KubeFlow = platform (not registry).
+Harbor and other OCI registries are used through oras; the registry host is
+part of the artifact reference. Note: KubeFlow is a platform, not a registry.
 
 Examples:
   model-cli deploy
   model-cli deploy --gitops flux --registry oras --model my-model --repo https://github.com/you/model-manifests
-  model-cli deploy --gitops argocd --registry harbor --model phi-4-mini --repo https://github.com/org/manifests --path ./k8s`,
+  model-cli deploy --gitops argocd --registry oras --model phi-4-mini --repo https://github.com/org/manifests --path ./k8s`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := config.Load()
 
@@ -46,10 +35,10 @@ Examples:
 		artifactFlag, _ := cmd.Flags().GetString("artifact")
 
 		// Interactive prompts if not set in config or via flags
-		if err := askSelectIfEmpty(cmd, "gitops", &cfg.GitOps, "Select GitOps tool:", "Choose how you want to manage your deployments", []string{"flux", "argo", "argocd"}); err != nil {
+		if err := askSelectToolIfEmpty(cmd, "gitops", &cfg.GitOps, "Select GitOps tool:", "Choose how you want to manage your deployments", workflow.GitOpsOptions()); err != nil {
 			return err
 		}
-		if err := askSelectIfEmpty(cmd, "registry", &cfg.Registry, "Select Model Registry:", "Choose how you want to package and distribute your models", []string{"oras", "harbor", "tuf", "modelpack"}); err != nil {
+		if err := askSelectToolIfEmpty(cmd, "registry", &cfg.Registry, "Select Model Registry:", "Choose how you want to package and distribute your models", workflow.RegistryOptions()); err != nil {
 			return err
 		}
 
@@ -114,8 +103,8 @@ Examples:
 
 func init() {
 	rootCmd.AddCommand(deployCmd)
-	deployCmd.Flags().String("gitops", "", "GitOps tool: flux (RECOMMENDED), argocd, or argo")
-	deployCmd.Flags().String("registry", "", "Registry tool: oras (RECOMMENDED), harbor, tuf, or modelpack")
+	deployCmd.Flags().String("gitops", "", "GitOps tool: "+workflow.GitOpsOptions().Summary())
+	deployCmd.Flags().String("registry", "", "Registry tool: "+workflow.RegistryOptions().Summary())
 	deployCmd.Flags().String("model", "", "Model name for deployment")
 	deployCmd.Flags().String("artifact", "", "Full artifact reference (e.g., ghcr.io/my-org/my-model:v1) with Trust Profile annotations")
 	deployCmd.Flags().String("repo", "", "Git repository URL for Kubernetes manifests")

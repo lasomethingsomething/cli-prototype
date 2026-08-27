@@ -26,21 +26,20 @@ multiple signing tools for supply chain security, and generates SLSA provenance
 attestations by default for immutable provenance tracking.
 
 Supported registry tools (mutually exclusive):
-  • ORAS - RECOMMENDED
-  • Harbor
-  • TUF
+` + workflow.RegistryOptions().Bullets() + `
+
+Harbor and other OCI registries are used through oras:
+--registry oras --destination <harbor-host>/<project>
 
 Supported signing tools (mutually exclusive):
-  • cosign (Sigstore) - RECOMMENDED
-  • Notary v2
-  • in-toto
+` + workflow.SignerOptions().Bullets() + `
 
 Note: KubeFlow = platform (not registry). SPIFFE/SPIRE = identity (not signing).
 
 Examples:
   model-cli push
   model-cli push --artifact my-model:latest --registry oras --destination ghcr.io/my-org
-  model-cli push --artifact my-model:latest --registry harbor
+  model-cli push --artifact my-model:latest --registry oras --destination harbor.example.com/models
   model-cli push --artifact my-model:latest --sign --signer cosign
   model-cli push --artifact my-model:latest --generate-provenance --sign --signer cosign`,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -98,7 +97,7 @@ Examples:
 			}
 		}
 
-		if err := askSelectIfEmpty(cmd, "registry", &cfg.Registry, "Select Registry tool:", "Choose how to push your artifact", []string{"oras", "harbor", "tuf", "modelpack"}); err != nil {
+		if err := askSelectToolIfEmpty(cmd, "registry", &cfg.Registry, "Select Registry tool:", "Choose how to push your artifact", workflow.RegistryOptions()); err != nil {
 			return err
 		}
 		registry := cfg.Registry
@@ -223,7 +222,7 @@ Examples:
 			signerToUse = cfg.Signer
 		}
 		if signerToUse == "" {
-			signerToUse = "sigstore" // Default to sigstore
+			signerToUse = workflow.SignerOptions().Recommended()
 		}
 
 		// Generate provenance attestation if requested (default: true)
@@ -309,7 +308,7 @@ func pushProvenanceAttestation(provider workflow.RegistryProvider, registryTool,
 	// Determine the signer to use
 	signerToUse := signerName
 	if signerToUse == "" {
-		signerToUse = "sigstore" // Default to sigstore
+		signerToUse = workflow.SignerOptions().Recommended()
 	}
 
 	// Get signing provider (may be nil if not installed, but we'll try anyway)
@@ -524,11 +523,11 @@ func init() {
 	rootCmd.AddCommand(pushCmd)
 	pushCmd.Flags().String("artifact", "", "OCI artifact reference to push (e.g., my-model:latest)")
 	pushCmd.Flags().String("target", "", "Full target reference (e.g., registry.example.com/my-model:v1) - combines destination and artifact")
-	pushCmd.Flags().String("registry", "", "Registry tool: oras (RECOMMENDED), harbor, tuf, or modelpack")
+	pushCmd.Flags().String("registry", "", "Registry tool: "+workflow.RegistryOptions().Summary())
 	pushCmd.Flags().String("destination", "", "Destination registry (e.g., ghcr.io/my-org)")
 	pushCmd.Flags().String("manifest", "", "Path to the OCI manifest.json produced by 'model-cli package', used to attach CNCF AI annotations")
 	pushCmd.Flags().Bool("sign", false, "Sign the artifact automatically after pushing")
-	pushCmd.Flags().String("signer", "", "Signing tool: cosign (RECOMMENDED), notary, or in-toto (default: cosign)")
+	pushCmd.Flags().String("signer", "", "Signing tool: "+workflow.SignerOptions().Summary()+" (default: "+workflow.SignerOptions().Recommended()+")")
 	pushCmd.Flags().Bool("generate-provenance", true, "Generate SLSA provenance attestation (default: true)")
 	pushCmd.Flags().String("model-path", "", "Path to the model directory (for provenance source info)")
 	pushCmd.Flags().String("artifact-type", "", "Type of AI artifact: model, skill, or pipeline")
