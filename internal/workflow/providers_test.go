@@ -33,6 +33,21 @@ func TestGetGitOpsProvider(t *testing.T) {
 	}
 }
 
+// TestRegistryProviderPackagingFormat pins the packaging format each registry
+// tool stamps into the manifest (issue #102): ORAS pushes plain OCI artifacts,
+// modctl builds ModelPack Model Spec artifacts.
+func TestRegistryProviderPackagingFormat(t *testing.T) {
+	for name, want := range map[string]string{"oras": PackagingFormatOCI, "modelpack": PackagingFormatModelPack} {
+		p, err := GetRegistryProvider(name)
+		if err != nil {
+			t.Fatalf("GetRegistryProvider(%q) error = %v", name, err)
+		}
+		if got := p.PackagingFormat(); got != want {
+			t.Errorf("%s PackagingFormat() = %q, want %q", name, got, want)
+		}
+	}
+}
+
 // Test RegistryProvider factory
 func TestGetRegistryProvider(t *testing.T) {
 	tests := []struct {

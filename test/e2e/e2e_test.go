@@ -156,6 +156,11 @@ func TestPackageThenValidateAgainstRegistry(t *testing.T) {
 			t.Errorf("pushed annotation %s = %q, want %q", key, got, want)
 		}
 	}
+	// ORAS pushes a plain OCI artifact; the manifest must say so, not claim
+	// ModelPack (issue #102).
+	if got := pushed.Annotations[workflow.AnnotationPackagingFormat]; got != workflow.PackagingFormatOCI {
+		t.Errorf("pushed annotation %s = %q, want %q", workflow.AnnotationPackagingFormat, got, workflow.PackagingFormatOCI)
+	}
 	// Packaging is only packaging: SBOM and MOF classification are the
 	// separate harden step (issue #87), so nothing of them is produced here.
 	if got, ok := pushed.Annotations[workflow.AnnotationMOFClass]; ok {
@@ -365,6 +370,9 @@ func TestPackageThenValidateWithModelPack(t *testing.T) {
 		if got := pushed.Annotations[key]; got != want {
 			t.Errorf("pushed annotation %s = %q, want %q", key, got, want)
 		}
+	}
+	if got := pushed.Annotations[workflow.AnnotationPackagingFormat]; got != workflow.PackagingFormatModelPack {
+		t.Errorf("pushed annotation %s = %q, want %q", workflow.AnnotationPackagingFormat, got, workflow.PackagingFormatModelPack)
 	}
 	if firstAnnotation(pushed.Annotations, modelfileAnnotationKeys) == "" {
 		t.Errorf("modctl's Modelfile annotation is missing; annotations = %v", pushed.Annotations)

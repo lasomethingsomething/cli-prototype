@@ -47,8 +47,20 @@ const (
 	AnnotationProvenanceType = "org.cncf.ai.security.provenance.type"
 
 	// PackagingFormat identifies the packaging format
-	// Value: "modelpack", "none", etc.
+	// Value: PackagingFormatOCI or PackagingFormatModelPack, set by the
+	// package workflow from the registry tool that pushed the artifact.
 	AnnotationPackagingFormat = "org.cncf.ai.packaging.format"
+)
+
+// Values of AnnotationPackagingFormat. Each registry tool produces one of
+// them (RegistryProvider.PackagingFormat); the annotation is deliberately not
+// defaulted so a manifest never claims a format that was not used.
+const (
+	// PackagingFormatOCI is a plain OCI artifact, as pushed with ORAS.
+	PackagingFormatOCI = "oci"
+	// PackagingFormatModelPack is a CNCF ModelPack Model Spec artifact, as
+	// built and pushed with modctl.
+	PackagingFormatModelPack = "modelpack"
 )
 
 // Runtime annotations for deployment
@@ -152,7 +164,6 @@ func NewAnnotationSet() *AnnotationSet {
 		SigningFramework: "sigstore-cosign",
 		SBOMFormat:       "spdx-json",
 		ProvenanceType:   "slsa-v1.0",
-		PackagingFormat:  "modelpack",
 		Runtime:          "vllm",
 		Accelerator:      "nvidia-gpu",
 		CUDAMin:          "12.1",

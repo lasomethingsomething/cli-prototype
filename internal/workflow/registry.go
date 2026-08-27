@@ -20,6 +20,10 @@ type RegistryProvider interface {
 	Name() string
 	IsInstalled() bool
 	InstallInstructions() string
+	// PackagingFormat returns the value the provider stamps into the
+	// org.cncf.ai.packaging.format annotation: the format the artifact is
+	// actually packaged in, not the tool name (see PackagingFormatOCI).
+	PackagingFormat() string
 	// Push uploads the file or directory at sourcePath to registry as
 	// artifact, attaching annotations (e.g. from AnnotationSet.ToMap()) to
 	// the resulting OCI manifest. annotations may be nil or empty when no
@@ -69,6 +73,10 @@ type ORASProvider struct{}
 
 func (o *ORASProvider) Name() string {
 	return "oras"
+}
+
+func (o *ORASProvider) PackagingFormat() string {
+	return PackagingFormatOCI
 }
 
 func (o *ORASProvider) IsInstalled() bool {
@@ -521,6 +529,10 @@ type ModelPackProvider struct{}
 
 func (m *ModelPackProvider) Name() string {
 	return "modelpack"
+}
+
+func (m *ModelPackProvider) PackagingFormat() string {
+	return PackagingFormatModelPack
 }
 
 func (m *ModelPackProvider) IsInstalled() bool {
