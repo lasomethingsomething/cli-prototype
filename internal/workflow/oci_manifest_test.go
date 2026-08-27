@@ -123,6 +123,43 @@ func TestAddLayer(t *testing.T) {
 	}
 }
 
+// TestConfigDescriptorFollowsAIConfig verifies that constructing a manifest
+// and every way of changing its AI config leave the config descriptor
+// describing the current config, so callers (e.g. `push`) can validate the
+// manifest without an extra step.
+func TestConfigDescriptorFollowsAIConfig(t *testing.T) {
+	m := NewUnifiedOCIManifest(ArtifactTypeModel, "test-model", []OCILayer{})
+	if m.Config.Digest == "" || m.Config.Size == 0 {
+		t.Fatalf("new manifest has no config descriptor: %+v", m.Config)
+	}
+	if err := ValidateOCIManifest(m); err != nil {
+		t.Errorf("new manifest does not validate: %v", err)
+	}
+	initial := m.Config.Digest
+
+	m.SetModelConfig(AIModelConfig{ModelType: "embedding"})
+	afterSet := m.Config.Digest
+	if afterSet == initial {
+		t.Error("SetModelConfig did not update the config digest")
+	}
+
+	m.SetRelationships(map[string][]string{"skills": {"skill:v1"}})
+	if m.Config.Digest == afterSet {
+		t.Error("SetRelationships did not update the config digest")
+	}
+
+	blob, err := m.configBlob()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := fmt.Sprintf("sha256:%x", sha256.Sum256(blob)); m.Config.Digest != want || m.Config.Size != int64(len(blob)) {
+		t.Errorf("descriptor = %+v, want digest %s size %d", m.Config, want, len(blob))
+	}
+	if err := ValidateOCIManifest(m); err != nil {
+		t.Errorf("manifest does not validate after config changes: %v", err)
+	}
+}
+
 func TestSetRelationships(t *testing.T) {
 	manifest := NewUnifiedOCIManifest(ArtifactTypeModel, "test-model", []OCILayer{})
 
@@ -185,14 +222,11 @@ func TestWriteUnifiedOCIManifest(t *testing.T) {
 func TestWriteUnifiedOCIManifestConfigBlobMatchesDescriptor(t *testing.T) {
 	manifest := NewUnifiedOCIManifest(ArtifactTypeModel, "test-model", []OCILayer{})
 	manifest.SetModelConfig(AIModelConfig{ModelType: "text-generation", Runtime: "vllm", Capabilities: []string{"chat"}})
-	if err := manifest.refreshConfigDescriptor(); err != nil {
-		t.Fatal(err)
-	}
 	digestBeforeWrite := manifest.Config.Digest
 
-	// Change the config after the descriptor was computed: Write must not
+	// Change the config behind the setters' back: Write must still not
 	// keep the stale digest.
-	manifest.SetModelConfig(AIModelConfig{ModelType: "embedding"})
+	manifest.AIConfig = AIModelConfig{ModelType: "embedding"}
 
 	dir := t.TempDir()
 	manifestPath := filepath.Join(dir, "manifest.json")
@@ -231,16 +265,6 @@ func TestWriteUnifiedOCIManifestConfigBlobMatchesDescriptor(t *testing.T) {
 	}
 }
 
-// withConfigDescriptor fills m's config descriptor and fails the test if
-// that is not possible, so a table entry never silently becomes nil.
-func withConfigDescriptor(t *testing.T, m *UnifiedOCIManifest) *UnifiedOCIManifest {
-	t.Helper()
-	if err := m.refreshConfigDescriptor(); err != nil {
-		t.Fatalf("refreshConfigDescriptor() error = %v", err)
-	}
-	return m
-}
-
 func TestValidateOCIManifest(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -252,7 +276,7 @@ func TestValidateOCIManifest(t *testing.T) {
 			manifest: func() *UnifiedOCIManifest {
 				m := NewUnifiedOCIManifest(ArtifactTypeModel, "test-model", []OCILayer{})
 				m.SetModelConfig(AIModelConfig{ModelType: "text-generation"})
-				return withConfigDescriptor(t, m)
+				return m
 			}(),
 			wantErr: false,
 		},
@@ -261,7 +285,7 @@ func TestValidateOCIManifest(t *testing.T) {
 			manifest: func() *UnifiedOCIManifest {
 				m := NewUnifiedOCIManifest(ArtifactTypeSkill, "test-skill", []OCILayer{})
 				m.SetSkillConfig(AISkillConfig{SkillType: "rag"})
-				return withConfigDescriptor(t, m)
+				return m
 			}(),
 			wantErr: false,
 		},
@@ -270,7 +294,7 @@ func TestValidateOCIManifest(t *testing.T) {
 			manifest: func() *UnifiedOCIManifest {
 				m := NewUnifiedOCIManifest(ArtifactTypePipeline, "test-pipeline", []OCILayer{})
 				m.SetPipelineConfig(AIPipelineConfig{PipelineType: "inference"})
-				return withConfigDescriptor(t, m)
+				return m
 			}(),
 			wantErr: false,
 		},

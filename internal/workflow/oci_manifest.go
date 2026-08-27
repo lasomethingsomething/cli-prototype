@@ -179,29 +179,23 @@ func NewUnifiedOCIManifest(artifactType ArtifactType, name string, layers []OCIL
 	// Set the config based on artifact type
 	switch artifactType {
 	case ArtifactTypeModel:
-		config := AIModelConfig{
+		manifest.SetModelConfig(AIModelConfig{
 			Architecture: "amd64",
 			OS:           "linux",
 			ModelType:    "text-generation", // Default
-		}
-		manifest.AIConfig = config
-		manifest.Config.MediaType = AIModelConfigMediaType
+		})
 	case ArtifactTypeSkill:
-		config := AISkillConfig{
+		manifest.SetSkillConfig(AISkillConfig{
 			Architecture: "amd64",
 			OS:           "linux",
 			SkillType:    "general", // Default
-		}
-		manifest.AIConfig = config
-		manifest.Config.MediaType = AISkillConfigMediaType
+		})
 	case ArtifactTypePipeline:
-		config := AIPipelineConfig{
+		manifest.SetPipelineConfig(AIPipelineConfig{
 			Architecture: "amd64",
 			OS:           "linux",
 			PipelineType: "inference", // Default
-		}
-		manifest.AIConfig = config
-		manifest.Config.MediaType = AIPipelineConfigMediaType
+		})
 	}
 
 	// Set the name annotation
@@ -212,23 +206,31 @@ func NewUnifiedOCIManifest(artifactType ArtifactType, name string, layers []OCIL
 
 // SetModelConfig sets the model-specific configuration
 func (m *UnifiedOCIManifest) SetModelConfig(config AIModelConfig) {
-	m.AIConfig = config
-	m.Config.MediaType = AIModelConfigMediaType
-	m.Annotations[AnnotationArtifactType] = string(ArtifactTypeModel)
+	m.setAIConfig(config, AIModelConfigMediaType, ArtifactTypeModel)
 }
 
 // SetSkillConfig sets the skill-specific configuration
 func (m *UnifiedOCIManifest) SetSkillConfig(config AISkillConfig) {
-	m.AIConfig = config
-	m.Config.MediaType = AISkillConfigMediaType
-	m.Annotations[AnnotationArtifactType] = string(ArtifactTypeSkill)
+	m.setAIConfig(config, AISkillConfigMediaType, ArtifactTypeSkill)
 }
 
 // SetPipelineConfig sets the pipeline-specific configuration
 func (m *UnifiedOCIManifest) SetPipelineConfig(config AIPipelineConfig) {
+	m.setAIConfig(config, AIPipelineConfigMediaType, ArtifactTypePipeline)
+}
+
+// setAIConfig stores the AI config and keeps the config descriptor in sync
+// with it, so a manifest validates and describes the right blob right after
+// its config is set. The config types are plain structs whose JSON
+// serialization cannot fail; should it ever, the descriptor is left empty
+// and ValidateOCIManifest reports the missing digest.
+func (m *UnifiedOCIManifest) setAIConfig(config interface{}, mediaType string, artifactType ArtifactType) {
 	m.AIConfig = config
-	m.Config.MediaType = AIPipelineConfigMediaType
-	m.Annotations[AnnotationArtifactType] = string(ArtifactTypePipeline)
+	m.Config.MediaType = mediaType
+	m.Annotations[AnnotationArtifactType] = string(artifactType)
+	if err := m.refreshConfigDescriptor(); err != nil {
+		m.Config.Digest, m.Config.Size = "", 0
+	}
 }
 
 // AddLayer adds a layer to the manifest
@@ -238,18 +240,16 @@ func (m *UnifiedOCIManifest) AddLayer(layer OCILayer) {
 
 // SetRelationships sets the relationships for a model
 func (m *UnifiedOCIManifest) SetRelationships(relationships map[string][]string) {
-	if m.AIConfig != nil {
-		switch config := m.AIConfig.(type) {
-		case AIModelConfig:
-			config.Relationships = relationships
-			m.AIConfig = config
-		case AISkillConfig:
-			config.Dependencies = relationships
-			m.AIConfig = config
-		case AIPipelineConfig:
-			config.Dependencies = relationships
-			m.AIConfig = config
-		}
+	switch config := m.AIConfig.(type) {
+	case AIModelConfig:
+		config.Relationships = relationships
+		m.SetModelConfig(config)
+	case AISkillConfig:
+		config.Dependencies = relationships
+		m.SetSkillConfig(config)
+	case AIPipelineConfig:
+		config.Dependencies = relationships
+		m.SetPipelineConfig(config)
 	}
 }
 
