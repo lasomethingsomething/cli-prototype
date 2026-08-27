@@ -126,7 +126,7 @@ func (w *HardenWorkflow) Run() error {
 			return fmt.Errorf("SBOM generator not available: %v. SBOM is a required prerequisite for Phase 1 Step 2", err)
 		}
 
-		sbomPath := filepath.Join(w.modelPath, "sbom."+string(w.sbomFormat))
+		sbomPath := filepath.Join(w.modelPath, SBOMFileName(w.sbomFormat))
 		if err := sbomGen.Generate(w.modelPath, sbomPath, w.sbomFormat); err != nil {
 			return fmt.Errorf("SBOM generation failed: %v. SBOM is a required prerequisite for Phase 1 Step 2", err)
 		}

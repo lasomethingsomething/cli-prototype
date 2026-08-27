@@ -143,44 +143,62 @@ func (w *CheckWorkflow) checkSBOM() {
 		return
 	}
 
-	// Look for common SBOM file names
-	sbomFiles := []string{
+	for _, dir := range w.searchDirs() {
+		for _, sbomFile := range w.sbomFileCandidates(dir) {
+			if _, err := os.Stat(filepath.Join(dir, sbomFile)); err == nil {
+				fmt.Printf("  ✓ SBOM found: %s\n", sbomFile)
+				w.sbomCheck = true
+				return
+			}
+		}
+	}
+
+	fmt.Println("  ✗ SBOM not found")
+	w.sbomCheck = false
+	w.missing = append(w.missing, "SBOM")
+}
+
+// searchDirs returns the directories to look for artifacts in: the model
+// path first, then the artifact path if it is a different directory.
+func (w *CheckWorkflow) searchDirs() []string {
+	dirs := []string{w.modelPath}
+	if w.artifactPath != "" && w.artifactPath != w.modelPath {
+		dirs = append(dirs, w.artifactPath)
+	}
+	return dirs
+}
+
+// sbomFileCandidates returns the SBOM file names to look for in dir, most
+// specific first: the file `harden` wrote according to the SBOM format
+// recorded in dir's manifest.json, then `harden`'s naming for every known
+// format, then names other tools commonly use.
+func (w *CheckWorkflow) sbomFileCandidates(dir string) []string {
+	var candidates []string
+	if format := manifestSBOMFormat(filepath.Join(dir, "manifest.json")); format != "" {
+		candidates = append(candidates, SBOMFileName(format))
+	}
+	for _, format := range AllSBOMFormats {
+		candidates = append(candidates, SBOMFileName(format))
+	}
+	candidates = append(candidates,
 		"sbom.spdx.json",
 		"sbom.json",
 		"sbom.spdx",
 		"sbom-cyclonedx.json",
 		"sbom-syft.json",
-	}
+	)
+	return candidates
+}
 
-	found := false
-	for _, sbomFile := range sbomFiles {
-		sbomPath := filepath.Join(w.modelPath, sbomFile)
-		if _, err := os.Stat(sbomPath); !os.IsNotExist(err) {
-			found = true
-			fmt.Printf("  ✓ SBOM found: %s\n", sbomFile)
-			w.sbomCheck = true
-			break
-		}
+// manifestSBOMFormat returns the SBOM format `harden` recorded in the
+// manifest at path, or "" if there is no readable manifest or no SBOM
+// annotation in it.
+func manifestSBOMFormat(path string) SBOMFormat {
+	manifest, err := ReadUnifiedOCIManifest(path)
+	if err != nil {
+		return ""
 	}
-
-	if !found {
-		// Also check in artifact directory
-		for _, sbomFile := range sbomFiles {
-			sbomPath := filepath.Join(w.artifactPath, sbomFile)
-			if _, err := os.Stat(sbomPath); !os.IsNotExist(err) {
-				found = true
-				fmt.Printf("  ✓ SBOM found: %s\n", sbomFile)
-				w.sbomCheck = true
-				break
-			}
-		}
-	}
-
-	if !found {
-		fmt.Println("  ✗ SBOM not found")
-		w.sbomCheck = false
-		w.missing = append(w.missing, "SBOM")
-	}
+	return SBOMFormat(manifest.Annotations[AnnotationSBOMFormat])
 }
 
 // checkMOF checks for MOF classification
