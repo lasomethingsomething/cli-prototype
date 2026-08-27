@@ -10,11 +10,12 @@ Specialized tools already exist for each step in the [CNCF ecosystem](https://ww
 
 The workflow in one sentence per phase:
 
-1. **Package** - bundle the model folder into a standard container-style artifact, tag it with metadata, and generate an ingredients list (SBOM) and a proof of origin (provenance).
-2. **Sign** - stamp it cryptographically so tampering can be detected later.
-3. **Push** - upload it to a registry.
-4. **Validate** - check the metadata against your rules locally, at the registry, and at the cluster door, using one shared engine so passing in one place means passing everywhere.
-5. **Deploy** - hand it to Argo CD / Flux and a serving runtime such as vLLM or KServe.
+1. **Package** - bundle the model folder into a standard container-style artifact, tag it with metadata, and record a proof of origin (provenance).
+2. **Harden** - generate an ingredients list (SBOM) and classify how open the model is (MOF), and record both in the packaged artifact.
+3. **Sign** - stamp it cryptographically so tampering can be detected later.
+4. **Push** - upload it to a registry.
+5. **Validate** - check the metadata against your rules locally, at the registry, and at the cluster door, using one shared engine so passing in one place means passing everywhere.
+6. **Deploy** - hand it to Argo CD / Flux and a serving runtime such as vLLM or KServe.
 
 If terms like *OCI*, *SBOM*, or *admission* are new to you, see the [Glossary](#glossary) below.
 
@@ -48,13 +49,26 @@ brew install oras   # or see https://oras.land
   --registry-url ""
 ```
 
-The CLI asks a few questions (runtime, accelerator, MOF class, ...). **These are metadata only** - you don't need the hardware or software installed. Press Enter to accept defaults.
+The CLI asks a few questions (runtime, accelerator, ...). **These are metadata only** - you don't need the hardware or software installed. Press Enter to accept defaults.
 
 You'll end up with:
 
 - `~/test-model/manifest.json` - an OCI manifest carrying CNCF AI Interoperability Profile annotations
 - `~/test-model/attestation.json` - a SLSA provenance attestation
-- an SBOM at `~/test-model/sbom.spdx-json`, generated with `syft` - the SBOM is a required prerequisite, so packaging aborts with a non-zero exit code if `syft` is missing or fails (`brew install anchore/syft/syft`, or pass `--generate-sbom=false` to skip it)
+
+```bash
+# 5. Harden it: SBOM + MOF classification, recorded in the manifest from step 4
+brew install syft   # or pick trivy / cdxgen with --sbom-tool
+./model-cli harden --model test-model --model-path ~/test-model --artifact test:v1
+```
+
+This asks which SBOM tool to use (`syft` is recommended) and which MOF class to declare (default: detected from the files). It adds:
+
+- `~/test-model/sbom.spdx-json` - the SBOM
+- `~/test-model/mof.json` - the MOF metadata
+- the SBOM format and MOF class/components as annotations in `~/test-model/manifest.json`
+
+`harden` refuses to run before `package` (no `manifest.json` yet), so the order is always package, then harden.
 
 A detailed, annotated walkthrough of this run is in [docs/trial-run-report.md](docs/trial-run-report.md).
 
@@ -71,9 +85,9 @@ Start with `model-cli wizard` - the guided, end-to-end tour. Everything it does 
 
 **Build the artifact**
 
-- `package` - package a model or agentic skill as an OCI artifact: annotations, SBOM, provenance
-- `harden` - add SBOM (Syft recommended, or Trivy, cdxgen) and MOF classification to an existing artifact
-- `sign`, `verify` - cosign (Sigstore, recommended) or notation (Notary v2)
+- `package` - package a model or agentic skill as an OCI artifact: manifest, annotations, provenance, push
+- `harden` - the step after `package`: generate an SBOM (syft recommended, or trivy / cdxgen), classify the model (MOF), and record both in the packaged manifest
+- `sign`, `verify` - Sigstore (cosign) or Notary v2 (notation)
 - `push` - push to an OCI registry, with the provenance attestation attached as a referrer
 
 **Validate** - one command family, one report format (text, `--quiet`, or `--json-output` for CI)
