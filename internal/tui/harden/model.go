@@ -61,6 +61,8 @@ type Model struct {
 	// Hardening options
 	generateSBOM bool
 	includeMOF   bool
+	sbomTool     string
+	sbomFormat   workflow.SBOMFormat
 
 	// Results
 	sbomPath      string
@@ -88,6 +90,8 @@ func New(registry string) *Model {
 		logs:         make([]string, 0),
 		generateSBOM: true,
 		includeMOF:   true,
+		sbomTool:     workflow.SBOMToolOptions().Recommended(),
+		sbomFormat:   workflow.SPDXJSON,
 		currentStep:  0,
 		steps: []Step{
 			{Label: "Generate SBOM", State: StepPending},
@@ -234,6 +238,7 @@ func (m *Model) startHardening() tea.Cmd {
 		// Set up the workflow
 		m.workflow.SetHardenInfo(m.modelName, m.modelPath, m.artifactName)
 		m.workflow.SetOptions(m.generateSBOM, m.includeMOF)
+		m.workflow.SetSBOMTool(m.sbomTool, m.sbomFormat)
 
 		// Create annotations to be updated
 		annotations := workflow.NewAnnotationSet()
@@ -340,6 +345,7 @@ func (m *Model) renderContextPanel() string {
 	contextModel.SetModelInfo(m.modelName, m.modelPath, m.artifactName)
 	contextModel.SetStep(m.currentStep + 1)
 	contextModel.SetOptions(m.generateSBOM, m.includeMOF)
+	contextModel.SetSBOMTool(m.sbomTool, string(m.sbomFormat))
 
 	// Update with results if available
 	if m.sbomPath != "" {
@@ -432,15 +438,13 @@ func (m *Model) renderSBOMPanel() string {
 	sb.WriteString("  ✓ Attached to OCI artifact layers\n\n")
 
 	sb.WriteString("Supported SBOM tools (mutually exclusive):\n")
-	sb.WriteString("  • Syft - RECOMMENDED\n")
-	sb.WriteString("  • Trivy\n")
-	sb.WriteString("  • cdxgen\n\n")
+	sb.WriteString(workflow.SBOMToolOptions().Bullets() + "\n\n")
 
 	checkbox := "[x]"
 	if !m.generateSBOM {
 		checkbox = "[ ]"
 	}
-	sb.WriteString(fmt.Sprintf("  %s Generate SBOM\n", checkbox))
+	sb.WriteString(fmt.Sprintf("  %s Generate SBOM (using %s, %s)\n", checkbox, m.sbomTool, m.sbomFormat))
 
 	return sb.String()
 }
@@ -604,6 +608,13 @@ func (m *Model) SetModelInfo(name, path, artifact string) {
 }
 
 // SetOptions sets the hardening options
+// SetSBOMTool selects the SBOM generator (see workflow.SBOMToolOptions) and
+// output format used when hardening runs.
+func (m *Model) SetSBOMTool(tool string, format workflow.SBOMFormat) {
+	m.sbomTool = tool
+	m.sbomFormat = format
+}
+
 func (m *Model) SetOptions(generateSBOM, includeMOF bool) {
 	m.generateSBOM = generateSBOM
 	m.includeMOF = includeMOF
