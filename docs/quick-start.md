@@ -98,7 +98,8 @@ model-cli map --model my-model --skill my-skill --pipeline my-pipeline
 You may see messages like:
 
 ```
-Warning: SBOM generation failed: syft not installed. Install with: brew install anchore/syft/syft
+⚠ Signing tool not installed
+   Install with: brew install cosign
 ```
 
 **This is not a failure - it's a feature!** The CLI:
@@ -109,6 +110,14 @@ Warning: SBOM generation failed: syft not installed. Install with: brew install 
 4. Continues with the workflow anyway
 
 This is the "orchestrate and hand off" design. The CLI doesn't crash when tools are missing - it guides you to install them.
+
+The one exception is the SBOM. It is a required prerequisite (Phase 1 Step 2), so `package` and `harden` abort with a non-zero exit code when it cannot be generated:
+
+```
+Error: SBOM generation failed: syft not installed. Install with: brew install anchore/syft/syft. SBOM is a required prerequisite for Phase 1 Step 2
+```
+
+Nothing after the SBOM step (MOF classification, manifest, push, provenance, signing) runs. Install `syft` to proceed, or opt out explicitly with `--generate-sbom=false`.
 
 ## Tool Requirements
 

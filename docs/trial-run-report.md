@@ -113,6 +113,8 @@ MOF Components:
 
 ### The Packaging Output
 
+> **Note:** this transcript predates the SBOM becoming a required prerequisite. Today the `Warning: SBOM generation failed` line below is an error that aborts packaging with a non-zero exit code. Install `syft` (`brew install anchore/syft/syft`) before packaging, or pass `--generate-sbom=false` to skip the SBOM.
+
 After answering the prompts, you'll see:
 
 ```
