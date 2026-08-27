@@ -80,13 +80,13 @@ const (
 // New creates a new package TUI model
 func New(registry string) *Model {
 	m := &Model{
-		panel:        PanelIntro,
-		registry:     registry,
-		width:        80,
-		height:       24,
-		logs:         make([]string, 0),
-		includeRAG:   false,
-		currentStep:  0,
+		panel:       PanelIntro,
+		registry:    registry,
+		width:       80,
+		height:      24,
+		logs:        make([]string, 0),
+		includeRAG:  false,
+		currentStep: 0,
 		steps: []Step{
 			{Label: "Collect model information", State: StepPending},
 			{Label: "Configure annotation conventions", State: StepPending},

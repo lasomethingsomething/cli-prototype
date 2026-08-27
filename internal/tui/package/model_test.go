@@ -19,4 +19,3 @@ func TestInitCreatesWorkflow(t *testing.T) {
 		t.Fatalf("Init() set unexpected error: %v", m.err)
 	}
 }
-

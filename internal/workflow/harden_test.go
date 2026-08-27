@@ -47,9 +47,9 @@ func (f *fakeSBOMGenerator) Generate(modelPath, outputPath string, format SBOMFo
 	return os.WriteFile(outputPath, []byte(`{"spdxVersion":"SPDX-2.3"}`), 0644)
 }
 
-// packagedModelDir returns a model directory (weights + README, i.e. MOF
+// hardenPackagedModelDir returns a model directory (weights + README, i.e. MOF
 // class II) that `package` has already written a manifest.json for.
-func packagedModelDir(t *testing.T) string {
+func hardenPackagedModelDir(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	for name, content := range map[string]string{"model.safetensors": "weights", "README.md": "# model"} {
@@ -95,7 +95,7 @@ func TestHardenWorkflowRequiresPackagedManifest(t *testing.T) {
 // SBOM tool blocks hardening before MOF classification runs, naming the
 // prerequisite (Issue #89).
 func TestHardenWorkflowSBOMToolUnavailableBlocks(t *testing.T) {
-	dir := packagedModelDir(t)
+	dir := hardenPackagedModelDir(t)
 	hw := newTestHardenWorkflow(dir)
 	hw.SetOptions(true, true) // generateSBOM=true, includeMOF=true
 	hw.SetSBOMTool("nonexistent-tool", SPDXJSON)
@@ -118,7 +118,7 @@ func TestHardenWorkflowSBOMToolUnavailableBlocks(t *testing.T) {
 func TestHardenWorkflowSBOMGenerateFailureBlocks(t *testing.T) {
 	fakeSyft(t, "echo 'boom' >&2; exit 1")
 
-	dir := packagedModelDir(t)
+	dir := hardenPackagedModelDir(t)
 	hw := newTestHardenWorkflow(dir)
 	hw.SetOptions(true, true)
 	hw.SetSBOMTool("syft", SPDXJSON)
@@ -140,7 +140,7 @@ func TestHardenWorkflowSBOMGenerateFailureBlocks(t *testing.T) {
 // empty, and that an explicit class is kept.
 func TestHardenWorkflowAppliesMOFClassification(t *testing.T) {
 	t.Run("detected when empty", func(t *testing.T) {
-		dir := packagedModelDir(t)
+		dir := hardenPackagedModelDir(t)
 		hw := newTestHardenWorkflow(dir)
 		if err := hw.Run(); err != nil {
 			t.Fatalf("Run() error = %v", err)
@@ -178,7 +178,7 @@ func TestHardenWorkflowAppliesMOFClassification(t *testing.T) {
 	})
 
 	t.Run("explicit class kept", func(t *testing.T) {
-		dir := packagedModelDir(t)
+		dir := hardenPackagedModelDir(t)
 		hw := newTestHardenWorkflow(dir)
 		annotations := NewAnnotationSet()
 		annotations.MOFClass = "I"
@@ -201,7 +201,7 @@ func TestHardenWorkflowAppliesMOFClassification(t *testing.T) {
 	})
 
 	t.Run("rerun is stable", func(t *testing.T) {
-		dir := packagedModelDir(t)
+		dir := hardenPackagedModelDir(t)
 		for i := 0; i < 2; i++ {
 			hw := newTestHardenWorkflow(dir)
 			if err := hw.Run(); err != nil {
@@ -220,7 +220,7 @@ func TestHardenWorkflowAppliesMOFClassification(t *testing.T) {
 // without being claimed in the manifest.
 func TestHardenWorkflowRecordsSBOM(t *testing.T) {
 	t.Run("generated", func(t *testing.T) {
-		dir := packagedModelDir(t)
+		dir := hardenPackagedModelDir(t)
 		gen := &fakeSBOMGenerator{}
 		hw := newTestHardenWorkflow(dir)
 		hw.SetOptions(true, false)
@@ -250,7 +250,7 @@ func TestHardenWorkflowRecordsSBOM(t *testing.T) {
 	})
 
 	t.Run("generation failure", func(t *testing.T) {
-		dir := packagedModelDir(t)
+		dir := hardenPackagedModelDir(t)
 		hw := newTestHardenWorkflow(dir)
 		hw.SetOptions(true, false)
 		hw.sbomGenerator = &fakeSBOMGenerator{fail: true}
