@@ -98,7 +98,7 @@ Examples:
 			return err
 		}
 
-		if err := askString(cmd, "cuda-min", &annotations.CUDAMin, "Minimum CUDA version:", "Minimum CUDA version required (e.g., 12.1, leave empty if not applicable)"); err != nil {
+		if err := askCUDAMin(cmd, annotations); err != nil {
 			return err
 		}
 
@@ -166,6 +166,19 @@ Examples:
 		fmt.Println()
 		return pf.Run()
 	},
+}
+
+// askCUDAMin collects the minimum CUDA version. CUDA only exists on NVIDIA
+// hardware, so for any other accelerator (cpu, amd-gpu, ...) the default is
+// dropped and the question is skipped: a stray cuda.min annotation would make
+// 'validate nodes' and 'schedule' reject perfectly suitable nodes (Issue #103).
+// An explicit --cuda-min is always respected.
+func askCUDAMin(cmd *cobra.Command, annotations *workflow.AnnotationSet) error {
+	if annotations.Accelerator != "nvidia-gpu" && !cmd.Flags().Changed("cuda-min") {
+		annotations.CUDAMin = ""
+		return nil
+	}
+	return askString(cmd, "cuda-min", &annotations.CUDAMin, "Minimum CUDA version:", "Minimum CUDA version required (e.g., 12.1, leave empty if not applicable)")
 }
 
 func init() {

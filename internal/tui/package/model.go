@@ -272,6 +272,9 @@ func (m *Model) startPackaging() tea.Cmd {
 		}
 		if m.cudaMin != "" {
 			annotations.CUDAMin = m.cudaMin
+		} else if annotations.Accelerator != "nvidia-gpu" {
+			// CUDA is NVIDIA-only: never stamp the default on other hardware (Issue #103).
+			annotations.CUDAMin = ""
 		}
 		if m.memoryMin != "" {
 			annotations.MemoryMin = m.memoryMin
