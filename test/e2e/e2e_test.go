@@ -245,12 +245,12 @@ func TestPushAttachesProvenanceReferrer(t *testing.T) {
 
 func TestSearchFindsPushedArtifacts(t *testing.T) {
 	modelDir := newModelDir(t)
-	artifact := "e2e/search-test-model:" + uniqueTag()
-	ref := registry + "/" + artifact
+	tag := uniqueTag()
+	modelArtifact := "e2e/search-test-model:" + tag
+	modelRef := registry + "/" + modelArtifact
 
-	// Package and push a model
 	out, err := runCLI(t, filepath.Dir(modelDir), "package",
-		"--model", "test-model", "--model-path", modelDir, "--artifact", artifact,
+		"--model", "test-model", "--model-path", modelDir, "--artifact", modelArtifact,
 		"--registry", "oras", "--registry-url", registry,
 		"--runtime", "vllm", "--accelerator", "cpu")
 	if err != nil {
@@ -259,53 +259,125 @@ func TestSearchFindsPushedArtifacts(t *testing.T) {
 	if !strings.Contains(out, "Local parity VERIFIED") {
 		t.Errorf("package output lacks a passing parity check")
 	}
+	var descriptor struct {
+		Digest string `json:"digest"`
+	}
+	orasJSON(t, &descriptor, "manifest", "fetch", "--descriptor", modelRef)
 
-	// Search for the pushed model
-	out, err = runCLI(t, t.TempDir(), "search",
-		"--destination", registry,
-		"--type", "model",
-		"--registry-tool", "oras",
-		"--non-interactive")
+	// A pipeline that uses the model, carrying the relationship graph that
+	// `map` embeds, so --uses-model has something to find.
+	pipelineRef := registry + "/e2e/search-test-pipeline:" + tag
+	graph := workflow.NewRelationshipGraph()
+	graph.AddModel(modelRef, "", "llm", "")
+	graph.AddPipeline(pipelineRef, "", "inference", nil)
+	if err := graph.AddModelToPipeline(pipelineRef, modelRef); err != nil {
+		t.Fatal(err)
+	}
+	relationships, err := workflow.GenerateRelationshipGraphAnnotation(graph)
 	if err != nil {
-		t.Fatalf("search failed: %v", err)
+		t.Fatal(err)
+	}
+	pipelineDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(pipelineDir, "pipeline.yaml"), []byte("stages: []\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	push := exec.Command("oras", "push", pipelineRef,
+		"--artifact-type", "application/vnd.cncf.ai.pipeline",
+		"--annotation", workflow.AnnotationArtifactType+"=pipeline",
+		"--annotation", "ai.pipeline.type=inference",
+		"--annotation", workflow.AnnotationRelationshipGraph+"="+relationships,
+		"pipeline.yaml")
+	push.Dir = pipelineDir
+	if out, err := push.CombinedOutput(); err != nil {
+		t.Fatalf("oras push pipeline: %v\n%s", err, out)
 	}
 
-	// Verify the pushed artifact is in the search results
-	if !strings.Contains(out, "e2e/search-test-model") {
-		t.Errorf("search results don't contain pushed artifact, got:\n%s", out)
-	}
-
-	// Also test with --output json
-	out, err = runCLI(t, t.TempDir(), "search",
-		"--destination", registry,
-		"--type", "model",
-		"--registry-tool", "oras",
-		"--output", "json",
-		"--non-interactive")
-	if err != nil {
-		t.Fatalf("search with json output failed: %v", err)
-	}
-
-	// Parse the JSON output to verify structure
-	var results workflow.SearchResults
-	if err := json.Unmarshal([]byte(out), &results); err != nil {
-		t.Fatalf("failed to parse search results JSON: %v", err)
-	}
-
-	// Verify we got at least one result
-	if len(results.Results) == 0 {
-		t.Error("search returned no results")
-	}
-
-	// Verify at least one result has the expected artifact type
-	foundModel := false
-	for _, result := range results.Results {
-		if result.ArtifactType == "model" {
-			foundModel = true
-			break
+	// search --output json prints nothing but the SearchResults document.
+	search := func(t *testing.T, filters ...string) workflow.SearchResults {
+		t.Helper()
+		args := append([]string{"search", "--destination", registry, "--registry-tool", "oras", "--output", "json"}, filters...)
+		out, err := runCLI(t, t.TempDir(), args...)
+		if err != nil {
+			t.Fatalf("search failed: %v", err)
 		}
+		var results workflow.SearchResults
+		if err := json.Unmarshal([]byte(out), &results); err != nil {
+			t.Fatalf("--output json is not a JSON document: %v\n%s", err, out)
+		}
+		if results.Registry != registry || results.TotalCount != len(results.Results) {
+			t.Errorf("results registry=%q total=%d for %d results", results.Registry, results.TotalCount, len(results.Results))
+		}
+		return results
 	}
-	if !foundModel {
-		t.Error("search results don't contain any model artifacts")
+	references := func(results workflow.SearchResults) []string {
+		var refs []string
+		for _, r := range results.Results {
+			refs = append(refs, r.Reference)
+		}
+		return refs
 	}
+	find := func(results workflow.SearchResults, ref string) *workflow.SearchResult {
+		for i := range results.Results {
+			if results.Results[i].Reference == ref {
+				return &results.Results[i]
+			}
+		}
+		return nil
+	}
+
+	t.Run("type model", func(t *testing.T) {
+		results := search(t, "--type", "model")
+		got := find(results, modelRef)
+		if got == nil {
+			t.Fatalf("results %v lack the pushed model %s", references(results), modelRef)
+		}
+		if got.Digest != descriptor.Digest {
+			t.Errorf("digest = %q, want %q as stored in the registry", got.Digest, descriptor.Digest)
+		}
+		if got.ArtifactType != "model" || got.Annotations[workflow.AnnotationRuntime] != "vllm" {
+			t.Errorf("result = %+v, want artifact_type model with the pushed annotations", got)
+		}
+		for _, r := range results.Results {
+			if r.ArtifactType != "model" {
+				t.Errorf("--type model listed %s of type %q", r.Reference, r.ArtifactType)
+			}
+		}
+	})
+
+	t.Run("metadata", func(t *testing.T) {
+		results := search(t, "--type", "pipeline", "--metadata", "ai.pipeline.type=inference")
+		if find(results, pipelineRef) == nil {
+			t.Errorf("results %v lack the pipeline %s", references(results), pipelineRef)
+		}
+		if find(results, modelRef) != nil {
+			t.Errorf("--type pipeline listed the model %s", modelRef)
+		}
+		if none := search(t, "--metadata", "ai.pipeline.type=does-not-exist"); len(none.Results) != 0 {
+			t.Errorf("unmatched metadata filter returned %v", references(none))
+		}
+	})
+
+	t.Run("uses-model", func(t *testing.T) {
+		results := search(t, "--uses-model", modelRef)
+		if refs := references(results); len(refs) != 1 || refs[0] != pipelineRef {
+			t.Errorf("--uses-model %s = %v, want exactly [%s]", modelRef, refs, pipelineRef)
+		}
+	})
+
+	t.Run("table output", func(t *testing.T) {
+		out, err := runCLI(t, t.TempDir(), "search", "--destination", registry, "--registry-tool", "oras", "--type", "model")
+		if err != nil {
+			t.Fatalf("search failed: %v", err)
+		}
+		for _, want := range []string{
+			"Search Results from " + registry + ":\n",
+			". " + modelRef + "\n",
+			"   Digest: " + descriptor.Digest + "\n",
+			"   Type: model\n",
+		} {
+			if !strings.Contains(out, want) {
+				t.Errorf("table output lacks %q", want)
+			}
+		}
+	})
 }
