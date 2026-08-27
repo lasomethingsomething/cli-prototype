@@ -67,7 +67,8 @@ func (f *FluxProvider) Deploy(modelName, repoURL, path string) error {
 	return nil
 }
 
-// GetGitOpsProvider returns the appropriate GitOps provider by name
+// GetGitOpsProvider returns the GitOps provider for an option name from
+// GitOpsOptions. "argo" is an accepted alias for "argocd".
 func GetGitOpsProvider(name string) (GitOpsProvider, error) {
 	switch name {
 	case "argo", "argocd":
@@ -75,6 +76,6 @@ func GetGitOpsProvider(name string) (GitOpsProvider, error) {
 	case "flux":
 		return &FluxProvider{}, nil
 	default:
-		return nil, fmt.Errorf("unknown GitOps provider: %s (supported: argo, flux)", name)
+		return nil, fmt.Errorf("unknown GitOps provider: %s (supported: argocd, flux)", name)
 	}
 }

@@ -30,11 +30,11 @@ Workflows (internal/workflow)
   - RelationshipMapping (Story #60: Map Relationships)
   |
   v
-Providers (pluggable tools)
-  - GitOps: Argo, Flux
-  - Registry: ORAS, ModelPack
-  - Signing: Sigstore (cosign), Notary v2 (notation)
-  - SBOM: Syft
+Providers (pluggable tools; one recommended per category, see internal/workflow/options.go)
+  - GitOps: Flux (recommended), Argo CD
+  - Registry: ORAS (recommended; Harbor and any OCI registry), ModelPack (planned)
+  - Signing: cosign (Sigstore, recommended), notation (Notary v2)
+  - SBOM: Syft (recommended), Trivy, cdxgen
   - MOF: Classifier
   - Runtime: vLLM, KServe
 ```

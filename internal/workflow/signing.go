@@ -5,7 +5,8 @@ import (
 	"os/exec"
 )
 
-// SigningProvider defines the interface for signing tools (Sigstore, Notary v2)
+// SigningProvider defines the interface for signing tools (cosign, notation).
+// Name() is the option name from SignerOptions.
 type SigningProvider interface {
 	Name() string
 	IsInstalled() bool
@@ -20,7 +21,7 @@ type SigningProvider interface {
 type SigstoreProvider struct{}
 
 func (s *SigstoreProvider) Name() string {
-	return "sigstore"
+	return "cosign"
 }
 
 func (s *SigstoreProvider) IsInstalled() bool {
@@ -69,7 +70,7 @@ func (s *SigstoreProvider) GetSignaturePath(artifact string) string {
 type NotaryV2Provider struct{}
 
 func (n *NotaryV2Provider) Name() string {
-	return "notaryv2"
+	return "notary"
 }
 
 func (n *NotaryV2Provider) IsInstalled() bool {
@@ -113,7 +114,8 @@ func (n *NotaryV2Provider) GetSignaturePath(artifact string) string {
 	return artifact + ".notation"
 }
 
-// GetSigningProvider returns the appropriate signing provider by name
+// GetSigningProvider returns the signing provider for an option name from
+// SignerOptions. "sigstore" and "notaryv2"/"notation" are accepted aliases.
 func GetSigningProvider(name string) (SigningProvider, error) {
 	switch name {
 	case "sigstore", "cosign":
@@ -121,6 +123,6 @@ func GetSigningProvider(name string) (SigningProvider, error) {
 	case "notary", "notaryv2", "notation":
 		return &NotaryV2Provider{}, nil
 	default:
-		return nil, fmt.Errorf("unknown signing provider: %s (supported: sigstore, notary)", name)
+		return nil, fmt.Errorf("unknown signing provider: %s (supported: cosign, notary)", name)
 	}
 }

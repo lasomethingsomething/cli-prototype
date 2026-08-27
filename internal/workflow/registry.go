@@ -496,7 +496,8 @@ func (m *ModelPackProvider) FetchManifestAnnotations(artifactRef string) (map[st
 	return nil, m.notImplemented("manifest fetch")
 }
 
-// GetRegistryProvider returns the appropriate Registry provider by name
+// GetRegistryProvider returns the registry provider for an option name from
+// RegistryOptions. Harbor and other OCI registries are used through "oras".
 func GetRegistryProvider(name string) (RegistryProvider, error) {
 	switch name {
 	case "oras":

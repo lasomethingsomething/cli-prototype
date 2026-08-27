@@ -15,8 +15,9 @@ var verifyCmd = &cobra.Command{
 	Short: "Verify a model artifact signature and provenance attestation",
 	Long: `Verify the signature of an OCI model artifact to ensure trust and provenance.
 
-This command validates signatures created by Sigstore (cosign) or Notary v2 (notation),
-aligning with the OpenSSF Model Signing Specification (OMS).
+This command validates signatures aligning with the OpenSSF Model Signing
+Specification (OMS), created by one of the supported signing tools:
+` + workflow.SignerOptions().Bullets() + `
 
 It also validates SLSA provenance attestations to ensure the artifact's
 immutable provenance record is intact.
@@ -24,7 +25,7 @@ immutable provenance record is intact.
 Examples:
   model-cli verify
   model-cli verify --artifact my-model:latest
-  model-cli verify --artifact my-model:latest --signer sigstore
+  model-cli verify --artifact my-model:latest --signer cosign
   model-cli verify --artifact my-model:latest --attestation my-model.provenance.json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := config.Load()
@@ -44,7 +45,7 @@ Examples:
 			return err
 		}
 
-		if err := askSelectIfEmpty(cmd, "signer", &cfg.Signer, "Select signing tool:", "Which signing tool was used?", []string{"sigstore", "notary"}); err != nil {
+		if err := askSelectToolIfEmpty(cmd, "signer", &cfg.Signer, "Select signing tool:", "Which signing tool was used?", workflow.SignerOptions()); err != nil {
 			return err
 		}
 		signer := cfg.Signer
@@ -320,9 +321,9 @@ func extractArtifactNameFromArtifact(artifact string) string {
 func init() {
 	rootCmd.AddCommand(verifyCmd)
 	verifyCmd.Flags().String("artifact", "", "OCI artifact reference to verify (e.g., my-registry/my-model:latest)")
-	verifyCmd.Flags().String("signer", "", "Signing tool used: sigstore or notary")
+	verifyCmd.Flags().String("signer", "", "Signing tool used: "+workflow.SignerOptions().Summary())
 	verifyCmd.Flags().String("attestation", "", "Path to provenance attestation file (default: <artifact>.provenance.json)")
-	verifyCmd.Flags().String("registry", "", "Registry tool: oras or modelpack (for fetching attestations)")
+	verifyCmd.Flags().String("registry", "", "Registry tool for fetching attestations: "+workflow.RegistryOptions().Summary())
 	verifyCmd.Flags().String("local-manifest", "", "Path to local manifest file for parity verification")
 	verifyCmd.Flags().Bool("local-parity", false, "Verify that local artifact matches the pushed copy in registry")
 }
