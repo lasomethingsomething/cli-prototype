@@ -4,8 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
+	"net"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -440,15 +443,80 @@ func (o *ORASProvider) FetchManifestAnnotations(artifactRef string) (map[string]
 	return annotations, nil
 }
 
+// annotateManifest merges annotations into the manifest stored at ref and
+// pushes the result back under the same reference: `oras manifest fetch`,
+// edit .annotations, `oras manifest push`. Every other manifest field is
+// carried over untouched. It exists for providers whose own CLI cannot set
+// manifest annotations (modctl).
+func (o *ORASProvider) annotateManifest(ref string, annotations map[string]string) error {
+	fetch := exec.Command("oras", "manifest", "fetch", ref)
+	fetch.Stderr = os.Stderr
+	raw, err := fetch.Output()
+	if err != nil {
+		return fmt.Errorf("failed to fetch manifest %s with ORAS: %v", ref, err)
+	}
+	merged, err := mergeManifestAnnotations(raw, annotations)
+	if err != nil {
+		return fmt.Errorf("failed to annotate manifest %s: %v", ref, err)
+	}
+
+	tmpDir, err := os.MkdirTemp("", "manifest-*")
+	if err != nil {
+		return fmt.Errorf("failed to create temp dir for manifest: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+	manifestPath := filepath.Join(tmpDir, "manifest.json")
+	if err := os.WriteFile(manifestPath, merged, 0644); err != nil {
+		return fmt.Errorf("failed to write annotated manifest: %v", err)
+	}
+
+	// ORAS takes the media type from the manifest's own mediaType field.
+	push := exec.Command("oras", "manifest", "push", ref, manifestPath)
+	push.Stderr = os.Stderr
+	if err := push.Run(); err != nil {
+		return fmt.Errorf("failed to push annotated manifest %s with ORAS: %v", ref, err)
+	}
+	return nil
+}
+
+// mergeManifestAnnotations adds annotations to the "annotations" object of
+// the OCI manifest JSON raw, overwriting keys that already exist and keeping
+// every other field as is.
+func mergeManifestAnnotations(raw []byte, annotations map[string]string) ([]byte, error) {
+	var manifest map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &manifest); err != nil {
+		return nil, fmt.Errorf("invalid manifest JSON: %v", err)
+	}
+	merged := map[string]string{}
+	if existing, ok := manifest["annotations"]; ok {
+		if err := json.Unmarshal(existing, &merged); err != nil {
+			return nil, fmt.Errorf("invalid manifest annotations: %v", err)
+		}
+		if merged == nil { // "annotations": null
+			merged = map[string]string{}
+		}
+	}
+	for k, v := range annotations {
+		merged[k] = v
+	}
+	encoded, err := json.Marshal(merged)
+	if err != nil {
+		return nil, err
+	}
+	manifest["annotations"] = encoded
+	return json.Marshal(manifest)
+}
+
 // --- ModelPack Provider ---
 
-// ErrNotImplemented is returned by provider operations that have no real
-// implementation yet, so callers fail loudly instead of assuming success.
-var ErrNotImplemented = errors.New("not implemented")
-
-// ModelPackProvider is a placeholder for the ModelPack CLI integration.
-// Tool detection works; every registry operation returns ErrNotImplemented
-// until the integration is written. Use the ORAS provider in the meantime.
+// ModelPackProvider implements RegistryProvider with modctl, the CNCF
+// ModelPack CLI (https://github.com/modelpack/modctl). modctl packages a
+// model directory as a Model Spec artifact (`modctl build`) and uploads it
+// (`modctl push`), but it has no flag for manifest annotations and no
+// referrer commands. Those parts go through ORAS against the same registry,
+// which speaks plain OCI: Push merges the CNCF annotations into the pushed
+// manifest with ORAS, and the read-side operations delegate to ORASProvider.
+// Both modctl and oras therefore need to be installed.
 type ModelPackProvider struct{}
 
 func (m *ModelPackProvider) Name() string {
@@ -456,44 +524,224 @@ func (m *ModelPackProvider) Name() string {
 }
 
 func (m *ModelPackProvider) IsInstalled() bool {
-	_, err := exec.LookPath("modelpack")
+	_, err := exec.LookPath("modctl")
 	return err == nil
 }
 
 func (m *ModelPackProvider) InstallInstructions() string {
-	return "go install github.com/modelpack/modelpack@latest"
+	return "go install github.com/modelpack/modctl@latest"
 }
 
-func (m *ModelPackProvider) notImplemented(op string) error {
-	return fmt.Errorf("modelpack %s: %w (use --registry oras)", op, ErrNotImplemented)
-}
+// modelfileName is the file modctl reads the artifact layout from.
+const modelfileName = "Modelfile"
 
+// Push packages sourcePath with `modctl build -t <ref> -f <Modelfile> <dir>`
+// and uploads it with `modctl push <ref>`. A Modelfile in the source
+// directory is used as is; otherwise one is generated in a temp dir that
+// lists every file below sourcePath (modctl builds one layer per file and
+// has no directory layers). modctl cannot set manifest annotations, so the
+// CNCF annotations are merged into the pushed manifest with ORAS afterwards;
+// the returned digest is that of the final manifest.
 func (m *ModelPackProvider) Push(artifact, registry, sourcePath string, annotations map[string]string) (string, error) {
-	return "", m.notImplemented("push")
+	absSource, err := filepath.Abs(sourcePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve source path %q: %v", sourcePath, err)
+	}
+	info, err := os.Stat(absSource)
+	if err != nil {
+		return "", fmt.Errorf("source path %q is not accessible: %v", sourcePath, err)
+	}
+	oras := &ORASProvider{}
+	if _, err := exec.LookPath("oras"); err != nil {
+		return "", fmt.Errorf("the modelpack provider needs oras to annotate the pushed manifest; install it with: %s", oras.InstallInstructions())
+	}
+
+	// modctl builds from a directory context; a single file is built from its parent.
+	var contextDir, modelfilePath string
+	var files []string
+	if info.IsDir() {
+		contextDir = absSource
+		if existing := filepath.Join(absSource, modelfileName); fileExists(existing) {
+			modelfilePath = existing
+		} else if files, err = modelFiles(absSource); err != nil {
+			return "", err
+		}
+	} else {
+		contextDir = filepath.Dir(absSource)
+		files = []string{filepath.Base(absSource)}
+	}
+	if modelfilePath == "" {
+		if len(files) == 0 {
+			return "", fmt.Errorf("source path %q has no files to package", sourcePath)
+		}
+		tmpDir, err := os.MkdirTemp("", "modelfile-*")
+		if err != nil {
+			return "", fmt.Errorf("failed to create temp dir for Modelfile: %v", err)
+		}
+		defer os.RemoveAll(tmpDir)
+		modelfilePath = filepath.Join(tmpDir, modelfileName)
+		if err := os.WriteFile(modelfilePath, modelfileFor(modelNameOf(artifact), files), 0644); err != nil {
+			return "", fmt.Errorf("failed to write Modelfile: %v", err)
+		}
+	}
+
+	ref := registry + "/" + artifact
+	plainHTTP := plainHTTPArgs(registry)
+	buildArgs := append([]string{"build", "-t", ref, "-f", modelfilePath}, plainHTTP...)
+	buildArgs = append(buildArgs, contextDir)
+	if err := runModctl(buildArgs...); err != nil {
+		return "", fmt.Errorf("failed to build with modctl: %v", err)
+	}
+	pushArgs := append([]string{"push"}, plainHTTP...)
+	pushArgs = append(pushArgs, ref)
+	if err := runModctl(pushArgs...); err != nil {
+		return "", fmt.Errorf("failed to push with modctl: %v", err)
+	}
+	fmt.Printf("Pushed artifact %s to %s using ModelPack\n", artifact, registry)
+
+	if len(annotations) > 0 {
+		if err := oras.annotateManifest(ref, annotations); err != nil {
+			return "", err
+		}
+		fmt.Printf("Attached %d CNCF AI annotation(s) to the manifest\n", len(annotations))
+	}
+	return oras.GetArtifactDigest(artifact, registry)
 }
 
-func (m *ModelPackProvider) Pull(artifact, registry string) error {
-	return m.notImplemented("pull")
+// runModctl runs modctl with args, streaming its progress output.
+func runModctl(args ...string) error {
+	cmd := exec.Command("modctl", args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
+
+// plainHTTPArgs returns modctl's --plain-http flag for registries on the
+// local host, where no TLS is expected. ORAS applies that default on its
+// own; modctl has to be told.
+func plainHTTPArgs(registry string) []string {
+	host := registry
+	if i := strings.Index(host, "/"); i >= 0 {
+		host = host[:i]
+	}
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+	switch host {
+	case "localhost", "127.0.0.1", "::1":
+		return []string{"--plain-http"}
+	}
+	return nil
+}
+
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
+}
+
+// modelNameOf returns the last path element of an artifact's repository,
+// e.g. "my-model" for "my-org/my-model:v1", for the Modelfile NAME.
+func modelNameOf(artifact string) string {
+	return path.Base(repositoryOf(artifact))
+}
+
+// modelFiles lists the files below dir relative to it, in lexical order.
+// Hidden entries (".git", ".DS_Store", ...) are skipped, as `modctl
+// modelfile generate` does.
+func modelFiles(dir string) ([]string, error) {
+	var files []string
+	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if p != dir && strings.HasPrefix(d.Name(), ".") {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !d.IsDir() {
+			rel, err := filepath.Rel(dir, p)
+			if err != nil {
+				return err
+			}
+			files = append(files, filepath.ToSlash(rel))
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list files in %s: %v", dir, err)
+	}
+	return files, nil
+}
+
+// modelfileFor writes a Modelfile (see modctl's docs/getting-started.md)
+// that names the model and lists each file under the Model Spec directive
+// for its role: CONFIG for JSON/YAML, DOC for Markdown and text, CODE for
+// Python, MODEL for everything else. Paths are relative to the build
+// context; ones with whitespace are quoted for the Modelfile parser.
+func modelfileFor(name string, files []string) []byte {
+	var b strings.Builder
+	b.WriteString("# Generated by model-cli for modctl build\n")
+	if name != "" && name != "." {
+		fmt.Fprintf(&b, "NAME %s\n", name)
+	}
+	for _, f := range files {
+		arg := f
+		if strings.ContainsAny(arg, " \t") {
+			arg = `"` + arg + `"`
+		}
+		fmt.Fprintf(&b, "%s %s\n", modelfileDirective(f), arg)
+	}
+	return []byte(b.String())
+}
+
+func modelfileDirective(file string) string {
+	switch strings.ToLower(filepath.Ext(file)) {
+	case ".json", ".yaml", ".yml":
+		return "CONFIG"
+	case ".md", ".txt":
+		return "DOC"
+	case ".py":
+		return "CODE"
+	}
+	return "MODEL"
+}
+
+// Pull downloads the artifact into modctl's local store with `modctl pull`.
+func (m *ModelPackProvider) Pull(artifact, registry string) error {
+	args := append([]string{"pull"}, plainHTTPArgs(registry)...)
+	args = append(args, registry+"/"+artifact)
+	if err := runModctl(args...); err != nil {
+		return fmt.Errorf("failed to pull with modctl: %v", err)
+	}
+	fmt.Printf("Pulled artifact %s from %s using ModelPack\n", artifact, registry)
+	return nil
+}
+
+// The remaining operations read or attach plain OCI manifests, which modctl
+// has no commands for (`modctl inspect` shows the Model Spec config, not the
+// manifest digest or annotations, and it has no referrer support). They
+// delegate to ORAS against the same registry.
 
 func (m *ModelPackProvider) GetArtifactDigest(artifact, registry string) (string, error) {
-	return "", m.notImplemented("digest lookup")
+	return (&ORASProvider{}).GetArtifactDigest(artifact, registry)
 }
 
 func (m *ModelPackProvider) PushReferrer(artifact, registry, referrerType string, data []byte, annotations map[string]string) error {
-	return m.notImplemented("referrer push")
+	return (&ORASProvider{}).PushReferrer(artifact, registry, referrerType, data, annotations)
 }
 
 func (m *ModelPackProvider) GetReferrers(artifact, registry, referrerType string) ([][]byte, error) {
-	return nil, m.notImplemented("referrer fetch")
+	return (&ORASProvider{}).GetReferrers(artifact, registry, referrerType)
 }
 
 func (m *ModelPackProvider) Search(registry string, query *SearchQuery) ([]ManifestCandidate, error) {
-	return nil, m.notImplemented("search")
+	return (&ORASProvider{}).Search(registry, query)
 }
 
 func (m *ModelPackProvider) FetchManifestAnnotations(artifactRef string) (map[string]string, error) {
-	return nil, m.notImplemented("manifest fetch")
+	return (&ORASProvider{}).FetchManifestAnnotations(artifactRef)
 }
 
 // GetRegistryProvider returns the registry provider for an option name from

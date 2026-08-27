@@ -129,7 +129,7 @@ Model CLI only requires Go. No specific tool is required: each category offers s
 | Category | Option | Tool | Install | Required for |
 |----------|--------|------|---------|--------------|
 | Registry | `oras` (recommended) | ORAS - any OCI registry: Harbor, GHCR, zot, ... | `brew install oras` | Package/Push |
-| Registry | `modelpack` | ModelPack (planned, not implemented yet) | - | Package/Push |
+| Registry | `modelpack` | ModelPack, via modctl (needs `oras` too) | `go install github.com/modelpack/modctl@latest` | Package/Push |
 | GitOps | `flux` (recommended) | Flux (agents) | `brew install fluxcd/tap/flux` | Deploy |
 | GitOps | `argocd` | Argo CD (UI) | `brew install argoproj/tap/argocd` | Deploy |
 | Signing | `cosign` (recommended) | cosign (Sigstore) | `brew install sigstore/tap/cosign` | Sign/Verify |

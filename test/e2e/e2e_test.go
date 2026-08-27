@@ -10,7 +10,9 @@
 //	  ghcr.io/project-zot/zot-linux-amd64:latest
 //	MODEL_CLI_E2E_REGISTRY=localhost:5000 go test -tags e2e -v ./test/e2e/
 //
-// Without MODEL_CLI_E2E_REGISTRY the tests are skipped.
+// Without MODEL_CLI_E2E_REGISTRY the tests are skipped. The ModelPack test
+// additionally needs modctl on PATH (go install github.com/modelpack/modctl@latest)
+// and is skipped without it.
 package e2e
 
 import (
@@ -21,6 +23,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -112,6 +115,18 @@ type pushedManifest struct {
 	} `json:"layers"`
 }
 
+// packagedAnnotations is what `package` with the flags used in these tests
+// must put on the registry manifest, whichever registry tool pushes it. MOF
+// classification is not among them: it is produced by the separate harden
+// step (issue #87), not by package.
+var packagedAnnotations = map[string]string{
+	workflow.AnnotationArtifactType:   "model",
+	workflow.AnnotationRuntime:        "vllm",
+	workflow.AnnotationAccelerator:    "cpu",
+	workflow.AnnotationMemoryMin:      "1GiB",
+	workflow.AnnotationProfileVersion: "1.0.0",
+}
+
 func TestPackageThenValidateAgainstRegistry(t *testing.T) {
 	modelDir := newModelDir(t)
 	repo := "e2e/test-model"
@@ -136,13 +151,7 @@ func TestPackageThenValidateAgainstRegistry(t *testing.T) {
 	if pushed.ArtifactType != "application/vnd.cncf.ai.model" {
 		t.Errorf("artifactType = %q", pushed.ArtifactType)
 	}
-	for key, want := range map[string]string{
-		workflow.AnnotationArtifactType:   "model",
-		workflow.AnnotationRuntime:        "vllm",
-		workflow.AnnotationAccelerator:    "cpu",
-		workflow.AnnotationMemoryMin:      "1GiB",
-		workflow.AnnotationProfileVersion: "1.0.0",
-	} {
+	for key, want := range packagedAnnotations {
 		if got := pushed.Annotations[key]; got != want {
 			t.Errorf("pushed annotation %s = %q, want %q", key, got, want)
 		}
@@ -208,39 +217,7 @@ func TestPackageThenValidateAgainstRegistry(t *testing.T) {
 		}
 	}
 
-	// validate gitops / admission read the same manifest back through the CLI.
-	for _, tc := range []struct {
-		name string
-		args []string
-	}{
-		{"gitops", []string{"validate", "gitops", "--artifact", ref, "--registry", "oras", "--json-output"}},
-		{"admission air-gapped", []string{"validate", "admission", "--artifact", ref, "--registry", "oras", "--env", "air-gapped", "--json-output"}},
-		{"admission hybrid-cloud", []string{"validate", "admission", "--artifact", ref, "--registry", "oras", "--env", "hybrid-cloud", "--region", "eu-west-1", "--json-output"}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			out, err := runCLI(t, t.TempDir(), tc.args...)
-			if err != nil {
-				t.Fatalf("%s failed: %v", tc.name, err)
-			}
-			var report workflow.ValidationReport
-			if err := json.Unmarshal([]byte(out[strings.Index(out, "{"):]), &report); err != nil {
-				t.Fatalf("invalid JSON report: %v", err)
-			}
-			if !report.Passed || report.Status != "pass" || report.Artifact != ref {
-				t.Errorf("report = %+v, want pass for %s", report, ref)
-			}
-			if len(report.Checks) == 0 {
-				t.Error("report has no checks")
-			}
-		})
-	}
-
-	t.Run("missing artifact fails", func(t *testing.T) {
-		_, err := runCLI(t, t.TempDir(), "validate", "gitops", "--artifact", registry+"/e2e/does-not-exist:v0", "--registry", "oras", "--quiet")
-		if err == nil {
-			t.Error("validate gitops on a missing artifact should exit non-zero")
-		}
-	})
+	validateThroughCLI(t, ref, "oras")
 
 	// harden is the step after package: it generates the SBOM, classifies
 	// the model and records both in the manifest package wrote.
@@ -279,6 +256,45 @@ func TestPackageThenValidateAgainstRegistry(t *testing.T) {
 	})
 }
 
+// validateThroughCLI checks that validate gitops / admission read the
+// manifest of ref back through the CLI with the given registry tool, and
+// that a missing artifact fails.
+func validateThroughCLI(t *testing.T, ref, registryTool string) {
+	t.Helper()
+	for _, tc := range []struct {
+		name string
+		args []string
+	}{
+		{"gitops", []string{"validate", "gitops", "--artifact", ref, "--registry", registryTool, "--json-output"}},
+		{"admission air-gapped", []string{"validate", "admission", "--artifact", ref, "--registry", registryTool, "--env", "air-gapped", "--json-output"}},
+		{"admission hybrid-cloud", []string{"validate", "admission", "--artifact", ref, "--registry", registryTool, "--env", "hybrid-cloud", "--region", "eu-west-1", "--json-output"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, err := runCLI(t, t.TempDir(), tc.args...)
+			if err != nil {
+				t.Fatalf("%s failed: %v", tc.name, err)
+			}
+			var report workflow.ValidationReport
+			if err := json.Unmarshal([]byte(out[strings.Index(out, "{"):]), &report); err != nil {
+				t.Fatalf("invalid JSON report: %v", err)
+			}
+			if !report.Passed || report.Status != "pass" || report.Artifact != ref {
+				t.Errorf("report = %+v, want pass for %s", report, ref)
+			}
+			if len(report.Checks) == 0 {
+				t.Error("report has no checks")
+			}
+		})
+	}
+
+	t.Run("missing artifact fails", func(t *testing.T) {
+		_, err := runCLI(t, t.TempDir(), "validate", "gitops", "--artifact", registry+"/e2e/does-not-exist:v0", "--registry", registryTool, "--quiet")
+		if err == nil {
+			t.Error("validate gitops on a missing artifact should exit non-zero")
+		}
+	})
+}
+
 func TestHardenRequiresPackage(t *testing.T) {
 	modelDir := newModelDir(t)
 
@@ -291,6 +307,79 @@ func TestHardenRequiresPackage(t *testing.T) {
 	if !strings.Contains(out, "model-cli package") {
 		t.Errorf("harden output = %q, want it to tell the user to run `model-cli package` first", out)
 	}
+}
+
+// TestPackageThenValidateWithModelPack is the ModelPack flavour of the
+// package → validate flow: modctl builds and pushes a Model Spec artifact,
+// the CNCF annotations are merged into its manifest through ORAS, parity
+// verification passes, and validate reads the annotations back.
+// Model Spec identifiers as emitted by modctl releases (cnai) and main (cncf).
+var (
+	modelSpecManifestTypes = []string{
+		"application/vnd.cncf.model.manifest.v1+json",
+		"application/vnd.cnai.model.manifest.v1+json",
+	}
+	modelfileAnnotationKeys     = []string{"org.cncf.modctl.modelfile", "org.cnai.modctl.modelfile"}
+	layerFilepathAnnotationKeys = []string{"org.cncf.model.filepath", "org.cnai.model.filepath"}
+)
+
+// firstAnnotation returns the value of the first key present in annotations.
+func firstAnnotation(annotations map[string]string, keys []string) string {
+	for _, key := range keys {
+		if v := annotations[key]; v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+func TestPackageThenValidateWithModelPack(t *testing.T) {
+	if _, err := exec.LookPath("modctl"); err != nil {
+		t.Skip("modctl not on PATH; install it with `go install github.com/modelpack/modctl@latest` to run the ModelPack e2e test")
+	}
+	modelDir := newModelDir(t)
+	artifact := "e2e/modelpack-model:" + uniqueTag()
+	ref := registry + "/" + artifact
+
+	out, err := runCLI(t, filepath.Dir(modelDir), "package",
+		"--model", "test-model", "--model-path", modelDir, "--artifact", artifact,
+		"--registry", "modelpack", "--registry-url", registry,
+		"--runtime", "vllm", "--accelerator", "cpu", "--memory-min", "1GiB")
+	if err != nil {
+		t.Fatalf("package failed: %v", err)
+	}
+	if !strings.Contains(out, "Local parity VERIFIED") {
+		t.Errorf("package output lacks a passing parity check")
+	}
+
+	// The registry holds modctl's Model Spec manifest with the CNCF
+	// annotations merged into it, one layer per model file. modctl releases
+	// up to v0.2.2 use the pre-donation "cnai" namespace for the Model Spec
+	// types; main uses "cncf". The provider is agnostic, so accept both.
+	var pushed pushedManifest
+	orasJSON(t, &pushed, "manifest", "fetch", ref)
+	if !slices.Contains(modelSpecManifestTypes, pushed.ArtifactType) {
+		t.Errorf("artifactType = %q, want the Model Spec manifest type", pushed.ArtifactType)
+	}
+	for key, want := range packagedAnnotations {
+		if got := pushed.Annotations[key]; got != want {
+			t.Errorf("pushed annotation %s = %q, want %q", key, got, want)
+		}
+	}
+	if firstAnnotation(pushed.Annotations, modelfileAnnotationKeys) == "" {
+		t.Errorf("modctl's Modelfile annotation is missing; annotations = %v", pushed.Annotations)
+	}
+	var layerFiles []string
+	for _, layer := range pushed.Layers {
+		layerFiles = append(layerFiles, firstAnnotation(layer.Annotations, layerFilepathAnnotationKeys))
+	}
+	for _, want := range []string{"model.safetensors", "README.md"} {
+		if !slices.Contains(layerFiles, want) {
+			t.Errorf("pushed layers %v lack %s", layerFiles, want)
+		}
+	}
+
+	validateThroughCLI(t, ref, "modelpack")
 }
 
 func TestPushAttachesProvenanceReferrer(t *testing.T) {
