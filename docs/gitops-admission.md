@@ -756,13 +756,15 @@ For full Trust Profile validation with Flux, combine with OPA/Gatekeeper as show
 ```bash
 # Package model with Trust Profile annotations
 model-cli package --model my-model --model-path ./models \
-  --model-type llm --framework pytorch \
-  --sign --signer cosign
+  --model-type llm --framework pytorch
 
 # Push to registry (annotations are attached to manifest)
 model-cli push --artifact my-model:v1.0.0 \
   --registry oras \
   --destination ghcr.io/my-org
+
+# Sign the pushed artifact and record its provenance (separate step)
+model-cli sign --artifact ghcr.io/my-org/my-model:v1.0.0 --signer sigstore
 ```
 
 ### 2. Configure GitOps with Policy Enforcement
@@ -855,11 +857,14 @@ missing required annotation: org.cncf.ai.security.signing.framework
 
 **Solution:**
 ```bash
-# Re-package with signing enabled
-model-cli package --model my-model --sign --signer cosign
+# Re-package so the annotations are present
+model-cli package --model my-model
 
 # Re-push
 model-cli push --artifact my-model:v1.0.0 --registry oras --destination ghcr.io/my-org
+
+# Sign the pushed artifact
+model-cli sign --artifact ghcr.io/my-org/my-model:v1.0.0 --signer sigstore
 ```
 
 ### Admission Blocked: Invalid Signature
@@ -940,11 +945,12 @@ model-cli push --artifact my-model:v1.0.0-kserve
 
 ## Best Practices
 
-### 1. Always Sign Before Pushing
+### 1. Always Sign Before Deploying
 
 ```bash
-model-cli package --model my-model --sign --signer cosign
-model-cli push --artifact my-model:v1.0.0
+model-cli package --model my-model
+model-cli push --artifact my-model:v1.0.0 --destination ghcr.io/my-org
+model-cli sign --artifact ghcr.io/my-org/my-model:v1.0.0 --signer sigstore
 ```
 
 ### 2. Use Multiple Policy Layers

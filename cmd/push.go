@@ -233,15 +233,18 @@ Examples:
 			// Create provenance generator with real metadata
 			pg := workflow.NewProvenanceGenerator()
 			pg.SetSourceInfo(modelPath, destination)
-			pg.SetArtifactInfo(fullArtifact, nil) // Digest will be added by registry after push
+			// The subject is the manifest the registry just accepted; nil if the tool reported no digest.
+			pg.SetArtifactInfo(fullArtifact, workflow.DigestMap(pushedDigest))
 
 			// Add destination as a material
 			if destination != "" {
 				pg.AddMaterial("oci://"+destination, nil)
 			}
 
+			// RecipePush: this attestation describes the upload. `model-cli sign`
+			// records RecipeSign separately when the artifact is signed later.
 			pg.SetRecipeInfo(
-				"https://model-cli.dev/recipe/push/v1",
+				workflow.RecipePush,
 				fmt.Sprintf("registry:%s", registry),
 				"push",
 			)

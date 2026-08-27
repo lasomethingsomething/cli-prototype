@@ -41,9 +41,13 @@ func NewAttestationManager(signer SigningProvider, registryProvider RegistryProv
 // as a referrer. This implements the OSSF Model Signing Spec pattern where attestations
 // are stored as referrers to the main artifact.
 func (am *AttestationManager) AttestAndPush(artifactName string, pg *ProvenanceGenerator, sign bool) error {
-	// Generate the provenance attestation with real data
-	attestation := pg.Generate()
+	return am.PushAttestation(artifactName, pg.Generate(), sign)
+}
 
+// PushAttestation pushes an already generated provenance attestation to the
+// registry as a referrer of artifactName, so that a copy kept elsewhere (e.g.
+// on disk) is byte-for-byte the document the registry holds.
+func (am *AttestationManager) PushAttestation(artifactName string, attestation *ProvenanceAttestation, sign bool) error {
 	// Serialize to JSON
 	attestationData, err := json.MarshalIndent(attestation, "", "  ")
 	if err != nil {
@@ -143,6 +147,86 @@ func (am *AttestationManager) AttestAndPush(artifactName string, pg *ProvenanceG
 	fmt.Println("  The hardened provenance metadata is frozen, establishing the immutable record of origin.")
 
 	return nil
+}
+
+// SignedArtifact describes an artifact that `model-cli sign` has just signed.
+type SignedArtifact struct {
+	// Destination is the registry host and namespace (e.g. ghcr.io/my-org),
+	// or "" for a reference without a registry prefix.
+	Destination string
+	// Name is the repository and tag within Destination (e.g. my-model:v1).
+	Name string
+	// Signer is the signing tool as chosen by the user (e.g. sigstore).
+	Signer string
+	// SignaturePath is where the signing tool reported the signature.
+	SignaturePath string
+}
+
+// Reference returns the full artifact reference.
+func (a SignedArtifact) Reference() string {
+	if a.Destination == "" {
+		return a.Name
+	}
+	return a.Destination + "/" + a.Name
+}
+
+// SignProvenanceResult reports what AttestSignedArtifact produced.
+type SignProvenanceResult struct {
+	Attestation *ProvenanceAttestation
+	// Path is the local copy of the attestation.
+	Path string
+	// Attached reports whether the attestation was also attached to the
+	// artifact as a registry referrer.
+	Attached bool
+}
+
+// AttestSignedArtifact generates the SLSA provenance for a freshly signed
+// artifact (Phase 1, Step 3), writes it to outputPath and attaches the same
+// document to the artifact as a registry referrer, with the subject digest
+// resolved from the registry. When provider is nil or the artifact has no
+// registry prefix only the local file is written. Registry problems are
+// reported as warnings, not errors: the local attestation is still produced
+// and the caller can see from the result whether it was attached.
+func AttestSignedArtifact(provider RegistryProvider, signer SigningProvider, artifact SignedArtifact, outputPath string) (*SignProvenanceResult, error) {
+	pg := NewProvenanceGenerator()
+	pg.SetRecipeInfo(RecipeSign, "signer:"+artifact.Signer, "sign")
+	pg.SetInvocationInfo("", map[string]interface{}{
+		"signer":    artifact.Signer,
+		"signedAt":  time.Now().UTC().Format(time.RFC3339),
+		"signature": artifact.SignaturePath,
+	})
+
+	useRegistry := provider != nil && artifact.Destination != ""
+	var digest map[string]string
+	if useRegistry {
+		d, err := provider.GetArtifactDigest(artifact.Name, artifact.Destination)
+		if err != nil {
+			fmt.Printf("  ⚠ Could not resolve the artifact digest for the attestation subject: %v\n", err)
+		} else {
+			digest = DigestMap(d)
+		}
+	}
+	pg.SetArtifactInfo(artifact.Reference(), digest)
+
+	attestation, err := pg.WriteToFile(outputPath)
+	if err != nil {
+		return nil, err
+	}
+	if err := ValidateAttestation(attestation); err != nil {
+		return nil, fmt.Errorf("generated provenance attestation is invalid: %w", err)
+	}
+	fmt.Printf("✓ Provenance attestation written: %s\n", outputPath)
+	result := &SignProvenanceResult{Attestation: attestation, Path: outputPath}
+
+	if useRegistry {
+		am := NewAttestationManager(signer, provider, artifact.Destination)
+		if err := am.PushAttestation(artifact.Name, attestation, false); err != nil {
+			fmt.Printf("  ⚠ Could not attach the attestation to %s: %v\n", artifact.Reference(), err)
+		} else {
+			result.Attached = true
+		}
+	}
+	return result, nil
 }
 
 // GetAttestation fetches a provenance attestation from the registry

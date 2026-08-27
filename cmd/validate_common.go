@@ -149,7 +149,7 @@ func printTextReport(r *workflow.ValidationReport, hints reportHints) {
 // gitopsHints are shared by the gitops and admission targets.
 var gitopsHints = reportHints{
 	pass: "GitOps tools (Argo CD, Flux) can proceed. External policy engines (Sigstore Policy Controller,\nOPA/Gatekeeper, Kyverno) perform the actual admission control from these annotations.",
-	fail: "To fix: re-package with 'model-cli package' (add --sign) so every required annotation is present.",
+	fail: "To fix: re-package with 'model-cli package' so every required annotation is present, then sign with 'model-cli sign'.",
 }
 
 // deprecatedAlias returns a hidden top-level copy of a validate subcommand
