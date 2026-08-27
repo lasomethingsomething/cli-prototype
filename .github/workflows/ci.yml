@@ -44,6 +44,7 @@ jobs:
         with:
           go-version-file: go.mod
       - uses: oras-project/setup-oras@v1
+      - uses: anchore/sbom-action/download-syft@v0
       - name: Start zot registry
         run: |
           docker run -d --name zot -p 5000:5000 \

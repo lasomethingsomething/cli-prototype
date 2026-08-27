@@ -2,7 +2,8 @@
 
 // Package e2e drives the built model-cli binary against a real OCI registry.
 //
-// Run locally with a throwaway zot registry and ORAS on PATH:
+// Run locally with a throwaway zot registry and ORAS and syft on PATH
+// (package generates an SBOM with syft and fails without it):
 //
 //	docker run -d --name zot -p 5000:5000 \
 //	  -v "$PWD/test/e2e/zot-config.json:/etc/zot/config.json:ro" \
@@ -36,9 +37,11 @@ func TestMain(m *testing.M) {
 		fmt.Println("MODEL_CLI_E2E_REGISTRY not set; skipping e2e tests")
 		os.Exit(0)
 	}
-	if _, err := exec.LookPath("oras"); err != nil {
-		fmt.Println("oras not on PATH; e2e tests need it")
-		os.Exit(1)
+	for _, tool := range []string{"oras", "syft"} {
+		if _, err := exec.LookPath(tool); err != nil {
+			fmt.Printf("%s not on PATH; e2e tests need it\n", tool)
+			os.Exit(1)
+		}
 	}
 
 	dir, err := os.MkdirTemp("", "model-cli-e2e-*")
@@ -120,6 +123,11 @@ func TestPackageThenValidateAgainstRegistry(t *testing.T) {
 	}
 	if !strings.Contains(out, "Local parity VERIFIED") {
 		t.Errorf("package output lacks a passing parity check")
+	}
+
+	// The SBOM is a required prerequisite: package writes it next to the model.
+	if _, err := os.Stat(filepath.Join(modelDir, "sbom.spdx-json")); err != nil {
+		t.Errorf("package did not write an SBOM next to the model: %v", err)
 	}
 
 	// The registry holds a manifest with the CNCF annotations and the
