@@ -415,9 +415,10 @@ func fakeSyft(t *testing.T, scanScript string) {
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 }
 
-// TestPackageWorkflowDoesNotGenerateProvenance verifies that provenance is NOT
-// generated during packaging (Phase 1, Step 3 - provenance should be after packaging)
-// This addresses issue #88
+// TestPackageWorkflowDoesNotGenerateProvenance verifies that packaging stops
+// at the artifact: no provenance attestation is written and nothing is
+// attached to the registry. Provenance and signing are the separate
+// `model-cli sign` step (Phase 1, Step 3; issue #88).
 func TestPackageWorkflowDoesNotGenerateProvenance(t *testing.T) {
 	modelPath := t.TempDir()
 	if err := os.WriteFile(filepath.Join(modelPath, "model.txt"), []byte("weights"), 0644); err != nil {
@@ -431,25 +432,29 @@ func TestPackageWorkflowDoesNotGenerateProvenance(t *testing.T) {
 		annotations:      NewAnnotationSet(),
 		verifyParity:     false,
 	}
+	pf.SetPackageInfo("test-model", modelPath, "test:v1", "ghcr.io/my-org", false, "")
 
-	pf.SetPackageInfo("test-model", modelPath, "test:v1", "", false, "")
-
-	// Run the package workflow
 	if err := pf.Run(); err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
 
-	// Verify that provenance was NOT generated (no provenance path set)
-	// In the old implementation, provenance would be generated during packaging
-	// Now it should only be generated in the sign command (Phase 1, Step 3)
-	// The workflow should complete without errors, but without provenance generation
-
-	// Check that manifest was created (packaging succeeded)
-	if pf.ManifestPath() == "" {
-		t.Error("expected manifest to be created")
+	// Packaging itself succeeded...
+	if _, err := os.Stat(pf.ManifestPath()); err != nil {
+		t.Errorf("manifest not written: %v", err)
 	}
 
-	// The test passes if we get here without provenance being generated
-	// The absence of a ProvenancePath method means provenance is not part of package workflow
-	t.Log("Packaging completed without provenance generation (as expected for issue #88)")
+	// ...but no attestation was written where the old package step put it
+	// (nor where the sign step puts it), and none was attached in the registry.
+	for _, path := range []string{
+		filepath.Join(modelPath, "attestation.json"),
+		GetAttestationPath("test:v1"),
+		GetAttestationPath("ghcr.io/my-org/test:v1"),
+	} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Errorf("provenance attestation %s exists after packaging (stat error = %v); it belongs to the sign step", path, err)
+		}
+	}
+	if len(fake.referrers) != 0 {
+		t.Errorf("packaging attached %d referrer(s) to the artifact, want none", len(fake.referrers))
+	}
 }
