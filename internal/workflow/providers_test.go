@@ -1,7 +1,6 @@
 package workflow
 
 import (
-	"errors"
 	"os"
 	"testing"
 )
@@ -348,33 +347,6 @@ func TestAnnotationArgs(t *testing.T) {
 
 	if args := annotationArgs(nil); len(args) != 0 {
 		t.Errorf("annotationArgs(nil) = %v, want empty", args)
-	}
-}
-
-// TestModelPackProviderIsNotImplemented verifies every ModelPack registry
-// operation fails with ErrNotImplemented instead of pretending to succeed.
-func TestModelPackProviderIsNotImplemented(t *testing.T) {
-	p, err := GetRegistryProvider("modelpack")
-	if err != nil {
-		t.Fatalf("GetRegistryProvider(\"modelpack\") error = %v", err)
-	}
-
-	ops := map[string]func() error{
-		"Push": func() error {
-			_, err := p.Push("my-model:v1", "ghcr.io/my-org", t.TempDir(), NewAnnotationSet().ToMap())
-			return err
-		},
-		"Pull":                     func() error { return p.Pull("my-model:v1", "ghcr.io/my-org") },
-		"GetArtifactDigest":        func() error { _, err := p.GetArtifactDigest("my-model:v1", "ghcr.io/my-org"); return err },
-		"PushReferrer":             func() error { return p.PushReferrer("my-model:v1", "ghcr.io/my-org", "t", nil, nil) },
-		"GetReferrers":             func() error { _, err := p.GetReferrers("my-model:v1", "ghcr.io/my-org", "t"); return err },
-		"Search":                   func() error { _, err := p.Search("ghcr.io/my-org", NewSearchQuery()); return err },
-		"FetchManifestAnnotations": func() error { _, err := p.FetchManifestAnnotations("ghcr.io/my-org/my-model:v1"); return err },
-	}
-	for name, op := range ops {
-		if err := op(); !errors.Is(err, ErrNotImplemented) {
-			t.Errorf("%s() error = %v, want ErrNotImplemented", name, err)
-		}
 	}
 }
 

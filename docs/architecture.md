@@ -101,17 +101,17 @@ The Enterprise OCI Registry Integration (Phase 2) follows a **decoupled handoff 
 │                    Registry Provider Interface                    │
 ├─────────────────────────────────────────────────────────────────┤
 │  - ORAS Provider (full implementation)                           │
-│  - ModelPack Provider (stub implementation)                     │
+│  - ModelPack Provider (modctl build/push, ORAS for the rest)    │
 │  - Methods: Push, Pull, Search, GetArtifactDigest, etc.          │
 └─────────────────────┬───────────────────────────────────────────┘
                       │
         ┌─────────────┴─────────────┐
         ▼                           ▼
 ┌───────────────────┐    ┌─────────────────────┐
-│      ORAS CLI     │    │    ModelPack CLI     │
-│  - oras push      │    │  - modelpack push    │
-│  - oras pull      │    │  - modelpack pull    │
-│  - oras discover  │    │  - (stub) search     │
+│      ORAS CLI     │    │  ModelPack (modctl)  │
+│  - oras push      │    │  - modctl build/push │
+│  - oras pull      │    │  - modctl pull       │
+│  - oras discover  │    │  - reads via oras    │
 │  - oras repo ls   │    │                      │
 └───────────────────┘    └─────────────────────┘
         │                           │
