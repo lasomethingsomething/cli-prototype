@@ -14,6 +14,7 @@ func TestNewManifestFromDirectory(t *testing.T) {
 		"model.safetensors":   "weights-bytes",
 		"tokenizer/vocab.txt": "vocab",
 		"manifest.json":       "{}", // written by model-cli: must be skipped
+		"config.json":         "{}", // written by model-cli: must be skipped
 		"attestation.json":    "{}", // written by model-cli: must be skipped
 		"sbom.spdx-json":      "{}", // written by model-cli: must be skipped
 	}
@@ -75,6 +76,25 @@ func TestNewManifestFromDirectory(t *testing.T) {
 
 	if err := ValidateOCIManifest(m); err != nil {
 		t.Errorf("ValidateOCIManifest() error = %v", err)
+	}
+}
+
+// TestLayersFromDirectorySkipsGeneratedFiles pins the set of files model-cli
+// writes next to the model: none of them may become a layer, so packaging a
+// directory that was packaged before yields the same layers.
+func TestLayersFromDirectorySkipsGeneratedFiles(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"weights.bin", "manifest.json", "config.json", "attestation.json", "sbom.spdx.json", "sbom.cyclonedx.json"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(name), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	layers, err := layersFromDirectory(dir)
+	if err != nil {
+		t.Fatalf("layersFromDirectory() error = %v", err)
+	}
+	if len(layers) != 1 || layers[0].Annotations["org.opencontainers.image.title"] != "weights.bin" {
+		t.Errorf("layers = %+v, want only weights.bin", layers)
 	}
 }
 

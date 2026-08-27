@@ -39,10 +39,115 @@ func TestORASPushUploadsSourcePathWithAnnotations(t *testing.T) {
 	if cwd != filepath.Dir(modelDir) {
 		t.Errorf("oras ran in %q, want the model's parent directory %q", cwd, filepath.Dir(modelDir))
 	}
+	// No config.json/manifest.json in the source: no --config is passed.
 	want := "push ghcr.io/my-org/my-model:v1 --artifact-type application/vnd.cncf.ai.model --format json " +
 		"--annotation org.cncf.ai.artifact.type=model --annotation org.cncf.ai.runtime=vllm my-model"
 	if args != want {
 		t.Errorf("oras args =\n  %s\nwant\n  %s", args, want)
+	}
+}
+
+// packagedModelDir returns a model directory with manifest.json and
+// config.json as written by `package`, with the given artifact type.
+func packagedModelDir(t *testing.T, artifactType ArtifactType) string {
+	t.Helper()
+	modelDir := filepath.Join(t.TempDir(), "my-model")
+	if err := os.MkdirAll(modelDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(modelDir, "model.txt"), []byte("weights"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	m, err := NewManifestFromDirectory(artifactType, "my-model:v1", modelDir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteUnifiedOCIManifest(m, filepath.Join(modelDir, "manifest.json")); err != nil {
+		t.Fatal(err)
+	}
+	return modelDir
+}
+
+func TestORASPushAttachesConfigBlob(t *testing.T) {
+	for _, tc := range []struct {
+		artifactType  ArtifactType
+		wantMediaType string
+	}{
+		{ArtifactTypeModel, AIModelConfigMediaType},
+		{ArtifactTypeSkill, AISkillConfigMediaType},
+		{ArtifactTypePipeline, AIPipelineConfigMediaType},
+	} {
+		t.Run(string(tc.artifactType), func(t *testing.T) {
+			calls := installFakeOras(t, "", 0)
+			modelDir := packagedModelDir(t, tc.artifactType)
+
+			_, err := (&ORASProvider{}).Push("my-model:v1", "ghcr.io/my-org", modelDir, map[string]string{
+				AnnotationArtifactType: string(tc.artifactType),
+			})
+			if err != nil {
+				t.Fatalf("Push() error = %v", err)
+			}
+			got := calls()
+			if len(got) != 1 {
+				t.Fatalf("expected exactly one oras invocation, got %d: %v", len(got), got)
+			}
+			cwd, args, _ := strings.Cut(got[0], "\t")
+			if cwd != filepath.Dir(modelDir) {
+				t.Errorf("oras ran in %q, want the model's parent directory %q", cwd, filepath.Dir(modelDir))
+			}
+			// The config path is relative to the parent directory ORAS runs
+			// in, like the source itself, and typed with the manifest's
+			// config media type.
+			want := "push ghcr.io/my-org/my-model:v1 --artifact-type application/vnd.cncf.ai." + string(tc.artifactType) +
+				" --format json --annotation org.cncf.ai.artifact.type=" + string(tc.artifactType) +
+				" --config my-model/config.json:" + tc.wantMediaType + " my-model"
+			if args != want {
+				t.Errorf("oras args =\n  %s\nwant\n  %s", args, want)
+			}
+		})
+	}
+}
+
+func TestORASPushSkipsConfigBlobWithoutManifest(t *testing.T) {
+	calls := installFakeOras(t, "", 0)
+
+	// A model directory that ships its own config.json (as Hugging Face
+	// models do) but was not packaged: nothing says what the blob is.
+	modelDir := filepath.Join(t.TempDir(), "my-model")
+	if err := os.MkdirAll(modelDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(modelDir, "config.json"), []byte(`{"hidden_size":128}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := (&ORASProvider{}).Push("my-model:v1", "ghcr.io/my-org", modelDir, nil); err != nil {
+		t.Fatalf("Push() error = %v", err)
+	}
+	_, args, _ := strings.Cut(calls()[0], "\t")
+	if strings.Contains(args, "--config") {
+		t.Errorf("oras args = %q, want no --config without a manifest.json", args)
+	}
+}
+
+func TestORASPushRejectsUnreadableManifestNextToConfigBlob(t *testing.T) {
+	calls := installFakeOras(t, "", 0)
+
+	modelDir := filepath.Join(t.TempDir(), "my-model")
+	if err := os.MkdirAll(modelDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	for name, content := range map[string]string{"config.json": "{}", "manifest.json": "not json"} {
+		if err := os.WriteFile(filepath.Join(modelDir, name), []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if _, err := (&ORASProvider{}).Push("my-model:v1", "ghcr.io/my-org", modelDir, nil); err == nil {
+		t.Fatal("Push() should fail when manifest.json next to config.json cannot be read")
+	}
+	if len(calls()) != 0 {
+		t.Errorf("oras should not be invoked, got %v", calls())
 	}
 }
 

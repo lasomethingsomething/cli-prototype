@@ -156,7 +156,7 @@ Standards: [OCI Image Spec](https://specs.opencontainers.org/image-spec/), [OCI 
 Honest list of what is scaffolding today:
 
 - **ModelPack provider is not implemented** - tool detection works, but every registry operation returns a clear `not implemented` error. Use `--registry oras`.
-- **The local `manifest.json` is a preview** - it has real layer descriptors (digest, size, title per file) and the annotations, but the AI config is inlined (`aiConfig`) rather than stored as a separate blob. On push, ORAS assembles the manifest the registry stores; the annotations are passed to it.
+- **The AI config is still also inlined in the local `manifest.json`** - `package` writes the AI config to `config.json` next to the manifest and pushes it as the manifest's config blob, so the registry's config descriptor (digest, size, media type) is the one in the local manifest. The same config is still inlined as `aiConfig` for readers of the local file (`enforce`, `validate`, admission checks); those do not yet read the blob back from the registry, which is pending (#84).
 - **No published binaries yet**; build from source or tag a release.
 
 ## Development
