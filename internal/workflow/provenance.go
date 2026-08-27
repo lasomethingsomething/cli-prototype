@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -327,6 +328,32 @@ func GetAttestationPath(artifactName string) string {
 	// For local artifacts, store alongside the manifest
 	// For remote artifacts, this would be stored in the registry as a referrer
 	return artifactName + ".provenance.json"
+}
+
+// Recipe types identify which command produced a provenance attestation.
+// Each command that attests an artifact records its own recipe:
+//
+//   - RecipePush is recorded by `model-cli push`, which uploads a model and
+//     attaches provenance describing that upload in the same run.
+//   - RecipeSign is recorded by `model-cli sign`, the separate Phase 1, Step 3
+//     (Supply Chain Check) that follows `model-cli package` and attests the
+//     finished, signed artifact.
+//
+// An artifact that was pushed and later signed carries both, as two referrers.
+const (
+	RecipePush = "https://model-cli.dev/recipe/push/v1"
+	RecipeSign = "https://model-cli.dev/recipe/sign/v1"
+)
+
+// DigestMap converts a digest string such as "sha256:abc..." into the
+// {algorithm: hex} form used for provenance subjects and materials. It
+// returns nil for an empty or malformed digest.
+func DigestMap(digest string) map[string]string {
+	algo, hex, ok := strings.Cut(digest, ":")
+	if !ok || algo == "" || hex == "" {
+		return nil
+	}
+	return map[string]string{algo: hex}
 }
 
 // ValidateAttestation validates a provenance attestation structure

@@ -168,21 +168,11 @@ OCI Annotations (CNCF AI Interoperability Profile):
  Saved locally (not pushed to registry)
   Artifact ready at: test:v1
 
-=== Provenance ===
-→ Generating SLSA provenance attestation...
- Provenance attestation generated: /Users/lauriapple/test-model/attestation.json
-  Attestation contains:
-    - Build ID: model-cli-1787479108160164000
-    - Build Type: https://model-cli.dev/build/v1
-    - Builder: model-cli
-    - Source: /Users/lauriapple/test-model
-    - Timestamp: 2026-08-23T09:58:28Z
-
 === Summary ===
 Packaging complete!
 
 Next steps:
-  - Sign with: model-cli sign --artifact test:v1
+  - Sign and record provenance with: model-cli sign --artifact test:v1
   - Verify with: model-cli verify --artifact test:v1
   - Deploy with: model-cli deploy
 ```
@@ -280,7 +270,7 @@ In 5 minutes, with just a text file as a "model", you:
 1.  Built the CLI from source
 2.  Packaged a model as an OCI artifact
 3.  Injected 10+ standardized annotations
-4.  Generated provenance attestation
+4.  Were pointed to the next step, `model-cli sign`, which signs the artifact and records its provenance
 5.  Saw clear, actionable error messages
 6.  Produced a valid manifest any tool can read
 

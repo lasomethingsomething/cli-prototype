@@ -17,23 +17,17 @@ This command helps you package models, prompts, RAG context, or agentic skills
 (conforming to agentskills.io standard format) into a single OCI artifact that can be
 stored in registries and deployed anywhere. No specific tool requirement - uses OCI Image Spec standard.
 
-The command also supports automatic signing at the point of creation using
-multiple signing tools for supply chain security, and generates SLSA provenance
-attestations by default for immutable provenance tracking.
-
 Supported registry tools (mutually exclusive):
 ` + workflow.RegistryOptions().Bullets() + `
 
 Harbor and other OCI registries are used through oras:
 --registry oras --registry-url <harbor-host>/<project>
 
-Supported signing tools (mutually exclusive):
-` + workflow.SignerOptions().Bullets() + `
-
-Note: KubeFlow = platform (not registry). SPIFFE/SPIRE = identity (not signing).
-
 SBOM generation and MOF classification are a separate step: run
 'model-cli harden' on the same --model-path after packaging.
+
+Signing and SLSA provenance are also a separate step that runs afterwards
+(Phase 1, Step 3: Supply Chain Check): see 'model-cli sign'.
 
 Examples:
   # Package a model
@@ -44,19 +38,13 @@ Examples:
   model-cli package --model my-skill --model-path ./skills/my-skill --skill
   model-cli package --skill --model-path ./my-skill --artifact my-org/my-skill:v1
 
-  # Package and sign automatically
-  model-cli package --model phi-4-mini --artifact my-model:latest --sign --signer cosign
-
-  # Package without provenance (disable with flag)
-  model-cli package --model phi-4-mini --artifact my-model:latest --generate-provenance=false`,
+  # Then sign and attest the packaged artifact
+  model-cli sign --artifact my-model:latest --signer cosign`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := config.Load()
 
 		// Get flags
 		isSkillFlag, _ := cmd.Flags().GetBool("skill")
-		signFlag, _ := cmd.Flags().GetBool("sign")
-		signerFlag, _ := cmd.Flags().GetString("signer")
-		provenanceFlag, _ := cmd.Flags().GetBool("generate-provenance")
 		// Node requirement flags for infrastructure orchestration (Story #68)
 		// Runtime execution flags for Story #69
 
@@ -170,17 +158,6 @@ Examples:
 		pf.SetAnnotations(annotations)
 		pf.SetIsSkill(isSkillFlag)
 
-		// Set signing options
-		// Determine signer: use flag, then config, then default to empty (the workflow falls back to the recommended signer)
-		signerToUse := signerFlag
-		if signerToUse == "" {
-			signerToUse = cfg.Signer
-		}
-		pf.SetSigningOptions(signFlag, signerToUse)
-
-		// Set provenance options (enabled by default, can be disabled with --generate-provenance=false)
-		pf.SetProvenanceOptions(provenanceFlag)
-
 		artifactType := "model"
 		if isSkillFlag {
 			artifactType = "skill"
@@ -214,7 +191,4 @@ func init() {
 	packageCmd.Flags().String("dlc-endpoint", "", "Reference Skill DLC endpoint URL")
 	packageCmd.Flags().String("skill-refs", "", "Comma-separated list of skill references")
 	packageCmd.Flags().Bool("skill", false, "Package as an agentic skill (agentskills.io format)")
-	packageCmd.Flags().Bool("sign", false, "Sign the artifact automatically after packaging")
-	packageCmd.Flags().String("signer", "", "Signing tool: "+workflow.SignerOptions().Summary()+" (default: "+workflow.SignerOptions().Recommended()+")")
-	packageCmd.Flags().Bool("generate-provenance", true, "Generate SLSA provenance attestation (default: true)")
 }
