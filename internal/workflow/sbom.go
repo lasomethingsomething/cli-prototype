@@ -22,6 +22,16 @@ const (
 	CycloneDXXML SBOMFormat = "cyclonedx-xml"
 )
 
+// AllSBOMFormats lists every format an SBOM can be generated in.
+var AllSBOMFormats = []SBOMFormat{SPDXJSON, SPDXTagValue, CycloneDXJSON, CycloneDXXML}
+
+// SBOMFileName returns the file name `harden` writes the SBOM to inside the
+// model directory, e.g. "sbom.spdx-json". `validate local` uses the same
+// rule to find it again.
+func SBOMFileName(format SBOMFormat) string {
+	return "sbom." + string(format)
+}
+
 // SBOMGenerator defines the interface for SBOM generation
 type SBOMGenerator interface {
 	Name() string
