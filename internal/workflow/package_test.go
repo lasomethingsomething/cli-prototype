@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -453,5 +454,101 @@ func TestSBOMFailureBlocksWorkflow(t *testing.T) {
 	// Verify the error message mentions SBOM is a prerequisite
 	if !strings.Contains(err.Error(), "SBOM") || !strings.Contains(err.Error(), "prerequisite") {
 		t.Errorf("expected error to mention SBOM prerequisite, got: %v", err)
+	}
+}
+
+// fakeSyft puts a shell script named "syft" first on PATH for the duration of
+// the test. It answers `syft version` successfully, so the real SyftGenerator
+// reaches Generate(); how the scan itself behaves is decided by scanScript,
+// which sees the arguments syft was called with.
+func fakeSyft(t *testing.T, scanScript string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("fake syft is a shell script")
+	}
+	dir := t.TempDir()
+	script := "#!/bin/sh\nif [ \"$1\" = version ]; then echo v0.0.0-fake; exit 0; fi\n" + scanScript + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "syft"), []byte(script), 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+// TestSBOMGenerateFailureBlocksWorkflow verifies that a failure inside the SBOM
+// generator itself (tool installed, scan fails) blocks the workflow before the
+// manifest, push, and provenance steps (Issue #89).
+func TestSBOMGenerateFailureBlocksWorkflow(t *testing.T) {
+	fakeSyft(t, "echo 'boom' >&2; exit 1")
+
+	modelPath := t.TempDir()
+	if err := os.WriteFile(filepath.Join(modelPath, "model.txt"), []byte("weights"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	fake := &fakeRegistryProvider{installed: true}
+	pf := &PackageWorkflow{
+		registry:           "fake",
+		registryProvider:   fake,
+		annotations:        NewAnnotationSet(),
+		generateSBOM:       true,
+		includeMOF:         true,
+		sbomTool:           "syft",
+		sbomFormat:         SPDXJSON,
+		generateProvenance: true,
+	}
+	pf.SetPackageInfo("test-model", modelPath, "test:v1", "registry.example.com", false, "")
+
+	err := pf.Run()
+	if err == nil {
+		t.Fatal("expected SBOM generation failure to block workflow, got nil")
+	}
+	if !strings.Contains(err.Error(), "syft generation failed") || !strings.Contains(err.Error(), "prerequisite") {
+		t.Errorf("error = %v, want SBOM generation failure naming the prerequisite", err)
+	}
+
+	// Nothing after the SBOM step ran.
+	if fake.pushCalled {
+		t.Error("artifact was pushed despite SBOM failure")
+	}
+	if pf.ManifestPath() != "" || pf.ProvenancePath() != "" {
+		t.Errorf("manifest %q / provenance %q were produced despite SBOM failure", pf.ManifestPath(), pf.ProvenancePath())
+	}
+	for _, name := range []string{"manifest.json", "attestation.json", "sbom.spdx-json"} {
+		if _, err := os.Stat(filepath.Join(modelPath, name)); err == nil {
+			t.Errorf("%s was written despite SBOM failure", name)
+		}
+	}
+}
+
+// TestSBOMGenerateSuccessContinuesWorkflow is the counterpart: when the SBOM
+// generator succeeds the workflow carries on and the SBOM sits next to the model.
+func TestSBOMGenerateSuccessContinuesWorkflow(t *testing.T) {
+	fakeSyft(t, `while [ $# -gt 0 ]; do if [ "$1" = --file ]; then echo '{"spdxVersion":"SPDX-2.3"}' > "$2"; fi; shift; done`)
+
+	modelPath := t.TempDir()
+	if err := os.WriteFile(filepath.Join(modelPath, "model.txt"), []byte("weights"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	fake := &fakeRegistryProvider{installed: true}
+	pf := &PackageWorkflow{
+		registry:         "fake",
+		registryProvider: fake,
+		annotations:      NewAnnotationSet(),
+		generateSBOM:     true,
+		includeMOF:       false,
+		sbomTool:         "syft",
+		sbomFormat:       SPDXJSON,
+	}
+	pf.SetPackageInfo("test-model", modelPath, "test:v1", "", false, "")
+
+	if err := pf.Run(); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(modelPath, "sbom.spdx-json")); err != nil {
+		t.Errorf("SBOM not written next to the model: %v", err)
+	}
+	if pf.ManifestPath() == "" {
+		t.Error("manifest was not written after a successful SBOM step")
 	}
 }
