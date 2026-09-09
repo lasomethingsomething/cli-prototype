@@ -397,13 +397,13 @@ Examples:
 			signerTool := cfg.Signer
 			if err := huh.NewSelect[string]().
 				Title("Which signing approach should the wizard demonstrate?").
-				Description(infoStyle.Render("Cosign: Sigstore | Notary v2: notation; use model-cli sign for execution")).
 				Options(toolOptions(workflow.SignerOptions())...).
 				Value(&signerTool).
 				Run(); err != nil {
 				return err
 			}
 			cfg.Signer = signerTool
+			fmt.Printf("To execute this step outside the wizard: model-cli sign --artifact %s --signer %s\n", fullArtifact, cfg.Signer)
 
 			sp, err := workflow.GetSigningProvider(cfg.Signer)
 			if err != nil {
@@ -547,7 +547,6 @@ Examples:
 			gitOpsTool := cfg.GitOps
 			if err := huh.NewSelect[string]().
 				Title("How would you like to promote the artifact?").
-				Description(infoStyle.Render("Flux: agent-based automation | Argo CD: UI-based workflows")).
 				Options(toolOptions(workflow.GitOpsOptions())...).
 				Value(&gitOpsTool).
 				Run(); err != nil {
@@ -739,8 +738,36 @@ func inspectWizardManifest(modelPath, artifact, registry, destination string) er
 		}
 		fmt.Printf("Inspecting published manifest at %s/%s...\n", destination, artifact)
 	}
-	fmt.Printf("  Found %d manifest annotation(s)\n", len(annotations))
+	fmt.Printf("  %s\n", summarizeManifest(annotations))
+	if destination == "" {
+		fmt.Printf("  Inspect details: cat %s\n", filepath.Join(modelPath, "manifest.json"))
+	} else {
+		fmt.Printf("  Inspect details: oras manifest fetch %s/%s\n", destination, artifact)
+	}
 	return nil
+}
+
+func summarizeManifest(annotations map[string]string) string {
+	parts := []string{"Manifest includes"}
+	if artifactType := annotations[workflow.AnnotationArtifactType]; artifactType != "" {
+		parts = append(parts, artifactType+" artifact metadata")
+	}
+	if format := annotations[workflow.AnnotationPackagingFormat]; format != "" {
+		parts = append(parts, format+" packaging")
+	}
+	if sbom := annotations[workflow.AnnotationSBOMFormat]; sbom != "" {
+		parts = append(parts, sbom+" SBOM metadata")
+	}
+	if mofClass := annotations[workflow.AnnotationMOFClass]; mofClass != "" {
+		parts = append(parts, "MOF Class "+mofClass)
+	}
+	if runtime := annotations[workflow.AnnotationRuntime]; runtime != "" {
+		parts = append(parts, runtime+" runtime requirements")
+	}
+	if len(parts) == 1 {
+		return "Manifest retrieved; no recognized Model CLI annotations found."
+	}
+	return strings.Join(parts, ", ") + "."
 }
 
 // expandHomePath expands the home-directory shorthand that shells normally

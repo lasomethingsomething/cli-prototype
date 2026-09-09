@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/lasomethingsomething/cli-prototype/internal/workflow"
 )
 
 func TestExpandHomePath(t *testing.T) {
@@ -144,6 +146,21 @@ func TestWizardManifestInstructions(t *testing.T) {
 		}
 		if !found {
 			t.Errorf("instructions = %v, want %q", instructions, want)
+		}
+	}
+}
+
+func TestSummarizeManifest(t *testing.T) {
+	summary := summarizeManifest(map[string]string{
+		workflow.AnnotationArtifactType:    "model",
+		workflow.AnnotationPackagingFormat: "oci",
+		workflow.AnnotationSBOMFormat:      "spdx-json",
+		workflow.AnnotationMOFClass:        "III",
+		workflow.AnnotationRuntime:         "vllm",
+	})
+	for _, want := range []string{"model artifact metadata", "oci packaging", "spdx-json SBOM metadata", "MOF Class III", "vllm runtime requirements"} {
+		if !strings.Contains(summary, want) {
+			t.Errorf("summary = %q, want %q", summary, want)
 		}
 	}
 }
