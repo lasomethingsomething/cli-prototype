@@ -199,7 +199,7 @@ Examples:
 		fmt.Println()
 
 		// Show interactive context panel with current progress
-		ctxModel.SetStep(1)
+		ctxModel.SetStep(2)
 		ctxModel.SetModelInfo(modelName, modelPath, artifactName)
 		displayInteractiveContext(ctxModel, "Press Enter to package your model locally.")
 
@@ -239,7 +239,7 @@ Examples:
 		// In real implementation, would push to registry
 
 		// Update context model
-		ctxModel.SetStep(2)
+		ctxModel.SetStep(3)
 		ctxModel.SetResults(packageSucceeded, false, false, false)
 		ctxModel.AddLog(fmt.Sprintf("Packaged artifact: %s", artifactName))
 		fmt.Println()
@@ -289,7 +289,7 @@ Examples:
 			fmt.Println(infoStyle.Render("Hardening skipped because packaging did not complete."))
 		}
 
-		ctxModel.SetStep(3)
+		ctxModel.SetStep(4)
 		ctxModel.SetResults(packageSucceeded, false, false, false)
 		ctxModel.AddLog("Hardening completed")
 		fmt.Println()
@@ -337,7 +337,7 @@ Examples:
 		}
 
 		// Update context model
-		ctxModel.SetStep(4)
+		ctxModel.SetStep(5)
 		ctxModel.AddLog("Compliance check completed")
 		if checkSucceeded {
 			ctxModel.AddLog("All checks passed")
@@ -427,7 +427,7 @@ Examples:
 		}
 		cfg.Registry = registryTool
 		ctxModel.SetConfig(cfg.Registry, cfg.GitOps, cfg.Signer, "")
-		ctxModel.SetStep(7)
+		ctxModel.SetStep(8)
 		nextAction = "Press Enter to start GitOps promotion."
 		if skipDeploy {
 			nextAction = "Press Enter to finish the wizard."
