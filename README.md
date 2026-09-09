@@ -154,13 +154,15 @@ local `~/test-model/manifest.json` instead.
 
 Without a cluster, the wizard simulates the GitOps admission and policy stage.
 With a cluster, it asks for the Git repository URL and manifest path, then
-invokes the selected Flux or Argo CD client.
+invokes the selected Flux or Argo CD client. Press Enter at the next context
+panel to continue to infrastructure orchestration.
 
 #### Step 6: Infrastructure & Resource Orchestration
 
 The wizard simulates how Kubernetes would match the artifact's declared
 accelerator, CUDA, memory, GPU, and vRAM requirements to cluster nodes. With a
-cluster, use `model-cli validate nodes` for the actual node check.
+cluster, use `model-cli validate nodes` for the actual node check. Press Enter
+at the next context panel to continue to runtime execution.
 
 #### Step 7: Runtime Execution & Optimization
 

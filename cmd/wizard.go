@@ -27,6 +27,7 @@ type wizardResult struct {
 	publishDestination string
 	deploySucceeded    bool
 	modelName          string
+	artifactName       string
 	signer             string
 	gitOps             string
 	skipSigning        bool
@@ -81,7 +82,18 @@ func wizardCompletionMessage(r wizardResult) string {
 	if r.deploySucceeded {
 		return "Your model is deployed and ready for production."
 	}
+	if r.publishSucceeded {
+		return "Your artifact is published and ready for signing or deployment."
+	}
 	return "Your local artifact is ready to sign, publish, and deploy when you are."
+}
+
+func wizardManifestInstructions(modelPath string, r wizardResult) []string {
+	instructions := []string{fmt.Sprintf("Local manifest: cat %s", filepath.Join(modelPath, "manifest.json"))}
+	if r.publishSucceeded {
+		instructions = append(instructions, fmt.Sprintf("Published manifest: oras manifest fetch %s/%s", r.publishDestination, r.artifactName))
+	}
+	return instructions
 }
 
 // Styling for clean, uncluttered TUI
@@ -617,16 +629,23 @@ Examples:
 		}
 
 		if !skipDeploy {
+			ctxModel.SetStep(6)
+			displayInteractiveContext(ctxModel, "Press Enter to continue to infrastructure and resource orchestration.")
+			fmt.Println()
+
 			fmt.Println()
 			fmt.Println(stepStyle.Render("Step 6: Infrastructure & Resource Orchestration"))
 			fmt.Println("Simulated: Kubernetes would match the artifact's accelerator, CUDA, memory, GPU, and vRAM annotations to available nodes.")
+
+			ctxModel.SetStep(7)
+			displayInteractiveContext(ctxModel, "Press Enter to continue to runtime execution and optimization.")
+			fmt.Println()
 
 			fmt.Println()
 			fmt.Println(stepStyle.Render("Step 7: Runtime Execution & Optimization"))
 			runtimeTool := cfg.Runtime
 			if err := huh.NewSelect[string]().
 				Title("Which runtime should serve the artifact?").
-				Description(infoStyle.Render("vLLM: high-throughput inference | KServe: Kubernetes-native serving")).
 				Options(toolOptions(workflow.RuntimeOptions())...).
 				Value(&runtimeTool).
 				Run(); err != nil {
@@ -653,6 +672,7 @@ Examples:
 			publishDestination: publishDestination,
 			deploySucceeded:    deploySucceeded,
 			modelName:          modelName,
+			artifactName:       artifactName,
 			signer:             cfg.Signer,
 			gitOps:             cfg.GitOps,
 			skipSigning:        skipSigning,
@@ -661,6 +681,11 @@ Examples:
 		}
 		for _, line := range buildSummaryLines(result) {
 			fmt.Printf("  %s\n", line)
+		}
+		fmt.Println()
+		fmt.Println("Inspect the manifest:")
+		for _, instruction := range wizardManifestInstructions(modelPath, result) {
+			fmt.Printf("  %s\n", instruction)
 		}
 		fmt.Println()
 		fmt.Println(infoStyle.Render(wizardCompletionMessage(result)))

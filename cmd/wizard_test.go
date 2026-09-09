@@ -127,4 +127,23 @@ func TestWizardCompletionMessage(t *testing.T) {
 	if got := wizardCompletionMessage(wizardResult{deploySucceeded: true}); !strings.Contains(got, "ready for production") {
 		t.Errorf("deployed completion message = %q", got)
 	}
+	if got := wizardCompletionMessage(wizardResult{publishSucceeded: true}); !strings.Contains(got, "published") {
+		t.Errorf("published completion message = %q", got)
+	}
+}
+
+func TestWizardManifestInstructions(t *testing.T) {
+	result := wizardResult{artifactName: "test:v1", publishSucceeded: true, publishDestination: "localhost:5000"}
+	instructions := wizardManifestInstructions("/tmp/test-model", result)
+	for _, want := range []string{"cat /tmp/test-model/manifest.json", "oras manifest fetch localhost:5000/test:v1"} {
+		found := false
+		for _, instruction := range instructions {
+			if strings.Contains(instruction, want) {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("instructions = %v, want %q", instructions, want)
+		}
+	}
 }
