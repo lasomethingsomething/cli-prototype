@@ -1,6 +1,6 @@
 # Model CLI
 
-**Your tour guide through the secure ML model deployment journey.**
+**Your tour guide through the CNCF's "[Cloud Native and OCI Compliant Inner-Loop Tooling & Packaging for AI Engineers](https://github.com/cncf/toc/issues/1740)" initiative.**
 
 ## What is this, in plain words?
 
