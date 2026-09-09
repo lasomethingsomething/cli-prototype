@@ -91,6 +91,28 @@ The completed local artifact contains:
 The wizard runs hardening after packaging and before the compliance gate.
 `harden` remains available when you need to rerun that stage independently.
 
+### Optional: Publish To A Local Registry
+
+To demonstrate the publish step without an account or cloud registry, run the
+open-source OCI Distribution Registry with Podman. This is separate from the
+wizard because it installs and starts machine-level software.
+
+```bash
+brew install podman
+podman machine init       # first time only
+podman machine start
+podman run -d --rm --name model-cli-registry -p 5000:5000 registry:2
+curl http://localhost:5000/v2/
+```
+
+Run the wizard again. At the publish prompts, choose `Yes`, `a local Podman
+registry at localhost:5000`, and `oras (recommended)`. The wizard verifies the
+local registry before it pushes `test:v1`. Stop it after the test:
+
+```bash
+podman stop model-cli-registry
+```
+
 ### Non-Interactive Package And Harden
 
 For CI or scripts, pass every required choice as a flag. This produces the same

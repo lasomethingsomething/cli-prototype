@@ -26,9 +26,10 @@ type PackageWorkflow struct {
 	isSkill          bool
 
 	// Local parity verification
-	localDigest  string // digest of the manifest written locally
-	pushedDigest string // digest the registry tool reported after pushing
-	verifyParity bool
+	localDigest   string // digest of the manifest written locally
+	pushedDigest  string // digest the registry tool reported after pushing
+	verifyParity  bool
+	showNextSteps bool
 }
 
 // NewPackageWorkflow creates a new packaging workflow
@@ -43,6 +44,7 @@ func NewPackageWorkflow(registry string) (*PackageWorkflow, error) {
 		registryProvider: registryProvider,
 		annotations:      NewAnnotationSet(), // Default annotations
 		verifyParity:     true,               // Default to verifying the pushed digest
+		showNextSteps:    true,
 	}, nil
 }
 
@@ -91,6 +93,12 @@ func (w *PackageWorkflow) SetLocalDigest(digest string) {
 // SetVerifyParity enables or disables local parity verification
 func (w *PackageWorkflow) SetVerifyParity(verify bool) {
 	w.verifyParity = verify
+}
+
+// SetShowNextSteps controls the standalone follow-up instructions emitted
+// after packaging. Composite flows such as the wizard provide their own.
+func (w *PackageWorkflow) SetShowNextSteps(show bool) {
+	w.showNextSteps = show
 }
 
 // Run executes the packaging workflow
@@ -201,11 +209,13 @@ func (w *PackageWorkflow) Run() error {
 	fmt.Println("\n=== Summary ===")
 	fmt.Println("Packaging complete!")
 
-	fmt.Println("\nNext steps:")
-	fmt.Printf("  - Harden (SBOM + MOF) with: model-cli harden --model %s --model-path %s --artifact %s\n", w.modelName, w.modelPath, w.artifactName)
-	fmt.Println("  - Sign and record provenance with: model-cli sign --artifact " + fullArtifact)
-	fmt.Println("  - Verify with: model-cli verify --artifact " + fullArtifact)
-	fmt.Println("  - Deploy with: model-cli deploy")
+	if w.showNextSteps {
+		fmt.Println("\nNext steps:")
+		fmt.Printf("  - Harden (SBOM + MOF) with: model-cli harden --model %s --model-path %s --artifact %s\n", w.modelName, w.modelPath, w.artifactName)
+		fmt.Println("  - Sign and record provenance with: model-cli sign --artifact " + fullArtifact)
+		fmt.Println("  - Verify with: model-cli verify --artifact " + fullArtifact)
+		fmt.Println("  - Deploy with: model-cli deploy")
+	}
 
 	return nil
 }

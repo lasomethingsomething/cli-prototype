@@ -2,9 +2,11 @@ package cmd
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
@@ -17,17 +19,19 @@ import (
 )
 
 type wizardResult struct {
-	packageSucceeded bool
-	checkSucceeded   bool
-	signSucceeded    bool
-	verifySucceeded  bool
-	deploySucceeded  bool
-	modelName        string
-	signer           string
-	gitOps           string
-	skipSigning      bool
-	skipDeploy       bool
-	skipCheck        bool
+	packageSucceeded   bool
+	checkSucceeded     bool
+	signSucceeded      bool
+	verifySucceeded    bool
+	publishSucceeded   bool
+	publishDestination string
+	deploySucceeded    bool
+	modelName          string
+	signer             string
+	gitOps             string
+	skipSigning        bool
+	skipDeploy         bool
+	skipCheck          bool
 }
 
 func buildSummaryLines(r wizardResult) []string {
@@ -58,6 +62,11 @@ func buildSummaryLines(r wizardResult) []string {
 			lines = append(lines, "⚠ Verification tool not installed")
 		}
 	}
+	if r.publishSucceeded {
+		lines = append(lines, fmt.Sprintf("✓ Published to %s", r.publishDestination))
+	} else {
+		lines = append(lines, "⚠ Kept artifact local (not published)")
+	}
 	if r.skipDeploy {
 		lines = append(lines, "⚠ Skipped deployment")
 	} else if r.deploySucceeded {
@@ -66,6 +75,13 @@ func buildSummaryLines(r wizardResult) []string {
 		lines = append(lines, "⚠ Skipped deployment")
 	}
 	return lines
+}
+
+func wizardCompletionMessage(r wizardResult) string {
+	if r.deploySucceeded {
+		return "Your model is deployed and ready for production."
+	}
+	return "Your local artifact is ready to sign, publish, and deploy when you are."
 }
 
 // Styling for clean, uncluttered TUI
@@ -226,6 +242,7 @@ Examples:
 			if err != nil {
 				return err
 			}
+			pf.SetShowNextSteps(false)
 			pf.SetPackageInfo(modelName, modelPath, artifactName, "", includeRAG, ragPath)
 
 			if err := pf.Run(); err != nil {
@@ -420,6 +437,7 @@ Examples:
 		fmt.Println(stepStyle.Render("Publishing artifact"))
 		fmt.Println()
 		publishArtifact := false
+		publishDestination := ""
 		if err := huh.NewConfirm().
 			Title("Publish this artifact to an OCI registry?").
 			Description("Choose No to keep this test artifact on your computer.").
@@ -428,6 +446,18 @@ Examples:
 			return err
 		}
 		if publishArtifact {
+			var publishTarget string
+			if err := huh.NewSelect[string]().
+				Title("Where is the OCI registry?").
+				Options(
+					huh.NewOption("an existing OCI registry", "existing"),
+					huh.NewOption("a local Podman registry at localhost:5000", "local-podman"),
+				).
+				Value(&publishTarget).
+				Run(); err != nil {
+				return err
+			}
+
 			registryTool := cfg.Registry
 			if err := huh.NewSelect[string]().
 				Title("Which client should publish the artifact?").
@@ -440,12 +470,24 @@ Examples:
 			cfg.Registry = registryTool
 
 			var destination string
-			if err := huh.NewInput().
-				Title("Registry destination:").
-				Description("For example: ghcr.io/my-org or harbor.example.com/models").
-				Value(&destination).
-				Run(); err != nil {
-				return err
+			if publishTarget == "local-podman" {
+				if err := verifyLocalRegistry(); err != nil {
+					fmt.Println("\nStart a local registry with Podman, then run the wizard again:")
+					fmt.Println("  brew install podman")
+					fmt.Println("  podman machine init       # first time only")
+					fmt.Println("  podman machine start")
+					fmt.Println("  podman run -d --rm --name model-cli-registry -p 5000:5000 registry:2")
+					return fmt.Errorf("local OCI registry is unavailable at localhost:5000: %w", err)
+				}
+				destination = "localhost:5000"
+			} else {
+				if err := huh.NewInput().
+					Title("Registry destination:").
+					Description("For example: ghcr.io/my-org or harbor.example.com/models").
+					Value(&destination).
+					Run(); err != nil {
+					return err
+				}
 			}
 			if err := requireValues("destination", destination); err != nil {
 				return err
@@ -466,6 +508,7 @@ Examples:
 				return fmt.Errorf("failed to publish artifact: %w", err)
 			}
 			fmt.Printf("✓ Published %s to %s\n", artifactName, destination)
+			publishDestination = destination
 		} else {
 			fmt.Println(infoStyle.Render("Publishing skipped; the artifact remains local."))
 		}
@@ -575,27 +618,44 @@ Examples:
 		fmt.Println()
 		fmt.Println("You've successfully:")
 		result := wizardResult{
-			packageSucceeded: packageSucceeded,
-			checkSucceeded:   checkSucceeded,
-			signSucceeded:    signSucceeded,
-			verifySucceeded:  verifySucceeded,
-			deploySucceeded:  deploySucceeded,
-			modelName:        modelName,
-			signer:           cfg.Signer,
-			gitOps:           cfg.GitOps,
-			skipSigning:      skipSigning,
-			skipDeploy:       skipDeploy,
-			skipCheck:        skipCheck,
+			packageSucceeded:   packageSucceeded,
+			checkSucceeded:     checkSucceeded,
+			signSucceeded:      signSucceeded,
+			verifySucceeded:    verifySucceeded,
+			publishSucceeded:   publishDestination != "",
+			publishDestination: publishDestination,
+			deploySucceeded:    deploySucceeded,
+			modelName:          modelName,
+			signer:             cfg.Signer,
+			gitOps:             cfg.GitOps,
+			skipSigning:        skipSigning,
+			skipDeploy:         skipDeploy,
+			skipCheck:          skipCheck,
 		}
 		for _, line := range buildSummaryLines(result) {
 			fmt.Printf("  %s\n", line)
 		}
 		fmt.Println()
-		fmt.Println(infoStyle.Render("Your model is now ready for production!"))
+		fmt.Println(infoStyle.Render(wizardCompletionMessage(result)))
 		fmt.Println()
 
 		return nil
 	},
+}
+
+// verifyLocalRegistry checks that the local OCI Distribution API is ready
+// before the wizard attempts to push to it.
+func verifyLocalRegistry() error {
+	client := &http.Client{Timeout: 2 * time.Second}
+	response, err := client.Get("http://localhost:5000/v2/")
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("registry API returned %s", response.Status)
+	}
+	return nil
 }
 
 // expandHomePath expands the home-directory shorthand that shells normally

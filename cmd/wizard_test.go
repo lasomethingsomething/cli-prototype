@@ -39,17 +39,19 @@ func TestExpandHomePath(t *testing.T) {
 
 func TestBuildSummaryLines_AllSucceeded(t *testing.T) {
 	r := wizardResult{
-		packageSucceeded: true,
-		checkSucceeded:   true,
-		signSucceeded:    true,
-		verifySucceeded:  true,
-		deploySucceeded:  true,
-		modelName:        "phi-4-mini",
-		signer:           "sigstore",
-		gitOps:           "argo",
+		packageSucceeded:   true,
+		checkSucceeded:     true,
+		signSucceeded:      true,
+		verifySucceeded:    true,
+		publishSucceeded:   true,
+		publishDestination: "ghcr.io/my-org",
+		deploySucceeded:    true,
+		modelName:          "phi-4-mini",
+		signer:             "sigstore",
+		gitOps:             "argo",
 	}
 	lines := buildSummaryLines(r)
-	checks := []string{"✓ Packaged", "✓ Compliance check passed", "✓ Signed with sigstore", "✓ Verified", "✓ Deployed"}
+	checks := []string{"✓ Packaged", "✓ Compliance check passed", "✓ Signed with sigstore", "✓ Verified", "✓ Published to ghcr.io/my-org", "✓ Deployed"}
 	for i, want := range checks {
 		if i >= len(lines) {
 			t.Fatalf("expected at least %d lines, got %d", i+1, len(lines))
@@ -115,5 +117,14 @@ func TestBuildSummaryLines_SkipDeploy(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("expected a skipped-deployment warning, got: %v", lines)
+	}
+}
+
+func TestWizardCompletionMessage(t *testing.T) {
+	if got := wizardCompletionMessage(wizardResult{}); !strings.Contains(got, "local artifact") {
+		t.Errorf("local completion message = %q", got)
+	}
+	if got := wizardCompletionMessage(wizardResult{deploySucceeded: true}); !strings.Contains(got, "ready for production") {
+		t.Errorf("deployed completion message = %q", got)
 	}
 }
