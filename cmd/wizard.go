@@ -127,6 +127,7 @@ Examples:
 		// Initialize context model for interactive TUI
 		ctxModel := tui.NewContextModel()
 		ctxModel.SetStep(1)
+		ctxModel.SetSkippedSteps(skipSigning, skipDeploy)
 		ctxModel.SetConfig(cfg.Registry, cfg.GitOps, cfg.Signer, "")
 
 		// === Welcome Screen ===
@@ -344,7 +345,11 @@ Examples:
 		}
 
 		// Update context model
-		ctxModel.SetStep(5)
+		nextStep := 5
+		if skipSigning {
+			nextStep = 7
+		}
+		ctxModel.SetStep(nextStep)
 		ctxModel.AddLog("Compliance check completed")
 		if checkSucceeded {
 			ctxModel.AddLog("All checks passed")
@@ -434,7 +439,7 @@ Examples:
 		}
 		cfg.Registry = registryTool
 		ctxModel.SetConfig(cfg.Registry, cfg.GitOps, cfg.Signer, "")
-		ctxModel.SetStep(8)
+		ctxModel.SetStep(7)
 		nextAction = "Press Enter to start GitOps promotion."
 		if skipDeploy {
 			nextAction = "Press Enter to finish the wizard."

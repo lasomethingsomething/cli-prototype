@@ -43,6 +43,7 @@ type ContextModel struct {
 	SignSucceeded    bool
 	VerifySucceeded  bool
 	DeploySucceeded  bool
+	SkippedSteps     map[int]bool
 
 	// Logs
 	Logs []string
@@ -62,12 +63,13 @@ type ContextModel struct {
 // NewContextModel creates a new interactive context model
 func NewContextModel() *ContextModel {
 	return &ContextModel{
-		CurrentStep: 1,
-		TotalSteps:  8,
-		ActiveTab:   TabProgress,
-		Logs:        make([]string, 0),
-		width:       40,
-		height:      15,
+		CurrentStep:  1,
+		TotalSteps:   8,
+		ActiveTab:    TabProgress,
+		Logs:         make([]string, 0),
+		SkippedSteps: make(map[int]bool),
+		width:        40,
+		height:       15,
 	}
 }
 
@@ -188,22 +190,23 @@ func (m *ContextModel) renderProgressTab() string {
 	for i, step := range steps {
 		stepNumber := i + 1
 		symbol := "·"
-		if stepNumber < m.CurrentStep {
+		if m.SkippedSteps[stepNumber] {
+			symbol = "-"
+		} else if stepNumber < m.CurrentStep {
 			symbol = "✓"
-		}
-		if stepNumber == m.CurrentStep {
+		} else if stepNumber == m.CurrentStep {
 			symbol = "→"
-		}
-		if stepNumber > m.CurrentStep {
+		} else if stepNumber > m.CurrentStep {
 			symbol = "·"
 		}
 
 		// Color based on results
 		color := "#555555"
-		if stepNumber == m.CurrentStep {
+		if m.SkippedSteps[stepNumber] {
+			color = "#888888"
+		} else if stepNumber == m.CurrentStep {
 			color = "#55AAFF"
-		}
-		if stepNumber < m.CurrentStep {
+		} else if stepNumber < m.CurrentStep {
 			color = "#00FF88"
 		}
 
@@ -372,6 +375,18 @@ func (m *ContextModel) SetResults(packageSucceeded, signSucceeded, verifySucceed
 	m.SignSucceeded = signSucceeded
 	m.VerifySucceeded = verifySucceeded
 	m.DeploySucceeded = deploySucceeded
+}
+
+// SetSkippedSteps records stages that this wizard run intentionally omits.
+func (m *ContextModel) SetSkippedSteps(skipSigning, skipDeploy bool) {
+	m.SkippedSteps = make(map[int]bool)
+	if skipSigning {
+		m.SkippedSteps[5] = true
+		m.SkippedSteps[6] = true
+	}
+	if skipDeploy {
+		m.SkippedSteps[8] = true
+	}
 }
 
 // AddLog adds a log message

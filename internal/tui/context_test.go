@@ -173,3 +173,16 @@ func TestContextModelProgressMatchesWizardJourney(t *testing.T) {
 		t.Errorf("progress tab contains removed K8s setup stage:\n%s", output)
 	}
 }
+
+func TestContextModelProgressShowsSkippedStages(t *testing.T) {
+	model := NewContextModel()
+	model.SetSkippedSteps(true, true)
+	model.SetStep(7)
+	output := model.renderProgressTab()
+
+	for _, want := range []string{"- Sign", "- Verify", "→ Publish & Discovery", "- GitOps Promotion"} {
+		if !strings.Contains(output, want) {
+			t.Errorf("progress tab does not contain %q:\n%s", want, output)
+		}
+	}
+}
