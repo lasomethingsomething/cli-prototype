@@ -23,13 +23,33 @@ Model CLI packages, signs, verifies, and deploys ML models as OCI artifacts thro
 
 > **Status: prototype.** The workflow, annotation model, and validation commands are real. Some tool integrations are still placeholders — see [Known limitations](#known-limitations) before relying on any single step.
 
+## System Requirements
+
+For the macOS Quick Test Drive, install these prerequisites before starting the
+wizard:
+
+| Requirement | Why it is needed | Install or check |
+|-------------|------------------|------------------|
+| Go 1.23+ | Build Model CLI | `go version` |
+| Homebrew | Install the external tools | [brew.sh](https://brew.sh/) |
+| Current Xcode Command Line Tools | Required when Homebrew builds a dependency | System Settings > General > Software Update; if no update is offered, run `xcode-select --install` |
+| ORAS | Create OCI artifacts; recommended registry client | `brew install oras` |
+| Syft | Generate the SBOM required by local hardening | `brew install anchore/syft/syft` |
+| Podman (optional) | Run a local OCI registry without an account or cloud service | `brew install podman` |
+
+The publish demonstration uses Podman's Linux VM and the open-source OCI
+Distribution Registry at `localhost:5000`. It does not require Docker Desktop.
+
 ## Quick Test Drive (5 minutes)
 
-Try the CLI with a plain text file. No real model, registry, or GPU required.
+Try the complete local package, harden, compliance, and publish flow with a
+plain text file. No real model, registry account, or GPU is required.
 
 ### Interactive Wizard
 
-Build the CLI first. Choose the path that matches where you are starting.
+#### Before Step 1: Build And Prepare
+
+Choose the build path that matches where you are starting:
 
 ```bash
 # First-time user (requires Go 1.23+)
@@ -43,23 +63,35 @@ go build -o model-cli .
 go build -o model-cli .
 ```
 
-Create a harmless dummy model and install the tools needed to complete every
-local stage of the drive:
+From the `cli-prototype` directory, create the harmless dummy model and install
+the local package and hardening tools:
 
 ```bash
 mkdir -p ~/test-model
 echo "test" > ~/test-model/model.txt
-brew install oras  # OCI packaging (recommended)
-brew install anchore/syft/syft  # SBOM generation (recommended)
+brew install oras
+brew install anchore/syft/syft
 ```
 
-Start the wizard without signing or deployment:
+To include the optional publish demonstration, prepare the local registry before
+starting the wizard. Run `podman machine init` only the first time.
+
+```bash
+brew install podman
+podman machine init
+podman machine start
+podman run -d --rm --name model-cli-registry -p 5000:5000 registry:2
+curl http://localhost:5000/v2/
+```
+
+`{}` from `curl` means the local registry is ready. Start the wizard with
+signing and Kubernetes deployment skipped:
 
 ```bash
 ./model-cli wizard --skip-signing --skip-deploy
 ```
 
-For this dummy-model run, use these answers:
+#### Step 1: Develop & Package
 
 | Prompt | Answer |
 |--------|--------|
@@ -67,19 +99,35 @@ For this dummy-model run, use these answers:
 | Model path | `~/test-model` |
 | Artifact name | `test:v1` |
 | Include RAG context? | `No` |
+
+Press Enter at the context panel to package the model locally. This writes
+`manifest.json` and `config.json` to `~/test-model`.
+
+#### Step 2: Local Hardening & Compliance
+
+| Prompt | Answer |
+|--------|--------|
 | SBOM tool | `syft (recommended)` |
 | Model Openness Framework class | `auto (recommended)` |
-| Signing tool | Skipped by `--skip-signing` |
-| Publish artifact to an OCI registry? | `No` |
-| Kubernetes / GitOps | Skipped by `--skip-deploy` |
 
-The wizard packages the model, generates an SBOM, classifies MOF, and passes a
-local compliance gate. Choose `No` at the publish prompt to keep the dummy
-artifact local. When publishing a real artifact, choose `oras (recommended)`
-and enter an OCI destination such as `ghcr.io/my-org`; Harbor, GHCR, and zot
-are destinations for ORAS. `modelpack` is the alternative CNCF ModelPack
-option; KServe, Kubeflow, and TUF belong to serving or trust flows, not the
-registry choice.
+Press Enter to run the local compliance check after hardening completes. This
+generates the SBOM and MOF metadata, then checks both before the artifact can
+continue.
+
+#### Step 3: Supply Chain Check
+
+Signing is skipped by `--skip-signing`. At the publish prompt, use:
+
+| Prompt | Answer |
+|--------|--------|
+| Publish this artifact to an OCI registry? | `Yes` |
+| Where is the OCI registry? | `a local Podman registry at localhost:5000` |
+| Which client should publish the artifact? | `oras (recommended)` |
+
+The wizard verifies `localhost:5000` before it pushes `test:v1`. ORAS works
+with Harbor, GHCR, zot, and other OCI registries; those are destinations, not
+alternative clients. `modelpack` is the alternative CNCF ModelPack option.
+KServe and Kubeflow are serving platforms, and TUF is trust metadata.
 
 The completed local artifact contains:
 
@@ -88,26 +136,12 @@ The completed local artifact contains:
 - `~/test-model/mof.json` - the MOF metadata
 - the SBOM format and MOF class/components as annotations in `~/test-model/manifest.json`
 
-The wizard runs hardening after packaging and before the compliance gate.
-`harden` remains available when you need to rerun that stage independently.
+The current prototype does not yet run phases 4-7 of the journey (remote
+manifest validation, GitOps admission, infrastructure orchestration, and
+runtime execution) from this wizard. The standalone `validate`, `deploy`,
+`schedule`, and `serve` commands cover those surfaces as they mature.
 
-### Optional: Publish To A Local Registry
-
-To demonstrate the publish step without an account or cloud registry, run the
-open-source OCI Distribution Registry with Podman. This is separate from the
-wizard because it installs and starts machine-level software.
-
-```bash
-brew install podman
-podman machine init       # first time only
-podman machine start
-podman run -d --rm --name model-cli-registry -p 5000:5000 registry:2
-curl http://localhost:5000/v2/
-```
-
-Run the wizard again. At the publish prompts, choose `Yes`, `a local Podman
-registry at localhost:5000`, and `oras (recommended)`. The wizard verifies the
-local registry before it pushes `test:v1`. Stop it after the test:
+Stop the temporary local registry when the test is complete:
 
 ```bash
 podman stop model-cli-registry

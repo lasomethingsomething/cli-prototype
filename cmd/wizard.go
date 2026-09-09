@@ -474,7 +474,7 @@ Examples:
 				if err := verifyLocalRegistry(); err != nil {
 					fmt.Println("\nStart a local registry with Podman, then run the wizard again:")
 					fmt.Println("  brew install podman")
-					fmt.Println("  podman machine init       # first time only")
+					fmt.Println("  podman machine init")
 					fmt.Println("  podman machine start")
 					fmt.Println("  podman run -d --rm --name model-cli-registry -p 5000:5000 registry:2")
 					return fmt.Errorf("local OCI registry is unavailable at localhost:5000: %w", err)
