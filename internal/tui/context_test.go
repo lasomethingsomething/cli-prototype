@@ -164,7 +164,7 @@ func TestContextModelProgressMatchesWizardJourney(t *testing.T) {
 	model := NewContextModel()
 	output := model.renderProgressTab()
 
-	for _, want := range []string{"Step 1 of 8", "→ Model Details", "· Package", "· Harden", "· Publish & Discovery"} {
+	for _, want := range []string{"Step 1 of 7", "→ Develop & Package", "· Local Hardening & Compliance", "· Supply Chain Check", "· Runtime Execution & Optimization"} {
 		if !strings.Contains(output, want) {
 			t.Errorf("progress tab does not contain %q:\n%s", want, output)
 		}
@@ -177,10 +177,10 @@ func TestContextModelProgressMatchesWizardJourney(t *testing.T) {
 func TestContextModelProgressShowsSkippedStages(t *testing.T) {
 	model := NewContextModel()
 	model.SetSkippedSteps(true, true)
-	model.SetStep(7)
+	model.SetStep(3)
 	output := model.renderProgressTab()
 
-	for _, want := range []string{"- Sign", "- Verify", "→ Publish & Discovery", "- GitOps Promotion"} {
+	for _, want := range []string{"→ Supply Chain Check", "- GitOps Admission & Policy Enforcement", "- Infrastructure & Resource Orchestration", "- Runtime Execution & Optimization"} {
 		if !strings.Contains(output, want) {
 			t.Errorf("progress tab does not contain %q:\n%s", want, output)
 		}

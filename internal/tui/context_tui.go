@@ -64,7 +64,7 @@ type ContextModel struct {
 func NewContextModel() *ContextModel {
 	return &ContextModel{
 		CurrentStep:  1,
-		TotalSteps:   8,
+		TotalSteps:   7,
 		ActiveTab:    TabProgress,
 		Logs:         make([]string, 0),
 		SkippedSteps: make(map[int]bool),
@@ -186,7 +186,15 @@ func (m *ContextModel) renderProgressTab() string {
 
 	// Status of each step
 	sb.WriteString("Workflow Steps:\n")
-	steps := []string{"Model Details", "Package", "Harden", "Compliance", "Sign", "Verify", "Publish & Discovery", "GitOps Promotion"}
+	steps := []string{
+		"Develop & Package",
+		"Local Hardening & Compliance",
+		"Supply Chain Check",
+		"Manifest-Level Validation",
+		"GitOps Admission & Policy Enforcement",
+		"Infrastructure & Resource Orchestration",
+		"Runtime Execution & Optimization",
+	}
 	for i, step := range steps {
 		stepNumber := i + 1
 		symbol := "·"
@@ -380,12 +388,10 @@ func (m *ContextModel) SetResults(packageSucceeded, signSucceeded, verifySucceed
 // SetSkippedSteps records stages that this wizard run intentionally omits.
 func (m *ContextModel) SetSkippedSteps(skipSigning, skipDeploy bool) {
 	m.SkippedSteps = make(map[int]bool)
-	if skipSigning {
+	if skipDeploy {
 		m.SkippedSteps[5] = true
 		m.SkippedSteps[6] = true
-	}
-	if skipDeploy {
-		m.SkippedSteps[8] = true
+		m.SkippedSteps[7] = true
 	}
 }
 

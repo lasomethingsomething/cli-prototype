@@ -70,14 +70,16 @@ For this dummy-model run, use these answers:
 | SBOM tool | `syft (recommended)` |
 | Model Openness Framework class | `auto (recommended)` |
 | Signing tool | Skipped by `--skip-signing` |
-| Publish tool | `oras (recommended)` |
+| Publish artifact to an OCI registry? | `No` |
 | Kubernetes / GitOps | Skipped by `--skip-deploy` |
 
 The wizard packages the model, generates an SBOM, classifies MOF, and passes a
-local compliance gate. It does not ask for a registry URL or upload the dummy
-artifact. ORAS is the recommended OCI client for Harbor, GHCR, zot, and other
-OCI registries. `modelpack` is the alternative CNCF ModelPack option; KServe,
-Kubeflow, and TUF belong to serving or trust flows, not the registry choice.
+local compliance gate. Choose `No` at the publish prompt to keep the dummy
+artifact local. When publishing a real artifact, choose `oras (recommended)`
+and enter an OCI destination such as `ghcr.io/my-org`; Harbor, GHCR, and zot
+are destinations for ORAS. `modelpack` is the alternative CNCF ModelPack
+option; KServe, Kubeflow, and TUF belong to serving or trust flows, not the
+registry choice.
 
 The completed local artifact contains:
 

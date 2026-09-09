@@ -136,8 +136,8 @@ Examples:
 		fmt.Println(subtitleStyle.Render("Your guided journey from model to production"))
 		fmt.Println()
 
-		// === Step 1: Model Information ===
-		fmt.Println(stepStyle.Render("Step 1: Model Details"))
+		// === Step 1: Develop and package ===
+		fmt.Println(stepStyle.Render("Step 1: Develop & Package"))
 		fmt.Println()
 
 		var modelName string
@@ -200,12 +200,11 @@ Examples:
 		fmt.Println()
 
 		// Show interactive context panel with current progress
-		ctxModel.SetStep(2)
+		ctxModel.SetStep(1)
 		ctxModel.SetModelInfo(modelName, modelPath, artifactName)
 		displayInteractiveContext(ctxModel, "Press Enter to package your model locally.")
 
-		// === Step 2: Package (SBOM and MOF are the separate `harden` step) ===
-		fmt.Println(stepStyle.Render("Step 2: Package Model"))
+		fmt.Println(stepStyle.Render("Packaging model locally"))
 		fmt.Println()
 
 		// Check if registry provider is installed before attempting to package
@@ -240,7 +239,7 @@ Examples:
 		// In real implementation, would push to registry
 
 		// Update context model
-		ctxModel.SetStep(3)
+		ctxModel.SetStep(2)
 		ctxModel.SetResults(packageSucceeded, false, false, false)
 		ctxModel.AddLog(fmt.Sprintf("Packaged artifact: %s", artifactName))
 		fmt.Println()
@@ -248,8 +247,8 @@ Examples:
 
 		fmt.Println()
 
-		// === Step 3: Harden the local artifact ===
-		fmt.Println(stepStyle.Render("Step 3: Harden Artifact"))
+		// === Step 2: Harden and validate the local artifact ===
+		fmt.Println(stepStyle.Render("Step 2: Local Hardening & Compliance"))
 		fmt.Println()
 		if packageSucceeded {
 			sbomTool := workflow.SBOMToolOptions().Recommended()
@@ -297,7 +296,7 @@ Examples:
 			fmt.Println(infoStyle.Render("Hardening skipped because packaging did not complete."))
 		}
 
-		ctxModel.SetStep(4)
+		ctxModel.SetStep(2)
 		ctxModel.SetResults(packageSucceeded, false, false, false)
 		ctxModel.AddLog("Hardening completed")
 		fmt.Println()
@@ -305,8 +304,7 @@ Examples:
 
 		fmt.Println()
 
-		// === Step 4: Compliance Check (local) ===
-		fmt.Println(stepStyle.Render("Step 4: Compliance Check"))
+		fmt.Println(stepStyle.Render("Running local compliance check"))
 		fmt.Println()
 
 		// Run compliance check on the local artifact before push
@@ -345,11 +343,7 @@ Examples:
 		}
 
 		// Update context model
-		nextStep := 5
-		if skipSigning {
-			nextStep = 7
-		}
-		ctxModel.SetStep(nextStep)
+		ctxModel.SetStep(3)
 		ctxModel.AddLog("Compliance check completed")
 		if checkSucceeded {
 			ctxModel.AddLog("All checks passed")
@@ -368,9 +362,9 @@ Examples:
 
 		fmt.Println()
 
-		// === Step 5: Sign (unless skipped) ===
+		// === Step 3: Supply-chain check ===
 		if !skipSigning {
-			fmt.Println(stepStyle.Render("Step 5: Sign Artifact"))
+			fmt.Println(stepStyle.Render("Step 3: Supply Chain Check"))
 			fmt.Println()
 
 			signerTool := cfg.Signer
@@ -402,9 +396,8 @@ Examples:
 			fmt.Println()
 		}
 
-		// === Step 6: Verify (unless skipped) ===
 		if !skipSigning {
-			fmt.Println(stepStyle.Render("Step 6: Verify Signature"))
+			fmt.Println(stepStyle.Render("Verifying signature"))
 			fmt.Println()
 
 			sp, err := workflow.GetSigningProvider(cfg.Signer)
@@ -425,34 +418,73 @@ Examples:
 			fmt.Println()
 		}
 
-		// === Step 7: Publish and discovery ===
-		fmt.Println(stepStyle.Render("Step 7: Publish & Discovery"))
+		fmt.Println(stepStyle.Render("Publishing artifact"))
 		fmt.Println()
-		registryTool := cfg.Registry
-		if err := huh.NewSelect[string]().
-			Title("Where would you like to publish your artifact?").
-			Description(infoStyle.Render("ORAS works with Harbor, GHCR, zot, and other OCI registries")).
-			Options(toolOptions(workflow.RegistryOptions())...).
-			Value(&registryTool).
+		publishArtifact := false
+		if err := huh.NewConfirm().
+			Title("Publish this artifact to an OCI registry?").
+			Description("Choose No to keep this test artifact on your computer.").
+			Value(&publishArtifact).
 			Run(); err != nil {
 			return err
 		}
-		cfg.Registry = registryTool
+		if publishArtifact {
+			registryTool := cfg.Registry
+			if err := huh.NewSelect[string]().
+				Title("Which client should publish the artifact?").
+				Description(infoStyle.Render("ORAS works with Harbor, GHCR, zot, and other OCI registries")).
+				Options(toolOptions(workflow.RegistryOptions())...).
+				Value(&registryTool).
+				Run(); err != nil {
+				return err
+			}
+			cfg.Registry = registryTool
+
+			var destination string
+			if err := huh.NewInput().
+				Title("Registry destination:").
+				Description("For example: ghcr.io/my-org or harbor.example.com/models").
+				Value(&destination).
+				Run(); err != nil {
+				return err
+			}
+			if err := requireValues("destination", destination); err != nil {
+				return err
+			}
+
+			registryProvider, err := workflow.GetRegistryProvider(cfg.Registry)
+			if err != nil {
+				return err
+			}
+			if !registryProvider.IsInstalled() {
+				return fmt.Errorf("%s is required to publish this artifact; install it with: %s", registryProvider.Name(), registryProvider.InstallInstructions())
+			}
+			manifest, err := workflow.ReadUnifiedOCIManifest(filepath.Join(modelPath, "manifest.json"))
+			if err != nil {
+				return fmt.Errorf("failed to read packaged manifest before publishing: %w", err)
+			}
+			if _, err := registryProvider.Push(artifactName, destination, modelPath, manifest.Annotations); err != nil {
+				return fmt.Errorf("failed to publish artifact: %w", err)
+			}
+			fmt.Printf("✓ Published %s to %s\n", artifactName, destination)
+		} else {
+			fmt.Println(infoStyle.Render("Publishing skipped; the artifact remains local."))
+		}
 		ctxModel.SetConfig(cfg.Registry, cfg.GitOps, cfg.Signer, "")
-		ctxModel.SetStep(7)
-		nextAction = "Press Enter to start GitOps promotion."
+		ctxModel.SetStep(4)
+		nextAction = "Press Enter to continue to GitOps admission and policy enforcement."
 		if skipDeploy {
 			nextAction = "Press Enter to finish the wizard."
 		}
 		displayInteractiveContext(ctxModel, nextAction)
 		fmt.Println()
 
-		// === Step 8: GitOps promotion and deployment (unless skipped) ===
+		// === Step 5: GitOps admission and policy enforcement ===
 		var hasKubernetes bool
 		var repoURL string
 		var manifestPath string
 		if !skipDeploy {
-			fmt.Println(stepStyle.Render("Step 8: GitOps Promotion"))
+			fmt.Println(stepStyle.Render("Step 5: GitOps Admission & Policy Enforcement"))
 			fmt.Println()
 			if err := huh.NewConfirm().
 				Title("Do you have a Kubernetes cluster?").
@@ -492,7 +524,7 @@ Examples:
 		}
 
 		if hasKubernetes && !skipDeploy {
-			fmt.Println(stepStyle.Render("Step 8: Deploy to Kubernetes"))
+			fmt.Println(stepStyle.Render("Deploying through GitOps"))
 			fmt.Println()
 
 			// Check if GitOps and registry providers are installed before deploying
@@ -530,7 +562,7 @@ Examples:
 			}
 			fmt.Println()
 		} else if !skipDeploy {
-			fmt.Println(stepStyle.Render("Step 8: Deployment Skipped"))
+			fmt.Println(stepStyle.Render("GitOps promotion skipped"))
 			fmt.Println()
 			fmt.Println(infoStyle.Render("No Kubernetes cluster detected or deployment skipped"))
 			fmt.Println(infoStyle.Render("Your model is packaged and signed, ready for deployment"))
