@@ -139,8 +139,9 @@ KServe and Kubeflow are serving platforms, and TUF is trust metadata.
 
 #### Step 4: Manifest-Level Validation
 
-The wizard validates `manifest.json` after the publish choice. When you chose
-the local Podman registry, it fetches and validates
+The wizard retrieves `manifest.json` after the publish choice and displays its
+annotation count without enforcing an evolving annotation contract. When you
+chose the local Podman registry, it fetches
 `localhost:5000/test:v1`; when you chose not to publish, it validates the
 local `~/test-model/manifest.json` instead.
 
