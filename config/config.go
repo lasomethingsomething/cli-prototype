@@ -9,10 +9,11 @@ import (
 )
 
 type Config struct {
-	GitOps   string `mapstructure:"gitops"`
-	Registry string `mapstructure:"registry"`
-	Runtime  string `mapstructure:"runtime"`
-	Signer   string `mapstructure:"signer"`
+	GitOps          string `mapstructure:"gitops"`
+	Registry        string `mapstructure:"registry"`
+	Runtime         string `mapstructure:"runtime"`
+	ServingTopology string `mapstructure:"serving-topology"`
+	Signer          string `mapstructure:"signer"`
 }
 
 func Load() *Config {
@@ -31,6 +32,7 @@ func Save(cfg *Config) error {
 	viper.Set("gitops", cfg.GitOps)
 	viper.Set("registry", cfg.Registry)
 	viper.Set("runtime", cfg.Runtime)
+	viper.Set("serving-topology", cfg.ServingTopology)
 	viper.Set("signer", cfg.Signer)
 
 	if err := viper.WriteConfig(); err != nil {

@@ -4,41 +4,52 @@
 
 ## What is this, in plain words?
 
-A trained ML model is a folder of files. Getting that folder from your laptop onto a production server safely means a series of steps: bundle it up, label it, list what is inside, record where it came from, sign it so nobody can tamper with it, upload it, check it against your organization's rules, and hand it to the system that runs it. 
+A trained ML model is a folder of files. Moving it safely from your laptop to production requires packaging, security checks, publishing, and deployment. Specialized tools in the [CNCF ecosystem](https://www.cncf.io/) already handle each task.
 
-Specialized tools already exist for each step in the [CNCF ecosystem](https://www.cncf.io/) and beyond. Model CLI is the guide that walks you through the steps in order, asks the questions each step needs, and calls the right tool for each one.
+Model CLI guides you through that journey, collects the needed details, and lets you choose an appropriate tool for each task.
 
-The workflow in one sentence per phase:
+The workflow, in seven action-led steps:
 
 1. **Package** - bundle the model folder into a standard container-style artifact and tag it with metadata.
 2. **Harden** - generate an ingredients list (SBOM) and classify how open the model is (MOF), and record both in the packaged artifact.
 3. **Sign** - stamp it cryptographically so tampering can be detected later, and record a proof of origin (provenance) for the finished artifact.
 4. **Push** - upload it to a registry.
 5. **Validate** - check the metadata against your rules locally, at the registry, and at the cluster door, using one shared engine so passing in one place means passing everywhere.
-6. **Deploy** - hand it to Argo CD / Flux and a serving runtime such as vLLM or KServe.
+6. **Orchestrate** - match the artifact's runtime and hardware requirements to infrastructure that can run it.
+7. **Deploy** - hand the approved artifact to Argo CD / Flux and a serving runtime such as vLLM or KServe.
 
-If terms like *OCI*, *SBOM*, or *admission* are new to you, see the [Glossary](#glossary) below.
+If terms like *SBOM*, *MOF*, or *admission* are new to you, see the [Glossary](#glossary) below.
 
-Model CLI packages, signs, verifies, and deploys ML models as OCI artifacts through a guided TUI. It follows one principle: **orchestrate the workflow, don't duplicate the tools.** It collects your intent, attaches standardized metadata to OCI manifests, validates it, and hands the actual work to ORAS, Cosign, Syft, Argo CD, and friends.
-
-> **Status: prototype.** The workflow, annotation model, and validation commands are real. Some tool integrations are still placeholders — see [Known limitations](#known-limitations) before relying on any single step.
+> **Status: prototype.** Model CLI guides ML-model packaging and delivery as OCI artifacts. It collects intent, writes standardized metadata, and delegates supported operations to selected tools such as ORAS, Syft, Cosign, Flux, and Argo CD. Some wizard stages and integrations remain simulated or incomplete; see [Known limitations](#known-limitations) before relying on a step in production.
 
 ## System Requirements
 
 For the macOS Quick Test Drive, install these prerequisites before starting the
 wizard:
 
+> This list intentionally includes the recommended tools needed to demonstrate
+> the complete flow. In normal use, Model CLI lets you choose a tool per phase
+> and checks for it only when that phase runs.
+
 | Requirement | Why it is needed | Install or check |
 |-------------|------------------|------------------|
 | Go 1.23+ | Build Model CLI | `go version` |
 | Homebrew | Install the external tools | [brew.sh](https://brew.sh/) |
 | Current Xcode Command Line Tools | Required when Homebrew builds a dependency | System Settings > General > Software Update; if no update is offered, run `xcode-select --install` |
-| ORAS | Create OCI artifacts; recommended registry client | `brew install oras` |
-| Syft | Generate the SBOM required by local hardening | `brew install anchore/syft/syft` |
-| Podman (optional) | Run a local OCI registry without an account or cloud service | `brew install podman` |
+| ORAS (recommended) | Create OCI artifacts; ModelPack is the alternative | `brew install oras` |
+| Syft (recommended) | Generate the SBOM; Trivy and cdxgen are alternatives | `brew install anchore/syft/syft` |
+| Cosign (recommended) | Show the Sigstore signing and verification branch; Notation is the alternative | `brew install sigstore/tap/cosign` |
+| Podman (recommended for local publishing) | Run a local OCI registry without an account or cloud service | `brew install podman` |
+| Flux (recommended) | Execute the GitOps path against a Kubernetes cluster; Argo CD is the alternative | `brew install fluxcd/tap/flux` |
+| kubectl and a Kubernetes cluster | Execute real GitOps admission, node checks, and runtime checks | `brew install kubectl` |
+| vLLM (recommended) and/or KServe | Execute serving instead of the wizard's runtime simulation; KServe can manage a Kubernetes deployment that uses vLLM | vLLM: `pip install vllm`; KServe: install its Kubernetes operator |
 
 The publish demonstration uses Podman's Linux VM and the open-source OCI
 Distribution Registry at `localhost:5000`. It does not require Docker Desktop.
+Flux, `kubectl`, a Kubernetes cluster, and a runtime are not needed for the
+macOS test drive: without a cluster, the wizard demonstrates phases 5-7 as
+guided simulations. Argo CD and KServe remain supported alternatives to Flux
+and vLLM, respectively.
 
 ## Quick Test Drive (5 minutes)
 
@@ -71,6 +82,7 @@ mkdir -p ~/test-model
 echo "test" > ~/test-model/model.txt
 brew install oras
 brew install anchore/syft/syft
+brew install sigstore/tap/cosign
 ```
 
 To include the optional publish demonstration, prepare the local registry before
@@ -84,12 +96,12 @@ podman run -d --rm --name model-cli-registry -p 5000:5000 registry:2
 curl http://localhost:5000/v2/
 ```
 
-`{}` from `curl` means the local registry is ready. Start the wizard with
-signing skipped. Without a Kubernetes cluster, the wizard simulates phases
-5-7 so you can see the complete journey:
+`{}` from `curl` means the local registry is ready. Start the wizard. Without a
+Kubernetes cluster, it simulates phases 5-7 so you can see the complete
+journey:
 
 ```bash
-./model-cli wizard --skip-signing
+./model-cli wizard
 ```
 
 #### Step 1: Develop & Package
@@ -99,10 +111,9 @@ signing skipped. Without a Kubernetes cluster, the wizard simulates phases
 | Model name | `test-model` |
 | Model path | `~/test-model` |
 | Artifact name | `test:v1` |
-| Include RAG context? | `No` |
+| Include RAG context? | `No` to skip |
 
-Press Enter at the context panel to package the model locally. This writes
-`manifest.json` and `config.json` to `~/test-model`.
+Press Enter at the context panel to package the model locally. It writes `manifest.json` and `config.json` to `~/test-model` without contacting a registry; that choice comes at the publish prompt in Step 3.
 
 #### Step 2: Local Hardening & Compliance
 
@@ -111,20 +122,17 @@ Press Enter at the context panel to package the model locally. This writes
 | SBOM tool | `syft (recommended)` |
 | Model Openness Framework class | `auto (recommended)` |
 
-Press Enter to run the local compliance check after hardening completes. This
-generates the SBOM and MOF metadata, then checks both before the artifact can
-continue.
-
-After the compliance check passes, inspect the current local manifest before
-continuing. Publishing and signing may add or attach further delivery metadata:
-
-```bash
-cat ~/test-model/manifest.json
-```
+Press Enter to run the local compliance check after hardening completes. This generates the SBOM and MOF metadata, then checks both before the artifact can continue.
 
 #### Step 3: Supply Chain Check
 
-Signing is skipped by `--skip-signing`. At the publish prompt, use:
+| Prompt | Answer |
+|--------|--------|
+| Signing tool | `cosign (recommended) - Sigstore` |
+
+The wizard shows the signing and verification stages. Those stages are currently guided simulations; use the standalone `model-cli sign` and `model-cli verify` commands for external tool execution. To omit this branch, run `./model-cli wizard --skip-signing` instead.
+
+At the publish prompt, use:
 
 | Prompt | Answer |
 |--------|--------|
@@ -132,18 +140,23 @@ Signing is skipped by `--skip-signing`. At the publish prompt, use:
 | Where is the OCI registry? | `a local Podman registry at localhost:5000` |
 | Which client should publish the artifact? | `oras (recommended)` |
 
-The wizard verifies `localhost:5000` before it pushes `test:v1`. ORAS works
-with Harbor, GHCR, zot, and other OCI registries; those are destinations, not
-alternative clients. `modelpack` is the alternative CNCF ModelPack option.
-KServe and Kubeflow are serving platforms, and TUF is trust metadata.
+The wizard verifies `localhost:5000` before it pushes `test:v1`.
+
+ORAS works with Harbor, GHCR, zot, and other OCI registries; those are destinations, not alternative clients. `modelpack` is the alternative CNCF ModelPack option.
 
 #### Step 4: Manifest-Level Validation
 
 The wizard retrieves `manifest.json` after the publish choice and displays its
 annotation count without enforcing an evolving annotation contract. When you
 chose the local Podman registry, it fetches
-`localhost:5000/test:v1`; when you chose not to publish, it validates the
-local `~/test-model/manifest.json` instead.
+`localhost:5000/test:v1`; when you chose not to publish, it inspects the local
+`~/test-model/manifest.json` instead. The Journey Complete summary then
+shows the exact command to inspect the local manifest and, when published, the
+registry copy.
+
+Annotation conventions and model metadata are evolving as part of the
+[CNCF AI inner-loop initiative #1740](https://github.com/cncf/toc/issues/1740),
+so this wizard inspects them without enforcing a fixed contract.
 
 #### Step 5: GitOps Admission & Policy Enforcement
 
@@ -152,39 +165,46 @@ local `~/test-model/manifest.json` instead.
 | GitOps tool | `flux (recommended)` |
 | Do you have a Kubernetes cluster? | `No` |
 
-Without a cluster, the wizard simulates the GitOps admission and policy stage.
-With a cluster, it asks for the Git repository URL and manifest path, then
-invokes the selected Flux or Argo CD client. Press Enter at the next context
-panel to continue to infrastructure orchestration.
+After Step 4 inspects the manifest, the wizard asks how to promote the artifact.
+For this Quick Test Drive, choose `No`: the wizard simulates the GitOps
+admission and policy stage without requiring a cluster.
+
+A connected-cluster path exists, but is still a prototype integration: it asks for the Git
+repository URL and manifest path, then invokes the selected Flux or Argo CD client against a preconfigured cluster. Press Enter at the next context panel to continue to infrastructure orchestration.
 
 #### Step 6: Infrastructure & Resource Orchestration
 
 The wizard simulates how Kubernetes would match the artifact's declared
-accelerator, CUDA, memory, GPU, and vRAM requirements to cluster nodes. With a
-cluster, use `model-cli validate nodes` for the actual node check. Press Enter
-at the next context panel to continue to runtime execution.
+hardware requirements to cluster nodes. With a configured cluster,
+`model-cli validate nodes` uses `kubectl` to check declared GPU type, vRAM, and
+topology; Kubernetes still makes the final scheduling decision. Press Enter at
+the next context panel to continue to runtime execution.
 
 #### Step 7: Runtime Execution & Optimization
 
 | Prompt | Answer |
 |--------|--------|
-| Runtime | `vllm (recommended)` |
+| Serving topology | `vllm (recommended) - direct model server` |
 
-The wizard simulates the selected runtime loading OCI layers and applying the
-artifact's runtime requirements. With a cluster, use `model-cli validate
-runtime`; `model-cli serve` delegates local vLLM serving or KServe handoff to
-the selected provider.
+The wizard offers direct `vllm (recommended)`, `kserve`, or `kserve-vllm` for a
+KServe-managed vLLM deployment. This is a guided simulation: it does not yet
+write the selected topology into the artifact or start a runtime. For an
+artifact that declares runtime requirements, use `model-cli validate runtime`
+against a cluster. `model-cli serve --runtime vllm` starts local vLLM; the
+current KServe provider reports the intended InferenceService rather than
+creating it.
 
-The completed local artifact contains:
+The test creates these local files. When you publish, ORAS uploads the model
+directory and its manifest annotations to the selected registry:
 
-- `~/test-model/manifest.json` - an OCI manifest carrying CNCF AI Interoperability Profile annotations
+- `~/test-model/manifest.json` - an OCI manifest carrying CNCF AI Interoperability Profile, SBOM format, and MOF annotations
 - `~/test-model/sbom.spdx-json` - the SBOM
 - `~/test-model/mof.json` - the MOF metadata
-- the SBOM format and MOF class/components as annotations in `~/test-model/manifest.json`
 
 Phases 5-7 are guided simulations when no Kubernetes cluster is connected.
-The standalone `validate`, `deploy`, `schedule`, and `serve` commands cover the
-corresponding cluster and runtime surfaces.
+The standalone `validate`, `deploy`, `schedule`, and `serve` commands provide
+the corresponding cluster and runtime entry points; see their individual
+prototype limits above.
 
 Stop the temporary local registry when the test is complete:
 

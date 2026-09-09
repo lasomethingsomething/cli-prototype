@@ -163,7 +163,7 @@ Examples:
 		fmt.Println(subtitleStyle.Render("Your guided journey from model to production"))
 		fmt.Println()
 
-		// === Step 1: Develop and package ===
+		// === Step 1: Package ===
 		fmt.Println(stepStyle.Render("Step 1: Develop & Package"))
 		fmt.Println()
 
@@ -201,8 +201,8 @@ Examples:
 
 		var includeRAG bool
 		if err := huh.NewConfirm().
-			Title("Include RAG context?").
-			Description("Add Retrieval-Augmented Generation data to your model").
+			Title("Demonstrate RAG context?").
+			Description("The selected path is shown in the tour; RAG files are not packaged yet.").
 			Value(&includeRAG).
 			Run(); err != nil {
 			return err
@@ -211,7 +211,7 @@ Examples:
 		var ragPath string
 		if includeRAG {
 			if err := huh.NewInput().
-				Title("RAG context path:").
+				Title("RAG context path to demonstrate:").
 				Value(&ragPath).
 				Run(); err != nil {
 				return err
@@ -275,7 +275,7 @@ Examples:
 
 		fmt.Println()
 
-		// === Step 2: Harden and validate the local artifact ===
+		// === Step 2: Harden ===
 		fmt.Println(stepStyle.Render("Step 2: Local Hardening & Compliance"))
 		fmt.Println()
 		if packageSucceeded {
@@ -381,10 +381,6 @@ Examples:
 		if !checkSucceeded && !skipCheck {
 			return fmt.Errorf("compliance must pass before signing, publishing, or deployment")
 		}
-		if checkSucceeded {
-			fmt.Printf("\nInspect the current local manifest with:\n  cat %s\n", filepath.Join(modelPath, "manifest.json"))
-		}
-
 		nextAction := "Press Enter to choose a signing tool."
 		if skipSigning {
 			nextAction = "Press Enter to choose how to publish the artifact."
@@ -393,15 +389,15 @@ Examples:
 
 		fmt.Println()
 
-		// === Step 3: Supply-chain check ===
+		// === Step 3: Sign ===
 		if !skipSigning {
 			fmt.Println(stepStyle.Render("Step 3: Supply Chain Check"))
 			fmt.Println()
 
 			signerTool := cfg.Signer
 			if err := huh.NewSelect[string]().
-				Title("How would you like to sign artifacts?").
-				Description(infoStyle.Render("Cosign: Sigstore | Notary v2: notation")).
+				Title("Which signing approach should the wizard demonstrate?").
+				Description(infoStyle.Render("Cosign: Sigstore | Notary v2: notation; use model-cli sign for execution")).
 				Options(toolOptions(workflow.SignerOptions())...).
 				Value(&signerTool).
 				Run(); err != nil {
@@ -419,16 +415,15 @@ Examples:
 				fmt.Println(warningStyle.Render("⚠ Signing tool not installed"))
 				fmt.Printf("   Install with: %s\n\n", sp.InstallInstructions())
 			} else {
-				fmt.Printf("Signing %s with %s...\n", fullArtifact, cfg.Signer)
-				// In real implementation: sp.Sign(fullArtifact, "")
-				fmt.Println(successStyle.Render("✓ Artifact signed"))
+				fmt.Printf("Simulating signing %s with %s...\n", fullArtifact, cfg.Signer)
+				fmt.Println(successStyle.Render("✓ Signing path demonstrated"))
 				signSucceeded = true
 			}
 			fmt.Println()
 		}
 
 		if !skipSigning {
-			fmt.Println(stepStyle.Render("Verifying signature"))
+			fmt.Println(stepStyle.Render("Demonstrating signature verification"))
 			fmt.Println()
 
 			sp, err := workflow.GetSigningProvider(cfg.Signer)
@@ -441,9 +436,8 @@ Examples:
 				fmt.Println(warningStyle.Render("⚠ Signing tool not installed"))
 				fmt.Printf("   Install with: %s\n\n", sp.InstallInstructions())
 			} else {
-				fmt.Printf("Verifying %s...\n", fullArtifact)
-				// In real implementation: sp.Verify(fullArtifact)
-				fmt.Println(successStyle.Render("✓ Signature verified - artifact is trusted"))
+				fmt.Printf("Simulating signature verification for %s...\n", fullArtifact)
+				fmt.Println(successStyle.Render("✓ Verification path demonstrated"))
 				verifySucceeded = true
 			}
 			fmt.Println()
@@ -629,30 +623,42 @@ Examples:
 		}
 
 		if !skipDeploy {
+			fmt.Println()
 			ctxModel.SetStep(6)
 			displayInteractiveContext(ctxModel, "Press Enter to continue to infrastructure and resource orchestration.")
 			fmt.Println()
 
-			fmt.Println()
 			fmt.Println(stepStyle.Render("Step 6: Infrastructure & Resource Orchestration"))
 			fmt.Println("Simulated: Kubernetes would match the artifact's accelerator, CUDA, memory, GPU, and vRAM annotations to available nodes.")
 
 			ctxModel.SetStep(7)
-			displayInteractiveContext(ctxModel, "Press Enter to continue to runtime execution and optimization.")
+			displayInteractiveContext(ctxModel, "Press Enter to continue to deployment.")
 			fmt.Println()
 
 			fmt.Println()
 			fmt.Println(stepStyle.Render("Step 7: Runtime Execution & Optimization"))
-			runtimeTool := cfg.Runtime
+			servingTopology := cfg.ServingTopology
+			if servingTopology == "" {
+				servingTopology = cfg.Runtime
+			}
+			if servingTopology == "" {
+				servingTopology = workflow.ServingTopologyOptions().Recommended()
+			}
 			if err := huh.NewSelect[string]().
-				Title("Which runtime should serve the artifact?").
-				Options(toolOptions(workflow.RuntimeOptions())...).
-				Value(&runtimeTool).
+				Title("Which serving topology should the wizard demonstrate?").
+				Options(toolOptions(workflow.ServingTopologyOptions())...).
+				Value(&servingTopology).
 				Run(); err != nil {
 				return err
 			}
-			cfg.Runtime = runtimeTool
-			fmt.Printf("Simulated: %s would pull the OCI layers and serve the artifact with the declared runtime requirements.\n", cfg.Runtime)
+			cfg.ServingTopology = servingTopology
+			if servingTopology == "kserve-vllm" {
+				cfg.Runtime = "vllm"
+				fmt.Println("Simulated: KServe would manage a vLLM deployment that pulls the OCI layers and applies the declared runtime requirements.")
+			} else {
+				cfg.Runtime = servingTopology
+				fmt.Printf("Simulated: %s would pull the OCI layers and serve the artifact with the declared runtime requirements.\n", cfg.Runtime)
+			}
 		}
 
 		if err := config.Save(cfg); err != nil {
@@ -721,7 +727,7 @@ func inspectWizardManifest(modelPath, artifact, registry, destination string) er
 			return fmt.Errorf("failed to read local manifest: %w", err)
 		}
 		annotations = manifest.Annotations
-		fmt.Println("Validating local manifest...")
+		fmt.Println("Inspecting local manifest...")
 	} else {
 		provider, err := workflow.GetRegistryProvider(registry)
 		if err != nil {
@@ -731,7 +737,7 @@ func inspectWizardManifest(modelPath, artifact, registry, destination string) er
 		if err != nil {
 			return fmt.Errorf("failed to fetch published manifest: %w", err)
 		}
-		fmt.Printf("Validating published manifest at %s/%s...\n", destination, artifact)
+		fmt.Printf("Inspecting published manifest at %s/%s...\n", destination, artifact)
 	}
 	fmt.Printf("  Found %d manifest annotation(s)\n", len(annotations))
 	return nil

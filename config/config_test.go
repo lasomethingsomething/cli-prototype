@@ -25,10 +25,11 @@ func TestSaveFirstRun(t *testing.T) {
 	viper.AddConfigPath(dir)
 
 	cfg := &Config{
-		GitOps:   "argo",
-		Registry: "oras",
-		Signer:   "sigstore",
-		Runtime:  "vllm",
+		GitOps:          "argo",
+		Registry:        "oras",
+		Signer:          "sigstore",
+		Runtime:         "vllm",
+		ServingTopology: "vllm",
 	}
 
 	if err := Save(cfg); err != nil {
@@ -53,10 +54,11 @@ func TestSaveAndLoad(t *testing.T) {
 	viper.SetConfigFile(cfgPath)
 
 	cfg := &Config{
-		GitOps:   "flux",
-		Registry: "modelpack",
-		Signer:   "notary",
-		Runtime:  "kserve",
+		GitOps:          "flux",
+		Registry:        "modelpack",
+		Signer:          "notary",
+		Runtime:         "kserve",
+		ServingTopology: "kserve-vllm",
 	}
 
 	if err := Save(cfg); err != nil {
@@ -81,6 +83,9 @@ func TestSaveAndLoad(t *testing.T) {
 	}
 	if loaded.Runtime != cfg.Runtime {
 		t.Errorf("Runtime = %q, want %q", loaded.Runtime, cfg.Runtime)
+	}
+	if loaded.ServingTopology != cfg.ServingTopology {
+		t.Errorf("ServingTopology = %q, want %q", loaded.ServingTopology, cfg.ServingTopology)
 	}
 }
 

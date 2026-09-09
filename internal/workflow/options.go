@@ -103,6 +103,17 @@ func RuntimeOptions() ToolOptions {
 	}
 }
 
+// ServingTopologyOptions lists the runtime arrangements presented by the
+// wizard. The combined KServe + vLLM entry is a deployment topology rather
+// than a single runtime provider.
+func ServingTopologyOptions() ToolOptions {
+	return ToolOptions{
+		{Name: "vllm", Description: "direct model server", Recommended: true},
+		{Name: "kserve", Description: "Kubernetes InferenceService"},
+		{Name: "kserve-vllm", Description: "KServe-managed vLLM deployment"},
+	}
+}
+
 // SBOMToolOptions lists the SBOM generators GetSBOMGenerator accepts.
 func SBOMToolOptions() ToolOptions {
 	return ToolOptions{
