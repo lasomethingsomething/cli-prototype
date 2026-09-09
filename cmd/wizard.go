@@ -133,56 +133,27 @@ Examples:
 		fmt.Println(subtitleStyle.Render("Your guided journey from model to production"))
 		fmt.Println()
 
-		// === Step 1: Setup Preferences ===
-		fmt.Println(stepStyle.Render("Step 1: Setup"))
+		// === Step 1: Package Setup ===
+		fmt.Println(stepStyle.Render("Step 1: Package Setup"))
 		fmt.Println()
 
-		// Registry tool
-		if cfg.Registry == "" {
-			var registryTool string
-			if err := huh.NewSelect[string]().
-				Title("How would you like to package your model?").
-				Description(infoStyle.Render("Harbor, GHCR, zot and any other OCI registry are used through ORAS")).
-				Options(toolOptions(workflow.RegistryOptions())...).
-				Value(&registryTool).
-				Run(); err != nil {
-				return err
-			}
-			cfg.Registry = registryTool
+		// Always begin the journey with packaging. A saved provider is a default,
+		// not a reason to hide the choice and jump straight to deployment.
+		registryTool := cfg.Registry
+		if err := huh.NewSelect[string]().
+			Title("How would you like to package your model?").
+			Description(infoStyle.Render("Harbor, GHCR, zot and any other OCI registry are used through ORAS")).
+			Options(toolOptions(workflow.RegistryOptions())...).
+			Value(&registryTool).
+			Run(); err != nil {
+			return err
 		}
-
-		// GitOps tool
-		if cfg.GitOps == "" {
-			var gitOpsTool string
-			if err := huh.NewSelect[string]().
-				Title("How would you like to deploy?").
-				Description(infoStyle.Render("Flux: good for automation | Argo CD: good for visual workflows")).
-				Options(toolOptions(workflow.GitOpsOptions())...).
-				Value(&gitOpsTool).
-				Run(); err != nil {
-				return err
-			}
-			cfg.GitOps = gitOpsTool
-		}
-
-		// Signing tool
-		if cfg.Signer == "" && !skipSigning {
-			var signerTool string
-			if err := huh.NewSelect[string]().
-				Title("How would you like to sign artifacts?").
-				Description(infoStyle.Render("cosign: free, widely adopted | Notary v2: enterprise-focused, production-grade")).
-				Options(toolOptions(workflow.SignerOptions())...).
-				Value(&signerTool).
-				Run(); err != nil {
-				return err
-			}
-			cfg.Signer = signerTool
-		}
+		cfg.Registry = registryTool
 
 		if err := config.Save(cfg); err != nil {
 			fmt.Printf("Warning: failed to save config: %v\n", err)
 		} else {
-			fmt.Println(successStyle.Render("✓ Preferences saved"))
+			fmt.Println(successStyle.Render("✓ Registry preference saved"))
 		}
 		fmt.Println()
 
@@ -250,43 +221,8 @@ Examples:
 		ctxModel.SetModelInfo(modelName, modelPath, artifactName)
 		displayInteractiveContext(ctxModel)
 
-		// === Step 3: Kubernetes Setup ===
-		fmt.Println(stepStyle.Render("Step 3: Kubernetes Setup"))
-		fmt.Println()
-
-		var hasKubernetes bool
-		if err := huh.NewConfirm().
-			Title("Do you have a Kubernetes cluster?").
-			Description("If yes: Deploy directly. If no: Package only, deploy later or use locally").
-			Value(&hasKubernetes).
-			Run(); err != nil {
-			return err
-		}
-
-		var repoURL string
-		var manifestPath string
-		if hasKubernetes && !skipDeploy {
-			if err := huh.NewInput().
-				Title("Git repository URL:").
-				Placeholder("https://github.com/you/model-manifests").
-				Value(&repoURL).
-				Run(); err != nil {
-				return err
-			}
-
-			if err := huh.NewInput().
-				Title("Manifest path in repo:").
-				Placeholder("./manifests").
-				Value(&manifestPath).
-				Run(); err != nil {
-				return err
-			}
-		}
-
-		fmt.Println()
-
-		// === Step 4: Package (SBOM and MOF are the separate `harden` step) ===
-		fmt.Println(stepStyle.Render("Step 4: Package Model"))
+		// === Step 3: Package (SBOM and MOF are the separate `harden` step) ===
+		fmt.Println(stepStyle.Render("Step 3: Package Model"))
 		fmt.Println()
 
 		// Check if registry provider is installed before attempting to package
@@ -319,7 +255,7 @@ Examples:
 		// In real implementation, would push to registry
 
 		// Update context model
-		ctxModel.SetStep(4)
+		ctxModel.SetStep(3)
 		ctxModel.SetResults(packageSucceeded, false, false, false)
 		ctxModel.AddLog(fmt.Sprintf("Packaged artifact: %s", artifactName))
 		fmt.Println()
@@ -327,8 +263,8 @@ Examples:
 
 		fmt.Println()
 
-		// === Step 5: Compliance Check (local) ===
-		fmt.Println(stepStyle.Render("Step 5: Compliance Check"))
+		// === Step 4: Compliance Check (local) ===
+		fmt.Println(stepStyle.Render("Step 4: Compliance Check"))
 		fmt.Println()
 
 		// Run compliance check on the local artifact before push
@@ -367,7 +303,7 @@ Examples:
 		}
 
 		// Update context model
-		ctxModel.SetStep(5)
+		ctxModel.SetStep(4)
 		ctxModel.AddLog("Compliance check completed")
 		if checkSucceeded {
 			ctxModel.AddLog("All checks passed")
@@ -378,10 +314,21 @@ Examples:
 
 		fmt.Println()
 
-		// === Step 6: Sign (unless skipped) ===
+		// === Step 5: Sign (unless skipped) ===
 		if !skipSigning {
 			fmt.Println(stepStyle.Render("Step 5: Sign Artifact"))
 			fmt.Println()
+
+			signerTool := cfg.Signer
+			if err := huh.NewSelect[string]().
+				Title("How would you like to sign artifacts?").
+				Description(infoStyle.Render("Cosign: Sigstore | Notary v2: notation")).
+				Options(toolOptions(workflow.SignerOptions())...).
+				Value(&signerTool).
+				Run(); err != nil {
+				return err
+			}
+			cfg.Signer = signerTool
 
 			sp, err := workflow.GetSigningProvider(cfg.Signer)
 			if err != nil {
@@ -401,9 +348,9 @@ Examples:
 			fmt.Println()
 		}
 
-		// === Step 7: Verify (unless skipped) ===
+		// === Step 6: Verify (unless skipped) ===
 		if !skipSigning {
-			fmt.Println(stepStyle.Render("Step 7: Verify Signature"))
+			fmt.Println(stepStyle.Render("Step 6: Verify Signature"))
 			fmt.Println()
 
 			sp, err := workflow.GetSigningProvider(cfg.Signer)
@@ -424,9 +371,52 @@ Examples:
 			fmt.Println()
 		}
 
-		// === Step 8: Deploy (unless skipped) ===
+		// === Step 7: GitOps promotion and deployment (unless skipped) ===
+		var hasKubernetes bool
+		var repoURL string
+		var manifestPath string
+		if !skipDeploy {
+			fmt.Println(stepStyle.Render("Step 7: GitOps Promotion"))
+			fmt.Println()
+			if err := huh.NewConfirm().
+				Title("Do you have a Kubernetes cluster?").
+				Description("If yes: deploy through GitOps. If no: package now and deploy later.").
+				Value(&hasKubernetes).
+				Run(); err != nil {
+				return err
+			}
+			if hasKubernetes {
+				gitOpsTool := cfg.GitOps
+				if err := huh.NewSelect[string]().
+					Title("How would you like to deploy?").
+					Description(infoStyle.Render("Flux: agent-based automation | Argo CD: UI-based workflows")).
+					Options(toolOptions(workflow.GitOpsOptions())...).
+					Value(&gitOpsTool).
+					Run(); err != nil {
+					return err
+				}
+				cfg.GitOps = gitOpsTool
+
+				if err := huh.NewInput().
+					Title("Git repository URL:").
+					Placeholder("https://github.com/you/model-manifests").
+					Value(&repoURL).
+					Run(); err != nil {
+					return err
+				}
+				if err := huh.NewInput().
+					Title("Manifest path in repo:").
+					Placeholder("./manifests").
+					Value(&manifestPath).
+					Run(); err != nil {
+					return err
+				}
+			}
+			fmt.Println()
+		}
+
 		if hasKubernetes && !skipDeploy {
-			fmt.Println(stepStyle.Render("Step 8: Deploy to Kubernetes"))
+			fmt.Println(stepStyle.Render("Step 7: Deploy to Kubernetes"))
 			fmt.Println()
 
 			// Check if GitOps and registry providers are installed before deploying
@@ -469,6 +459,10 @@ Examples:
 			fmt.Println(infoStyle.Render("No Kubernetes cluster detected or deployment skipped"))
 			fmt.Println(infoStyle.Render("Your model is packaged and signed, ready for deployment"))
 			fmt.Println()
+		}
+
+		if err := config.Save(cfg); err != nil {
+			fmt.Printf("Warning: failed to save preferences: %v\n", err)
 		}
 
 		// === Summary ===
