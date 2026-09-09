@@ -122,12 +122,9 @@ FORMAT="spdx-json"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        -o|--output)
-            FORMAT="$2"
-            shift 2
-            ;;
-        --file)
-            OUTPUT_FILE="$2"
+		--output)
+			FORMAT="${2%%=*}"
+			OUTPUT_FILE="${2#*=}"
             shift 2
             ;;
         *)

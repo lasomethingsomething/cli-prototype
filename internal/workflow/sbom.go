@@ -76,7 +76,7 @@ func (s *SyftGenerator) Generate(modelPath, outputPath string, format SBOMFormat
 	syftFormat := mapFormatToSyft(format)
 
 	// Build syft command
-	args := []string{"dir:" + modelPath, "-o", string(syftFormat), "--file", outputPath}
+	args := []string{"dir:" + modelPath, "--output", string(syftFormat) + "=" + outputPath}
 	cmd := exec.Command("syft", args...)
 
 	// Set up output for logging

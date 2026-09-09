@@ -127,7 +127,6 @@ Examples:
 		// Initialize context model for interactive TUI
 		ctxModel := tui.NewContextModel()
 		ctxModel.SetStep(1)
-		ctxModel.SetSkippedSteps(skipSigning, skipDeploy)
 		ctxModel.SetConfig(cfg.Registry, cfg.GitOps, cfg.Signer, "")
 
 		// === Welcome Screen ===
