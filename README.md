@@ -37,19 +37,29 @@ git clone https://github.com/lasomethingsomething/cli-prototype.git
 cd cli-prototype
 go build -o model-cli .
 
-# 3. Install ORAS - `package` checks for it up front
-brew install oras   # or see https://oras.land
+# 3. Install a registry tool
+# ORAS is recommended; choose ModelPack instead only if you have modctl.
+brew install oras   # recommended; or see https://oras.land
+# go install github.com/modelpack/modctl@latest  # alternative: ModelPack
 
 # 4. Package it (empty --registry-url = keep it local, push nothing)
 ./model-cli package \
   --model test-model \
   --model-path ~/test-model \
   --artifact test:v1 \
-  --registry oras \
   --registry-url ""
 ```
 
 The CLI asks a few questions (runtime, accelerator, ...). **These are metadata only** - you don't need the hardware or software installed. Press Enter to accept defaults.
+
+When prompted for a registry tool, choose `oras (recommended)`. ORAS stores OCI
+artifacts in any OCI registry, including Harbor, GHCR, and zot; those are
+destinations, not alternative registry tools. The other available choice is
+`modelpack`, which uses `modctl` for CNCF ModelPack artifacts and currently
+also needs ORAS when pushing, to annotate manifests and handle referrers. For
+this local-only run, install the tool you select. KServe and Kubeflow are
+serving platforms, while TUF is trust metadata; choose them in their respective
+deployment or signing flows, not as a registry tool.
 
 You'll end up with:
 
@@ -144,8 +154,8 @@ The words this README and the docs use, in plain language.
 | **[Provenance / SLSA attestation](https://slsa.dev/spec/v1.0/provenance)** | A signed statement of who built the artifact, from what, and when. Proof of origin. |
 | **[Sign / verify](https://github.com/ossf/model-signing-spec)** | Cryptographically stamp the artifact so anyone can later check it was not modified. Done by [Cosign](https://www.sigstore.dev/) (Sigstore, recommended) or [Notation](https://github.com/notaryproject/notaryproject) (Notary v2). |
 | **[MOF](https://isitopen.ai/)** (Model Openness Framework) | A classification of how open a model is. Class I is fully open (model, code, data, documentation), Class II is partially open, Class III is the least open. |
-| **[ORAS](https://oras.land/)** | The tool that pushes and pulls OCI artifacts that are not container images. Model CLI uses it for packaging and pushing to any OCI registry, including [Harbor](https://goharbor.io/): `--registry oras --registry-url <harbor-host>/<project>`. |
-| **[ModelPack](https://github.com/modelpack/model-spec)** | An alternative packaging format for models. Model CLI drives it through the [modctl](https://github.com/modelpack/modctl) CLI with `--registry modelpack`. |
+| **[ORAS](https://oras.land/)** | The recommended tool for packaging and pushing OCI artifacts that are not container images. It works with any OCI registry, including [Harbor](https://goharbor.io/): `--registry oras --registry-url <harbor-host>/<project>`. |
+| **[ModelPack](https://github.com/modelpack/model-spec)** | An alternative CNCF model packaging format. Model CLI drives it through the [modctl](https://github.com/modelpack/modctl) CLI with `--registry modelpack`; ORAS is also currently needed for annotations and referrers. |
 | **Serving runtime** ([vLLM](https://docs.vllm.ai/), [KServe](https://kserve.github.io/website/)) | The software that loads the model and answers requests once it is deployed. |
 | **Layer deduplication** | An optimization for large models: identical layers are stored once instead of being copied per artifact. |
 | **Skill / Reference Skill DLC endpoint** | An *agentic skill* is a packaged capability an AI agent can load. The DLC endpoint is the URL from which such skills are loaded dynamically at serve time. |
@@ -158,7 +168,7 @@ The words this README and the docs use, in plain language.
 
 | Task | Model CLI role | Options (recommended first) |
 |------|----------------|-----------------------------|
-| Package / push | Build manifest, inject annotations | `oras` - any OCI registry: Harbor, GHCR, zot, ... ; or `modelpack` via `modctl` (needs `oras` too) |
+| Package / push | Build manifest, inject annotations | `oras` (recommended) - any OCI registry: Harbor, GHCR, zot, ... ; or `modelpack` via `modctl` (also needs `oras` today) |
 | SBOM | Configure format, attach result | `syft`, `trivy`, `cdxgen` |
 | Sign / verify | Configure signer, run it | `cosign` (Sigstore), `notary` (Notation / Notary v2) |
 | Provenance | Generate SLSA v1.0 attestation | built in |
