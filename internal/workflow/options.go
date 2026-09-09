@@ -95,6 +95,14 @@ func GitOpsOptions() ToolOptions {
 	}
 }
 
+// RuntimeOptions lists the serving runtimes the CLI can hand artifacts to.
+func RuntimeOptions() ToolOptions {
+	return ToolOptions{
+		{Name: "vllm", Description: "high-throughput local inference", Recommended: true},
+		{Name: "kserve", Description: "Kubernetes InferenceService"},
+	}
+}
+
 // SBOMToolOptions lists the SBOM generators GetSBOMGenerator accepts.
 func SBOMToolOptions() ToolOptions {
 	return ToolOptions{

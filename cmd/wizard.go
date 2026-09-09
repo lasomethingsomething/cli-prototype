@@ -369,6 +369,9 @@ Examples:
 		if !checkSucceeded && !skipCheck {
 			return fmt.Errorf("compliance must pass before signing, publishing, or deployment")
 		}
+		if checkSucceeded {
+			fmt.Printf("\nInspect the finalized manifest with:\n  cat %s\n", filepath.Join(modelPath, "manifest.json"))
+		}
 
 		nextAction := "Press Enter to choose a signing tool."
 		if skipSigning {
@@ -512,9 +515,18 @@ Examples:
 		} else {
 			fmt.Println(infoStyle.Render("Publishing skipped; the artifact remains local."))
 		}
+
+		// === Step 4: Manifest-level validation ===
+		fmt.Println()
+		fmt.Println(stepStyle.Render("Step 4: Manifest-Level Validation"))
+		if err := validateWizardManifest(modelPath, artifactName, cfg.Registry, publishDestination); err != nil {
+			return err
+		}
+		fmt.Println(successStyle.Render("✓ Manifest-level validation passed"))
+
 		ctxModel.SetConfig(cfg.Registry, cfg.GitOps, cfg.Signer, "")
 		if !skipDeploy {
-			ctxModel.SetStep(4)
+			ctxModel.SetStep(5)
 			displayInteractiveContext(ctxModel, "Press Enter to continue to GitOps admission and policy enforcement.")
 			fmt.Println()
 		}
@@ -526,25 +538,24 @@ Examples:
 		if !skipDeploy {
 			fmt.Println(stepStyle.Render("Step 5: GitOps Admission & Policy Enforcement"))
 			fmt.Println()
+			gitOpsTool := cfg.GitOps
+			if err := huh.NewSelect[string]().
+				Title("How would you like to promote the artifact?").
+				Description(infoStyle.Render("Flux: agent-based automation | Argo CD: UI-based workflows")).
+				Options(toolOptions(workflow.GitOpsOptions())...).
+				Value(&gitOpsTool).
+				Run(); err != nil {
+				return err
+			}
+			cfg.GitOps = gitOpsTool
 			if err := huh.NewConfirm().
 				Title("Do you have a Kubernetes cluster?").
-				Description("If yes: deploy through GitOps. If no: package now and deploy later.").
+				Description("If no: the wizard simulates the remaining cluster stages.").
 				Value(&hasKubernetes).
 				Run(); err != nil {
 				return err
 			}
 			if hasKubernetes {
-				gitOpsTool := cfg.GitOps
-				if err := huh.NewSelect[string]().
-					Title("How would you like to deploy?").
-					Description(infoStyle.Render("Flux: agent-based automation | Argo CD: UI-based workflows")).
-					Options(toolOptions(workflow.GitOpsOptions())...).
-					Value(&gitOpsTool).
-					Run(); err != nil {
-					return err
-				}
-				cfg.GitOps = gitOpsTool
-
 				if err := huh.NewInput().
 					Title("Git repository URL:").
 					Placeholder("https://github.com/you/model-manifests").
@@ -602,11 +613,27 @@ Examples:
 			}
 			fmt.Println()
 		} else if !skipDeploy {
-			fmt.Println(stepStyle.Render("GitOps promotion skipped"))
+			fmt.Println(infoStyle.Render("No cluster connected; GitOps admission and policy enforcement simulated."))
+		}
+
+		if !skipDeploy {
 			fmt.Println()
-			fmt.Println(infoStyle.Render("No Kubernetes cluster detected or deployment skipped"))
-			fmt.Println(infoStyle.Render("Your model is packaged and signed, ready for deployment"))
+			fmt.Println(stepStyle.Render("Step 6: Infrastructure & Resource Orchestration"))
+			fmt.Println("Simulated: Kubernetes would match the artifact's accelerator, CUDA, memory, GPU, and vRAM annotations to available nodes.")
+
 			fmt.Println()
+			fmt.Println(stepStyle.Render("Step 7: Runtime Execution & Optimization"))
+			runtimeTool := cfg.Runtime
+			if err := huh.NewSelect[string]().
+				Title("Which runtime should serve the artifact?").
+				Description(infoStyle.Render("vLLM: high-throughput inference | KServe: Kubernetes-native serving")).
+				Options(toolOptions(workflow.RuntimeOptions())...).
+				Value(&runtimeTool).
+				Run(); err != nil {
+				return err
+			}
+			cfg.Runtime = runtimeTool
+			fmt.Printf("Simulated: %s would pull the OCI layers and serve the artifact with the declared runtime requirements.\n", cfg.Runtime)
 		}
 
 		if err := config.Save(cfg); err != nil {
@@ -654,6 +681,39 @@ func verifyLocalRegistry() error {
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
 		return fmt.Errorf("registry API returned %s", response.Status)
+	}
+	return nil
+}
+
+// validateWizardManifest validates the manifest that represents the completed
+// package: the local file before publication, or the registry copy afterwards.
+func validateWizardManifest(modelPath, artifact, registry, destination string) error {
+	var annotations map[string]string
+	if destination == "" {
+		manifest, err := workflow.ReadUnifiedOCIManifest(filepath.Join(modelPath, "manifest.json"))
+		if err != nil {
+			return fmt.Errorf("failed to read local manifest: %w", err)
+		}
+		annotations = manifest.Annotations
+		fmt.Println("Validating local manifest...")
+	} else {
+		provider, err := workflow.GetRegistryProvider(registry)
+		if err != nil {
+			return err
+		}
+		annotations, err = provider.FetchManifestAnnotations(destination + "/" + artifact)
+		if err != nil {
+			return fmt.Errorf("failed to fetch published manifest: %w", err)
+		}
+		fmt.Printf("Validating published manifest at %s/%s...\n", destination, artifact)
+	}
+	artifactType := workflow.ArtifactType(annotations[workflow.AnnotationArtifactType])
+	if artifactType == "" {
+		artifactType = workflow.ArtifactTypeModel
+	}
+	result := workflow.ValidateManifestMetadata(annotations, artifactType)
+	if !result.Valid {
+		return fmt.Errorf("manifest validation failed: %s", strings.Join(result.Errors, "; "))
 	}
 	return nil
 }

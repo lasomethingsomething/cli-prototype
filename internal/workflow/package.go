@@ -203,13 +203,11 @@ func (w *PackageWorkflow) Run() error {
 		fmt.Printf("  Artifact ready at: %s\n", fullArtifact)
 	}
 
-	// Signing and provenance are not part of packaging. They are Phase 1,
-	// Step 3 (Supply Chain Check), run afterwards with `model-cli sign`,
-	// which signs the finished artifact and attests it.
-	fmt.Println("\n=== Summary ===")
-	fmt.Println("Packaging complete!")
-
 	if w.showNextSteps {
+		// Signing and provenance are not part of packaging. They are Phase 1,
+		// Step 3 (Supply Chain Check), run afterwards with `model-cli sign`.
+		fmt.Println("\n=== Summary ===")
+		fmt.Println("Packaging complete!")
 		fmt.Println("\nNext steps:")
 		fmt.Printf("  - Harden (SBOM + MOF) with: model-cli harden --model %s --model-path %s --artifact %s\n", w.modelName, w.modelPath, w.artifactName)
 		fmt.Println("  - Sign and record provenance with: model-cli sign --artifact " + fullArtifact)

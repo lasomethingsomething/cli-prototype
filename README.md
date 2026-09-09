@@ -85,10 +85,11 @@ curl http://localhost:5000/v2/
 ```
 
 `{}` from `curl` means the local registry is ready. Start the wizard with
-signing and Kubernetes deployment skipped:
+signing skipped. Without a Kubernetes cluster, the wizard simulates phases
+5-7 so you can see the complete journey:
 
 ```bash
-./model-cli wizard --skip-signing --skip-deploy
+./model-cli wizard --skip-signing
 ```
 
 #### Step 1: Develop & Package
@@ -114,6 +115,13 @@ Press Enter to run the local compliance check after hardening completes. This
 generates the SBOM and MOF metadata, then checks both before the artifact can
 continue.
 
+After the compliance check passes, inspect the finalized manifest before
+continuing to publication:
+
+```bash
+cat ~/test-model/manifest.json
+```
+
 #### Step 3: Supply Chain Check
 
 Signing is skipped by `--skip-signing`. At the publish prompt, use:
@@ -129,6 +137,41 @@ with Harbor, GHCR, zot, and other OCI registries; those are destinations, not
 alternative clients. `modelpack` is the alternative CNCF ModelPack option.
 KServe and Kubeflow are serving platforms, and TUF is trust metadata.
 
+#### Step 4: Manifest-Level Validation
+
+The wizard validates `manifest.json` after the publish choice. When you chose
+the local Podman registry, it fetches and validates
+`localhost:5000/test:v1`; when you chose not to publish, it validates the
+local `~/test-model/manifest.json` instead.
+
+#### Step 5: GitOps Admission & Policy Enforcement
+
+| Prompt | Answer |
+|--------|--------|
+| GitOps tool | `flux (recommended)` |
+| Do you have a Kubernetes cluster? | `No` |
+
+Without a cluster, the wizard simulates the GitOps admission and policy stage.
+With a cluster, it asks for the Git repository URL and manifest path, then
+invokes the selected Flux or Argo CD client.
+
+#### Step 6: Infrastructure & Resource Orchestration
+
+The wizard simulates how Kubernetes would match the artifact's declared
+accelerator, CUDA, memory, GPU, and vRAM requirements to cluster nodes. With a
+cluster, use `model-cli validate nodes` for the actual node check.
+
+#### Step 7: Runtime Execution & Optimization
+
+| Prompt | Answer |
+|--------|--------|
+| Runtime | `vllm (recommended)` |
+
+The wizard simulates the selected runtime loading OCI layers and applying the
+artifact's runtime requirements. With a cluster, use `model-cli validate
+runtime`; `model-cli serve` delegates local vLLM serving or KServe handoff to
+the selected provider.
+
 The completed local artifact contains:
 
 - `~/test-model/manifest.json` - an OCI manifest carrying CNCF AI Interoperability Profile annotations
@@ -136,10 +179,9 @@ The completed local artifact contains:
 - `~/test-model/mof.json` - the MOF metadata
 - the SBOM format and MOF class/components as annotations in `~/test-model/manifest.json`
 
-The current prototype does not yet run phases 4-7 of the journey (remote
-manifest validation, GitOps admission, infrastructure orchestration, and
-runtime execution) from this wizard. The standalone `validate`, `deploy`,
-`schedule`, and `serve` commands cover those surfaces as they mature.
+Phases 5-7 are guided simulations when no Kubernetes cluster is connected.
+The standalone `validate`, `deploy`, `schedule`, and `serve` commands cover the
+corresponding cluster and runtime surfaces.
 
 Stop the temporary local registry when the test is complete:
 
