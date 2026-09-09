@@ -260,6 +260,13 @@ Examples:
 				Run(); err != nil {
 				return err
 			}
+			sbomGenerator, err := workflow.GetSBOMGenerator(sbomTool)
+			if err != nil {
+				return err
+			}
+			if !sbomGenerator.IsInstalled() {
+				return fmt.Errorf("%s is required to harden this artifact; install it with: %s", sbomGenerator.Name(), sbomGenerator.InstallInstructions())
+			}
 
 			annotations := workflow.NewAnnotationSet()
 			if err := huh.NewSelect[string]().

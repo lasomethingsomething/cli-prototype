@@ -50,7 +50,7 @@ local stage of the drive:
 mkdir -p ~/test-model
 echo "test" > ~/test-model/model.txt
 brew install oras  # OCI packaging (recommended)
-brew install syft  # SBOM generation (recommended)
+brew install anchore/syft/syft  # SBOM generation (recommended)
 ```
 
 Start the wizard without signing or deployment:
