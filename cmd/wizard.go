@@ -471,13 +471,11 @@ Examples:
 			fmt.Println(infoStyle.Render("Publishing skipped; the artifact remains local."))
 		}
 		ctxModel.SetConfig(cfg.Registry, cfg.GitOps, cfg.Signer, "")
-		ctxModel.SetStep(4)
-		nextAction = "Press Enter to continue to GitOps admission and policy enforcement."
-		if skipDeploy {
-			nextAction = "Press Enter to finish the wizard."
+		if !skipDeploy {
+			ctxModel.SetStep(4)
+			displayInteractiveContext(ctxModel, "Press Enter to continue to GitOps admission and policy enforcement.")
+			fmt.Println()
 		}
-		displayInteractiveContext(ctxModel, nextAction)
-		fmt.Println()
 
 		// === Step 5: GitOps admission and policy enforcement ===
 		var hasKubernetes bool
