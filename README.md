@@ -46,7 +46,20 @@ echo "test" > ~/test-model/model.txt
 brew install oras   # recommended; or see https://oras.land
 # go install github.com/modelpack/modctl@latest  # alternative: ModelPack
 
-# 3. Package it (empty --registry-url = keep it local, push nothing)
+# 3. Start the guided TUI wizard
+./model-cli wizard --skip-signing --skip-deploy
+```
+
+In the wizard, choose `oras (recommended)` and enter `test-model` for the
+model name, `~/test-model` for the model path, and `test:v1` for the artifact
+name. Choose an empty registry URL to keep the artifact local. The wizard then
+walks through tool choices and model metadata without requiring real hardware
+or software.
+
+To package only, without the guided wizard, run:
+
+```bash
+# Empty --registry-url = keep it local, push nothing.
 ./model-cli package \
   --model test-model \
   --model-path ~/test-model \
@@ -54,7 +67,7 @@ brew install oras   # recommended; or see https://oras.land
   --registry-url ""
 ```
 
-The CLI asks a few questions (runtime, accelerator, ...). **These are metadata only** - you don't need the hardware or software installed. Press Enter to accept defaults.
+The direct command asks a few questions (runtime, accelerator, ...). **These are metadata only** - you don't need the hardware or software installed. Press Enter to accept defaults.
 
 When prompted for a registry tool, choose `oras (recommended)`. ORAS stores OCI
 artifacts in any OCI registry, including Harbor, GHCR, and zot; those are
