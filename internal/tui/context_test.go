@@ -164,7 +164,7 @@ func TestContextModelProgressMatchesWizardJourney(t *testing.T) {
 	model := NewContextModel()
 	output := model.renderProgressTab()
 
-	for _, want := range []string{"Step 1 of 7", "→ Model Details", "· Package", "· Publish & Discovery"} {
+	for _, want := range []string{"Step 1 of 8", "→ Model Details", "· Package", "· Harden", "· Publish & Discovery"} {
 		if !strings.Contains(output, want) {
 			t.Errorf("progress tab does not contain %q:\n%s", want, output)
 		}

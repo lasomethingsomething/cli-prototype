@@ -1,9 +1,41 @@
 package cmd
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestExpandHomePath(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("UserHomeDir() error = %v", err)
+	}
+
+	tests := []struct {
+		name string
+		path string
+		want string
+	}{
+		{name: "home", path: "~", want: home},
+		{name: "home child", path: "~/test-model", want: filepath.Join(home, "test-model")},
+		{name: "relative", path: "./models/test", want: "./models/test"},
+		{name: "absolute", path: "/tmp/test-model", want: "/tmp/test-model"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := expandHomePath(test.path)
+			if err != nil {
+				t.Fatalf("expandHomePath(%q) error = %v", test.path, err)
+			}
+			if got != test.want {
+				t.Errorf("expandHomePath(%q) = %q, want %q", test.path, got, test.want)
+			}
+		})
+	}
+}
 
 func TestBuildSummaryLines_AllSucceeded(t *testing.T) {
 	r := wizardResult{

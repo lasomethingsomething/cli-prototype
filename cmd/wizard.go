@@ -3,6 +3,8 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
@@ -154,6 +156,11 @@ Examples:
 			Run(); err != nil {
 			return err
 		}
+		expandedModelPath, err := expandHomePath(modelPath)
+		if err != nil {
+			return err
+		}
+		modelPath = expandedModelPath
 
 		var artifactName string
 		if err := huh.NewInput().
@@ -181,6 +188,11 @@ Examples:
 				Run(); err != nil {
 				return err
 			}
+			expandedRAGPath, err := expandHomePath(ragPath)
+			if err != nil {
+				return err
+			}
+			ragPath = expandedRAGPath
 		}
 
 		fmt.Println(successStyle.Render("✓ Model details collected"))
@@ -189,7 +201,7 @@ Examples:
 		// Show interactive context panel with current progress
 		ctxModel.SetStep(1)
 		ctxModel.SetModelInfo(modelName, modelPath, artifactName)
-		displayInteractiveContext(ctxModel)
+		displayInteractiveContext(ctxModel, "Press Enter to package your model locally.")
 
 		// === Step 2: Package (SBOM and MOF are the separate `harden` step) ===
 		fmt.Println(stepStyle.Render("Step 2: Package Model"))
@@ -203,6 +215,7 @@ Examples:
 		}
 
 		packageSucceeded := false
+		hardenSucceeded := false
 		signSucceeded := false
 		verifySucceeded := false
 		deploySucceeded := false
@@ -230,17 +243,67 @@ Examples:
 		ctxModel.SetResults(packageSucceeded, false, false, false)
 		ctxModel.AddLog(fmt.Sprintf("Packaged artifact: %s", artifactName))
 		fmt.Println()
-		displayInteractiveContext(ctxModel)
+		displayInteractiveContext(ctxModel, "Press Enter to generate an SBOM and classify the model.")
 
 		fmt.Println()
 
-		// === Step 3: Compliance Check (local) ===
-		fmt.Println(stepStyle.Render("Step 3: Compliance Check"))
+		// === Step 3: Harden the local artifact ===
+		fmt.Println(stepStyle.Render("Step 3: Harden Artifact"))
+		fmt.Println()
+		if packageSucceeded {
+			sbomTool := workflow.SBOMToolOptions().Recommended()
+			if err := huh.NewSelect[string]().
+				Title("Which tool should generate the SBOM?").
+				Description("The SBOM is required before this artifact can be published.").
+				Options(toolOptions(workflow.SBOMToolOptions())...).
+				Value(&sbomTool).
+				Run(); err != nil {
+				return err
+			}
+
+			annotations := workflow.NewAnnotationSet()
+			if err := huh.NewSelect[string]().
+				Title("How should the Model Openness Framework class be set?").
+				Description("Auto detects the classification from the model files.").
+				Options(
+					huh.NewOption("auto (recommended)", ""),
+					huh.NewOption("I - open weights, code, data, docs, and license", "I"),
+					huh.NewOption("II - open weights plus code, data, or docs", "II"),
+					huh.NewOption("III - weights only", "III"),
+				).
+				Value(&annotations.MOFClass).
+				Run(); err != nil {
+				return err
+			}
+
+			hardenWorkflow := workflow.NewHardenWorkflow("")
+			hardenWorkflow.SetHardenInfo(modelName, modelPath, artifactName)
+			hardenWorkflow.SetOptions(true, true)
+			hardenWorkflow.SetSBOMTool(sbomTool, workflow.SPDXJSON)
+			hardenWorkflow.SetAnnotations(annotations)
+			if err := hardenWorkflow.Run(); err != nil {
+				return fmt.Errorf("hardening must complete before compliance: %w", err)
+			}
+			hardenSucceeded = true
+		} else {
+			fmt.Println(infoStyle.Render("Hardening skipped because packaging did not complete."))
+		}
+
+		ctxModel.SetStep(3)
+		ctxModel.SetResults(packageSucceeded, false, false, false)
+		ctxModel.AddLog("Hardening completed")
+		fmt.Println()
+		displayInteractiveContext(ctxModel, "Press Enter to run the local compliance check.")
+
+		fmt.Println()
+
+		// === Step 4: Compliance Check (local) ===
+		fmt.Println(stepStyle.Render("Step 4: Compliance Check"))
 		fmt.Println()
 
 		// Run compliance check on the local artifact before push
 		checkSucceeded := false
-		if packageSucceeded && !skipCheck {
+		if hardenSucceeded && !skipCheck {
 			fmt.Println("Running local compliance check before signing...")
 			fmt.Println()
 
@@ -269,25 +332,33 @@ Examples:
 			fmt.Println()
 			checkSucceeded = true // Consider passed if skipped
 		} else {
-			fmt.Println(infoStyle.Render("⚠ Skipping compliance check (package failed)"))
+			fmt.Println(infoStyle.Render("⚠ Skipping compliance check (hardening did not complete)"))
 			fmt.Println()
 		}
 
 		// Update context model
-		ctxModel.SetStep(3)
+		ctxModel.SetStep(4)
 		ctxModel.AddLog("Compliance check completed")
 		if checkSucceeded {
 			ctxModel.AddLog("All checks passed")
 		} else {
 			ctxModel.AddLog("Some checks failed")
 		}
-		displayInteractiveContext(ctxModel)
+		if !checkSucceeded && !skipCheck {
+			return fmt.Errorf("compliance must pass before signing, publishing, or deployment")
+		}
+
+		nextAction := "Press Enter to choose a signing tool."
+		if skipSigning {
+			nextAction = "Press Enter to choose how to publish the artifact."
+		}
+		displayInteractiveContext(ctxModel, nextAction)
 
 		fmt.Println()
 
-		// === Step 4: Sign (unless skipped) ===
+		// === Step 5: Sign (unless skipped) ===
 		if !skipSigning {
-			fmt.Println(stepStyle.Render("Step 4: Sign Artifact"))
+			fmt.Println(stepStyle.Render("Step 5: Sign Artifact"))
 			fmt.Println()
 
 			signerTool := cfg.Signer
@@ -319,9 +390,9 @@ Examples:
 			fmt.Println()
 		}
 
-		// === Step 5: Verify (unless skipped) ===
+		// === Step 6: Verify (unless skipped) ===
 		if !skipSigning {
-			fmt.Println(stepStyle.Render("Step 5: Verify Signature"))
+			fmt.Println(stepStyle.Render("Step 6: Verify Signature"))
 			fmt.Println()
 
 			sp, err := workflow.GetSigningProvider(cfg.Signer)
@@ -342,8 +413,8 @@ Examples:
 			fmt.Println()
 		}
 
-		// === Step 6: Publish and discovery ===
-		fmt.Println(stepStyle.Render("Step 6: Publish & Discovery"))
+		// === Step 7: Publish and discovery ===
+		fmt.Println(stepStyle.Render("Step 7: Publish & Discovery"))
 		fmt.Println()
 		registryTool := cfg.Registry
 		if err := huh.NewSelect[string]().
@@ -356,16 +427,20 @@ Examples:
 		}
 		cfg.Registry = registryTool
 		ctxModel.SetConfig(cfg.Registry, cfg.GitOps, cfg.Signer, "")
-		ctxModel.SetStep(6)
-		displayInteractiveContext(ctxModel)
+		ctxModel.SetStep(7)
+		nextAction = "Press Enter to start GitOps promotion."
+		if skipDeploy {
+			nextAction = "Press Enter to finish the wizard."
+		}
+		displayInteractiveContext(ctxModel, nextAction)
 		fmt.Println()
 
-		// === Step 7: GitOps promotion and deployment (unless skipped) ===
+		// === Step 8: GitOps promotion and deployment (unless skipped) ===
 		var hasKubernetes bool
 		var repoURL string
 		var manifestPath string
 		if !skipDeploy {
-			fmt.Println(stepStyle.Render("Step 7: GitOps Promotion"))
+			fmt.Println(stepStyle.Render("Step 8: GitOps Promotion"))
 			fmt.Println()
 			if err := huh.NewConfirm().
 				Title("Do you have a Kubernetes cluster?").
@@ -405,7 +480,7 @@ Examples:
 		}
 
 		if hasKubernetes && !skipDeploy {
-			fmt.Println(stepStyle.Render("Step 7: Deploy to Kubernetes"))
+			fmt.Println(stepStyle.Render("Step 8: Deploy to Kubernetes"))
 			fmt.Println()
 
 			// Check if GitOps and registry providers are installed before deploying
@@ -443,7 +518,7 @@ Examples:
 			}
 			fmt.Println()
 		} else if !skipDeploy {
-			fmt.Println(stepStyle.Render("Step 7: Deployment Skipped"))
+			fmt.Println(stepStyle.Render("Step 8: Deployment Skipped"))
 			fmt.Println()
 			fmt.Println(infoStyle.Render("No Kubernetes cluster detected or deployment skipped"))
 			fmt.Println(infoStyle.Render("Your model is packaged and signed, ready for deployment"))
@@ -482,8 +557,24 @@ Examples:
 	},
 }
 
+// expandHomePath expands the home-directory shorthand that shells normally
+// expand before commands run, but which an interactive text input preserves.
+func expandHomePath(path string) (string, error) {
+	if path != "~" && !strings.HasPrefix(path, "~/") {
+		return path, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("could not determine home directory: %w", err)
+	}
+	if path == "~" {
+		return home, nil
+	}
+	return filepath.Join(home, path[2:]), nil
+}
+
 // displayInteractiveContext displays an interactive context panel with tabs
-func displayInteractiveContext(ctxModel *tui.ContextModel) {
+func displayInteractiveContext(ctxModel *tui.ContextModel, nextAction string) {
 	// Check if stdin is a TTY (interactive terminal)
 	if !isTTY() {
 		// Non-interactive mode: just print the first tab
@@ -493,7 +584,8 @@ func displayInteractiveContext(ctxModel *tui.ContextModel) {
 	}
 
 	fmt.Println()
-	fmt.Println("Press Tab/Shift+Tab to switch views, 1-6 to select tab, Enter to continue, Esc to go back")
+	fmt.Println(nextAction)
+	fmt.Println("Tab/Shift+Tab: switch views | 1-6: select tab | Esc: cancel")
 	fmt.Println()
 
 	// Run the interactive context model

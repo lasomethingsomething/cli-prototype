@@ -63,7 +63,7 @@ type ContextModel struct {
 func NewContextModel() *ContextModel {
 	return &ContextModel{
 		CurrentStep: 1,
-		TotalSteps:  7,
+		TotalSteps:  8,
 		ActiveTab:   TabProgress,
 		Logs:        make([]string, 0),
 		width:       40,
@@ -184,7 +184,7 @@ func (m *ContextModel) renderProgressTab() string {
 
 	// Status of each step
 	sb.WriteString("Workflow Steps:\n")
-	steps := []string{"Model Details", "Package", "Compliance", "Sign", "Verify", "Publish & Discovery", "GitOps Promotion"}
+	steps := []string{"Model Details", "Package", "Harden", "Compliance", "Sign", "Verify", "Publish & Discovery", "GitOps Promotion"}
 	for i, step := range steps {
 		stepNumber := i + 1
 		symbol := "·"

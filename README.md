@@ -26,26 +26,40 @@ Model CLI packages, signs, verifies, and deploys ML models as OCI artifacts thro
 ## Quick Test Drive (5 minutes)
 
 Try the CLI with a plain text file. No real model, registry, or GPU required.
-Choose the setup that matches where you are starting:
+
+### Interactive Wizard
+
+Build the CLI first. Choose the path that matches where you are starting.
 
 ```bash
-# Option A: First-time user: clone and build the CLI (requires Go 1.23+)
+# First-time user (requires Go 1.23+)
 git clone https://github.com/lasomethingsomething/cli-prototype.git
 cd cli-prototype
 go build -o model-cli .
+```
 
-# Option B: Contributor: from your existing cli-prototype checkout
+```bash
+# Contributor: run this from your existing cli-prototype checkout
 go build -o model-cli .
+```
 
-# 1. Create a dummy model
+Create a harmless dummy model and install the tools needed to complete every
+local stage of the drive:
+
+```bash
 mkdir -p ~/test-model
 echo "test" > ~/test-model/model.txt
+brew install oras  # OCI packaging (recommended)
+brew install syft  # SBOM generation (recommended)
+```
 
-# 2. Start the guided TUI wizard
+Start the wizard without signing or deployment:
+
+```bash
 ./model-cli wizard --skip-signing --skip-deploy
 ```
 
-For this dummy-model run, answer the wizard prompts as follows:
+For this dummy-model run, use these answers:
 
 | Prompt | Answer |
 |--------|--------|
@@ -53,75 +67,55 @@ For this dummy-model run, answer the wizard prompts as follows:
 | Model path | `~/test-model` |
 | Artifact name | `test:v1` |
 | Include RAG context? | `No` |
+| SBOM tool | `syft (recommended)` |
+| Model Openness Framework class | `auto (recommended)` |
 | Signing tool | Skipped by `--skip-signing` |
 | Publish tool | `oras (recommended)` |
 | Kubernetes / GitOps | Skipped by `--skip-deploy` |
 
-The wizard walks through the remaining tool choices and model metadata without
-requiring real hardware or software. It uses a local-only package, so it does
-not ask for a registry URL.
+The wizard packages the model, generates an SBOM, classifies MOF, and passes a
+local compliance gate. It does not ask for a registry URL or upload the dummy
+artifact. ORAS is the recommended OCI client for Harbor, GHCR, zot, and other
+OCI registries. `modelpack` is the alternative CNCF ModelPack option; KServe,
+Kubeflow, and TUF belong to serving or trust flows, not the registry choice.
 
-The wizard can start without a registry tool. When it reaches packaging, it
-shows the install command for the provider you selected and skips packaging.
-To create the local manifest, install the tool and run the wizard again:
-
-```bash
-# ORAS is recommended; choose ModelPack instead only if you have modctl.
-brew install oras   # recommended; or see https://oras.land
-# go install github.com/modelpack/modctl@latest  # alternative: ModelPack
-./model-cli wizard --skip-signing --skip-deploy
-```
-
-To package only, without the guided wizard, run:
-
-```bash
-# Empty --registry-url = keep it local, push nothing.
-./model-cli package \
-  --model test-model \
-  --model-path ~/test-model \
-  --artifact test:v1 \
-  --registry-url ""
-```
-
-The direct command asks a few questions (runtime, accelerator, ...). **These are metadata only** - you don't need the hardware or software installed. Press Enter to accept defaults.
-
-When prompted for a registry tool, choose `oras (recommended)`. ORAS stores OCI
-artifacts in any OCI registry, including Harbor, GHCR, and zot; those are
-destinations, not alternative registry tools. The other available choice is
-`modelpack`, which uses `modctl` for CNCF ModelPack artifacts and currently
-also needs ORAS when pushing, to annotate manifests and handle referrers. For
-this local-only run, install the tool you select. KServe and Kubeflow are
-serving platforms, while TUF is trust metadata; choose them in their respective
-deployment or signing flows, not as a registry tool.
-
-You'll end up with:
+The completed local artifact contains:
 
 - `~/test-model/manifest.json` - an OCI manifest carrying CNCF AI Interoperability Profile annotations
-
-```bash
-# 5. Harden it: SBOM + MOF classification, recorded in the manifest from step 4
-brew install syft   # or pick trivy / cdxgen with --sbom-tool
-./model-cli harden --model test-model --model-path ~/test-model --artifact test:v1
-```
-
-This asks which SBOM tool to use (`syft` is recommended) and which MOF class to declare (default: detected from the files). It adds:
-
 - `~/test-model/sbom.spdx-json` - the SBOM
 - `~/test-model/mof.json` - the MOF metadata
 - the SBOM format and MOF class/components as annotations in `~/test-model/manifest.json`
 
-`harden` refuses to run before `package` (no `manifest.json` yet), so the order is always package, then harden.
+The wizard runs hardening after packaging and before the compliance gate.
+`harden` remains available when you need to rerun that stage independently.
 
-Signing and the SLSA provenance attestation are a separate step that runs afterwards: `model-cli sign --artifact test:v1`.
+### Non-Interactive Package And Harden
 
-A detailed, annotated walkthrough of this run is in [docs/trial-run-report.md](docs/trial-run-report.md).
-
-Anything you pass as a flag is not prompted for again. In CI or scripts, prompts are disabled automatically when stdin is not a terminal (or with `--non-interactive` / `MODEL_CLI_NO_INTERACTIVE=1`): saved config and defaults fill the gaps, and a missing required value fails with a message naming the flag to pass:
+For CI or scripts, pass every required choice as a flag. This produces the same
+local package and hardening results without prompts:
 
 ```bash
-./model-cli package --model test-model --model-path ~/test-model --artifact test:v1 \
-  --registry oras --registry-url "" --accelerator cpu --non-interactive
+./model-cli package \
+  --model test-model \
+  --model-path ~/test-model \
+  --artifact test:v1 \
+  --registry oras \
+  --registry-url "" \
+  --accelerator cpu \
+  --non-interactive
+
+./model-cli harden \
+  --model test-model \
+  --model-path ~/test-model \
+  --artifact test:v1 \
+  --sbom-tool syft \
+  --mof-class "" \
+  --non-interactive
 ```
+
+Signing and the SLSA provenance attestation are separate: `model-cli sign --artifact test:v1`.
+
+A detailed, annotated walkthrough of this run is in [docs/trial-run-report.md](docs/trial-run-report.md).
 
 ## Commands
 
