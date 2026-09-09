@@ -41,20 +41,26 @@ go build -o model-cli .
 mkdir -p ~/test-model
 echo "test" > ~/test-model/model.txt
 
-# 2. Install a registry tool
-# ORAS is recommended; choose ModelPack instead only if you have modctl.
-brew install oras   # recommended; or see https://oras.land
-# go install github.com/modelpack/modctl@latest  # alternative: ModelPack
-
-# 3. Start the guided TUI wizard
+# 2. Start the guided TUI wizard
 ./model-cli wizard --skip-signing --skip-deploy
 ```
 
 In the wizard, choose `oras (recommended)` and enter `test-model` for the
 model name, `~/test-model` for the model path, and `test:v1` for the artifact
-name. Choose an empty registry URL to keep the artifact local. The wizard then
-walks through tool choices and model metadata without requiring real hardware
-or software.
+name. The wizard walks through tool choices and model metadata without
+requiring real hardware or software. It uses a local-only package, so it does
+not ask for a registry URL.
+
+The wizard can start without a registry tool. When it reaches packaging, it
+shows the install command for the provider you selected and skips packaging.
+To create the local manifest, install the tool and run the wizard again:
+
+```bash
+# ORAS is recommended; choose ModelPack instead only if you have modctl.
+brew install oras   # recommended; or see https://oras.land
+# go install github.com/modelpack/modctl@latest  # alternative: ModelPack
+./model-cli wizard --skip-signing --skip-deploy
+```
 
 To package only, without the guided wizard, run:
 
