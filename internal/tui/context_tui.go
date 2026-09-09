@@ -17,8 +17,8 @@ const (
 	TabConfig
 	TabModel
 	TabLogs
-	TabHelp
 	TabEnv
+	TabHelp
 )
 
 // ContextModel is the interactive context panel model
@@ -63,7 +63,7 @@ type ContextModel struct {
 func NewContextModel() *ContextModel {
 	return &ContextModel{
 		CurrentStep: 1,
-		TotalSteps:  8,
+		TotalSteps:  7,
 		ActiveTab:   TabProgress,
 		Logs:        make([]string, 0),
 		width:       40,
@@ -122,7 +122,7 @@ func (m *ContextModel) renderHeader() string {
 
 // renderTabBar renders the tab navigation bar
 func (m *ContextModel) renderTabBar() string {
-	tabs := []string{"Progress", "Config", "Model", "Logs", "Help", "Env"}
+	tabs := []string{"Progress", "Config", "Model", "Logs", "Env", "Help"}
 
 	var sb strings.Builder
 
@@ -159,10 +159,10 @@ func (m *ContextModel) renderTabContent() string {
 		return m.renderModelTab()
 	case TabLogs:
 		return m.renderLogsTab()
-	case TabHelp:
-		return m.renderHelpTab()
 	case TabEnv:
 		return m.renderEnvTab()
+	case TabHelp:
+		return m.renderHelpTab()
 	}
 	return ""
 }
@@ -184,25 +184,26 @@ func (m *ContextModel) renderProgressTab() string {
 
 	// Status of each step
 	sb.WriteString("Workflow Steps:\n")
-	steps := []string{"Setup", "Model Details", "K8s Setup", "Package", "Compliance", "Sign", "Verify", "Deploy"}
+	steps := []string{"Package Setup", "Model Details", "Package", "Compliance", "Sign", "Verify", "GitOps Promotion"}
 	for i, step := range steps {
+		stepNumber := i + 1
 		symbol := "·"
-		if i < m.CurrentStep {
+		if stepNumber < m.CurrentStep {
 			symbol = "✓"
 		}
-		if i == m.CurrentStep {
+		if stepNumber == m.CurrentStep {
 			symbol = "→"
 		}
-		if i > m.CurrentStep {
+		if stepNumber > m.CurrentStep {
 			symbol = "·"
 		}
 
 		// Color based on results
 		color := "#555555"
-		if i == int(m.CurrentStep) {
+		if stepNumber == m.CurrentStep {
 			color = "#55AAFF"
 		}
-		if i < m.CurrentStep {
+		if stepNumber < m.CurrentStep {
 			color = "#00FF88"
 		}
 
@@ -419,10 +420,10 @@ func (m *ContextModel) HandleKey(key string) {
 		m.ActiveTab = TabLogs
 
 	case "5":
-		m.ActiveTab = TabHelp
+		m.ActiveTab = TabEnv
 
 	case "6":
-		m.ActiveTab = TabEnv
+		m.ActiveTab = TabHelp
 
 	case "enter":
 		// Exit the context panel and continue

@@ -112,6 +112,16 @@ func TestContextModelHandleKey(t *testing.T) {
 		t.Errorf("Expected ActiveTab to be TabProgress after '1', got %d", model.ActiveTab)
 	}
 
+	model.HandleKey("5")
+	if model.ActiveTab != TabEnv {
+		t.Errorf("Expected ActiveTab to be TabEnv after '5', got %d", model.ActiveTab)
+	}
+
+	model.HandleKey("6")
+	if model.ActiveTab != TabHelp {
+		t.Errorf("Expected ActiveTab to be TabHelp after '6', got %d", model.ActiveTab)
+	}
+
 	// Test Enter key sets Done flag
 	model.HandleKey("enter")
 	if !model.Done {
@@ -147,5 +157,19 @@ func TestContextModelHandleKey(t *testing.T) {
 	}
 	if !model.IsCancelled() {
 		t.Error("Expected IsCancelled() to be true")
+	}
+}
+
+func TestContextModelProgressMatchesWizardJourney(t *testing.T) {
+	model := NewContextModel()
+	output := model.renderProgressTab()
+
+	for _, want := range []string{"Step 1 of 7", "→ Package Setup", "· Model Details", "· GitOps Promotion"} {
+		if !strings.Contains(output, want) {
+			t.Errorf("progress tab does not contain %q:\n%s", want, output)
+		}
+	}
+	if strings.Contains(output, "K8s Setup") {
+		t.Errorf("progress tab contains removed K8s setup stage:\n%s", output)
 	}
 }
