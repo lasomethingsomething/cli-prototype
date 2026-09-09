@@ -184,7 +184,7 @@ func (m *ContextModel) renderProgressTab() string {
 
 	// Status of each step
 	sb.WriteString("Workflow Steps:\n")
-	steps := []string{"Package Setup", "Model Details", "Package", "Compliance", "Sign", "Verify", "GitOps Promotion"}
+	steps := []string{"Model Details", "Package", "Compliance", "Sign", "Verify", "Publish & Discovery", "GitOps Promotion"}
 	for i, step := range steps {
 		stepNumber := i + 1
 		symbol := "·"

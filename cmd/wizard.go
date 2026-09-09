@@ -133,38 +133,8 @@ Examples:
 		fmt.Println(subtitleStyle.Render("Your guided journey from model to production"))
 		fmt.Println()
 
-		// === Step 1: Package Setup ===
-		fmt.Println(stepStyle.Render("Step 1: Package Setup"))
-		fmt.Println()
-
-		// Always begin the journey with packaging. A saved provider is a default,
-		// not a reason to hide the choice and jump straight to deployment.
-		registryTool := cfg.Registry
-		if err := huh.NewSelect[string]().
-			Title("How would you like to package your model?").
-			Description(infoStyle.Render("Harbor, GHCR, zot and any other OCI registry are used through ORAS")).
-			Options(toolOptions(workflow.RegistryOptions())...).
-			Value(&registryTool).
-			Run(); err != nil {
-			return err
-		}
-		cfg.Registry = registryTool
-
-		if err := config.Save(cfg); err != nil {
-			fmt.Printf("Warning: failed to save config: %v\n", err)
-		} else {
-			fmt.Println(successStyle.Render("✓ Registry preference saved"))
-		}
-		fmt.Println()
-
-		// Update context model with config
-		ctxModel.SetConfig(cfg.Registry, cfg.GitOps, cfg.Signer, "")
-		ctxModel.SetStep(1)
-		displayInteractiveContext(ctxModel)
-		fmt.Println()
-
-		// === Step 2: Model Information ===
-		fmt.Println(stepStyle.Render("Step 2: Model Details"))
+		// === Step 1: Model Information ===
+		fmt.Println(stepStyle.Render("Step 1: Model Details"))
 		fmt.Println()
 
 		var modelName string
@@ -217,16 +187,17 @@ Examples:
 		fmt.Println()
 
 		// Show interactive context panel with current progress
-		ctxModel.SetStep(2)
+		ctxModel.SetStep(1)
 		ctxModel.SetModelInfo(modelName, modelPath, artifactName)
 		displayInteractiveContext(ctxModel)
 
-		// === Step 3: Package (SBOM and MOF are the separate `harden` step) ===
-		fmt.Println(stepStyle.Render("Step 3: Package Model"))
+		// === Step 2: Package (SBOM and MOF are the separate `harden` step) ===
+		fmt.Println(stepStyle.Render("Step 2: Package Model"))
 		fmt.Println()
 
 		// Check if registry provider is installed before attempting to package
-		registryProvider, err := workflow.GetRegistryProvider(cfg.Registry)
+		localRegistryTool := workflow.RegistryOptions().Recommended()
+		registryProvider, err := workflow.GetRegistryProvider(localRegistryTool)
 		if err != nil {
 			return err
 		}
@@ -239,7 +210,7 @@ Examples:
 			fmt.Println(warningStyle.Render("Warning: Registry tool not installed"))
 			fmt.Printf("   Install with: %s\n\n", registryProvider.InstallInstructions())
 		} else {
-			pf, err := workflow.NewPackageWorkflow(cfg.Registry)
+			pf, err := workflow.NewPackageWorkflow(localRegistryTool)
 			if err != nil {
 				return err
 			}
@@ -255,7 +226,7 @@ Examples:
 		// In real implementation, would push to registry
 
 		// Update context model
-		ctxModel.SetStep(3)
+		ctxModel.SetStep(2)
 		ctxModel.SetResults(packageSucceeded, false, false, false)
 		ctxModel.AddLog(fmt.Sprintf("Packaged artifact: %s", artifactName))
 		fmt.Println()
@@ -263,8 +234,8 @@ Examples:
 
 		fmt.Println()
 
-		// === Step 4: Compliance Check (local) ===
-		fmt.Println(stepStyle.Render("Step 4: Compliance Check"))
+		// === Step 3: Compliance Check (local) ===
+		fmt.Println(stepStyle.Render("Step 3: Compliance Check"))
 		fmt.Println()
 
 		// Run compliance check on the local artifact before push
@@ -303,7 +274,7 @@ Examples:
 		}
 
 		// Update context model
-		ctxModel.SetStep(4)
+		ctxModel.SetStep(3)
 		ctxModel.AddLog("Compliance check completed")
 		if checkSucceeded {
 			ctxModel.AddLog("All checks passed")
@@ -314,9 +285,9 @@ Examples:
 
 		fmt.Println()
 
-		// === Step 5: Sign (unless skipped) ===
+		// === Step 4: Sign (unless skipped) ===
 		if !skipSigning {
-			fmt.Println(stepStyle.Render("Step 5: Sign Artifact"))
+			fmt.Println(stepStyle.Render("Step 4: Sign Artifact"))
 			fmt.Println()
 
 			signerTool := cfg.Signer
@@ -348,9 +319,9 @@ Examples:
 			fmt.Println()
 		}
 
-		// === Step 6: Verify (unless skipped) ===
+		// === Step 5: Verify (unless skipped) ===
 		if !skipSigning {
-			fmt.Println(stepStyle.Render("Step 6: Verify Signature"))
+			fmt.Println(stepStyle.Render("Step 5: Verify Signature"))
 			fmt.Println()
 
 			sp, err := workflow.GetSigningProvider(cfg.Signer)
@@ -370,6 +341,24 @@ Examples:
 			}
 			fmt.Println()
 		}
+
+		// === Step 6: Publish and discovery ===
+		fmt.Println(stepStyle.Render("Step 6: Publish & Discovery"))
+		fmt.Println()
+		registryTool := cfg.Registry
+		if err := huh.NewSelect[string]().
+			Title("Where would you like to publish your artifact?").
+			Description(infoStyle.Render("ORAS works with Harbor, GHCR, zot, and other OCI registries")).
+			Options(toolOptions(workflow.RegistryOptions())...).
+			Value(&registryTool).
+			Run(); err != nil {
+			return err
+		}
+		cfg.Registry = registryTool
+		ctxModel.SetConfig(cfg.Registry, cfg.GitOps, cfg.Signer, "")
+		ctxModel.SetStep(6)
+		displayInteractiveContext(ctxModel)
+		fmt.Println()
 
 		// === Step 7: GitOps promotion and deployment (unless skipped) ===
 		var hasKubernetes bool

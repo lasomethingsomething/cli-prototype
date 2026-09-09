@@ -45,9 +45,19 @@ echo "test" > ~/test-model/model.txt
 ./model-cli wizard --skip-signing --skip-deploy
 ```
 
-In the wizard, choose `oras (recommended)` and enter `test-model` for the
-model name, `~/test-model` for the model path, and `test:v1` for the artifact
-name. The wizard walks through tool choices and model metadata without
+For this dummy-model run, answer the wizard prompts as follows:
+
+| Prompt | Answer |
+|--------|--------|
+| Model name | `test-model` |
+| Model path | `~/test-model` |
+| Artifact name | `test:v1` |
+| Include RAG context? | `No` |
+| Signing tool | Skipped by `--skip-signing` |
+| Publish tool | `oras (recommended)` |
+| Kubernetes / GitOps | Skipped by `--skip-deploy` |
+
+The wizard walks through the remaining tool choices and model metadata without
 requiring real hardware or software. It uses a local-only package, so it does
 not ask for a registry URL.
 
