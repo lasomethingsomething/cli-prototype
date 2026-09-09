@@ -115,8 +115,8 @@ Press Enter to run the local compliance check after hardening completes. This
 generates the SBOM and MOF metadata, then checks both before the artifact can
 continue.
 
-After the compliance check passes, inspect the finalized manifest before
-continuing to publication:
+After the compliance check passes, inspect the current local manifest before
+continuing. Publishing and signing may add or attach further delivery metadata:
 
 ```bash
 cat ~/test-model/manifest.json

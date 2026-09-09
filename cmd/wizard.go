@@ -370,7 +370,7 @@ Examples:
 			return fmt.Errorf("compliance must pass before signing, publishing, or deployment")
 		}
 		if checkSucceeded {
-			fmt.Printf("\nInspect the finalized manifest with:\n  cat %s\n", filepath.Join(modelPath, "manifest.json"))
+			fmt.Printf("\nInspect the current local manifest with:\n  cat %s\n", filepath.Join(modelPath, "manifest.json"))
 		}
 
 		nextAction := "Press Enter to choose a signing tool."
