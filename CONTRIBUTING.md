@@ -46,6 +46,9 @@ gofmt -l .      # CI fails if this prints anything
 go vet ./...
 ```
 
+CI runs build and tests on every pull request. Tagging `v*` builds binaries for
+Linux, macOS, and Windows and attaches them to a GitHub release.
+
 ### End-to-end tests
 
 `test/e2e` drives the built binary against a real OCI registry ([zot](https://zotregistry.dev)) with
