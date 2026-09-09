@@ -26,23 +26,27 @@ Model CLI packages, signs, verifies, and deploys ML models as OCI artifacts thro
 ## Quick Test Drive (5 minutes)
 
 Try the CLI with a plain text file. No real model, registry, or GPU required.
+Choose the setup that matches where you are starting:
 
 ```bash
-# 1. Create a dummy model
-mkdir -p ~/test-model
-echo "test" > ~/test-model/model.txt
-
-# 2. Build the CLI (requires Go 1.23+)
+# Option A: First-time user: clone and build the CLI (requires Go 1.23+)
 git clone https://github.com/lasomethingsomething/cli-prototype.git
 cd cli-prototype
 go build -o model-cli .
 
-# 3. Install a registry tool
+# Option B: Contributor: from your existing cli-prototype checkout
+go build -o model-cli .
+
+# 1. Create a dummy model
+mkdir -p ~/test-model
+echo "test" > ~/test-model/model.txt
+
+# 2. Install a registry tool
 # ORAS is recommended; choose ModelPack instead only if you have modctl.
 brew install oras   # recommended; or see https://oras.land
 # go install github.com/modelpack/modctl@latest  # alternative: ModelPack
 
-# 4. Package it (empty --registry-url = keep it local, push nothing)
+# 3. Package it (empty --registry-url = keep it local, push nothing)
 ./model-cli package \
   --model test-model \
   --model-path ~/test-model \
