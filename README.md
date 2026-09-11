@@ -10,14 +10,13 @@ Model CLI guides you through that journey, collects the needed details, and lets
 
 The workflow, in seven action-led steps:
 
-1. **Develop & Package** - bundle the model folder into a standard container-style artifact and tag it with metadata.
-2. **Local Hardening & Compliance** - generate an ingredients list (SBOM) and classify how open the model is (MOF), and record both in the packaged artifact.
-3. **Supply Chain Check** - stamp it cryptographically so tampering can be detected later, and record a proof of origin (provenance) for the finished artifact.
-4. **Manifest-Level Validation** - upload it to a registry.
-5. **GitOps Admission & Policy Enforcement** - check the metadata against your rules locally, at the registry, and at the cluster door, using one shared engine so passing in one place means passing everywhere.
-6. **Infrastructure & Resource Orchestration** - hand the approved artifact to Argo CD / Flux and a serving runtime such as vLLM or KServe.
-7. **Runtime Execution & Optimization** - match the artifact's runtime and hardware requirements to infrastructure that can run it.
-
+1. **Develop & Package**: Creates a local OCI artifact manifest from the model folder and tags it with CNCF AI Interoperability Profile metadata.
+2. **Local Hardening & Compliance**: Generates an SBOM and MOF classification, and records both in the packaged artifact.
+3. **Supply Chain Check**: Cryptographically signs the artifact so tampering can be detected later, and records a proof of origin (provenance) for the finished artifact.
+4. **Manifest-Level Validation**: Delegates upload to a registry to ORAS or ModelPack.
+5. **GitOps Admission & Policy Enforcement**: Hands the artifact to Argo CD or Flux as a prototype. _Does not auto-enforce policy_.
+6. **Infrastructure & Resource Orchestration**: Validates that infrastructure matches the artifact’s runtime and hardware requirements.
+7. **Runtime Execution & Optimization**: Validates serving runtime availability (vLLM, KServe). _Does not execute or optimize_.
 
 If terms like *SBOM*, *MOF*, or *admission* are new to you, see the
 [Concepts and Glossary](docs/concepts-and-glossary.md).
