@@ -10,13 +10,14 @@ Model CLI guides you through that journey, collects the needed details, and lets
 
 The workflow, in seven action-led steps:
 
-1. **Package** - bundle the model folder into a standard container-style artifact and tag it with metadata.
-2. **Harden** - generate an ingredients list (SBOM) and classify how open the model is (MOF), and record both in the packaged artifact.
-3. **Sign** - stamp it cryptographically so tampering can be detected later, and record a proof of origin (provenance) for the finished artifact.
-4. **Push** - upload it to a registry.
-5. **Validate** - check the metadata against your rules locally, at the registry, and at the cluster door, using one shared engine so passing in one place means passing everywhere.
-6. **Orchestrate** - match the artifact's runtime and hardware requirements to infrastructure that can run it.
-7. **Deploy** - hand the approved artifact to Argo CD / Flux and a serving runtime such as vLLM or KServe.
+1. **Develop & Package** - bundle the model folder into a standard container-style artifact and tag it with metadata.
+2. **Local Hardening & Compliance** - generate an ingredients list (SBOM) and classify how open the model is (MOF), and record both in the packaged artifact.
+3. **Supply Chain Check** - stamp it cryptographically so tampering can be detected later, and record a proof of origin (provenance) for the finished artifact.
+4. **Manifest-Level Validation** - upload it to a registry.
+5. **GitOps Admission & Policy Enforcement** - check the metadata against your rules locally, at the registry, and at the cluster door, using one shared engine so passing in one place means passing everywhere.
+6. **Infrastructure & Resource Orchestration** - hand the approved artifact to Argo CD / Flux and a serving runtime such as vLLM or KServe.
+7. **Runtime Execution & Optimization** - match the artifact's runtime and hardware requirements to infrastructure that can run it.
+
 
 If terms like *SBOM*, *MOF*, or *admission* are new to you, see the
 [Concepts and Glossary](docs/concepts-and-glossary.md).
