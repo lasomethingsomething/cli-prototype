@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: test-model
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-model
+  namespace: test-model
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: test-model
+  template:
+    metadata:
+      labels:
+        app: test-model
+    spec:
+      containers:
+        - name: model-placeholder
+          image: nginx:alpine
+          env:
+            - name: MODEL_ARTIFACT
+              value: "localhost:5000/test:v1 - placeholder"
