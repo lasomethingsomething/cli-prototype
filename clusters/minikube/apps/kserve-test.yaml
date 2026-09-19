@@ -8,6 +8,7 @@ metadata:
 spec:
   predictor:
     model:
+      runtime: kserve-sklearnserver
       modelFormat:
         name: sklearn
       storageUri: "gs://kfserving-examples/models/sklearn/1.3/model"
