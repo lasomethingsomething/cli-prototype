@@ -6,5 +6,4 @@ resources:
 - kserve-ks.yaml
 - cert-manager-ks.yaml
 - metrics-server-ks.yaml
-- infra-ks.yaml
 - test-model-ks.yaml
