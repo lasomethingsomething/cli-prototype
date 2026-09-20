@@ -137,6 +137,64 @@ func InstallTool(tool Tool) error {
 	return nil
 }
 
+// EnsureToolInstalled checks if a tool is installed and optionally installs it.
+// It returns true if the tool is installed (either was already installed or was just installed),
+// false if the user declined installation or the tool cannot be installed.
+// This function handles the prompt and installation for brew-installable tools.
+// For non-brew tools, it just prints the instructions.
+// Note: This function uses fmt for output, so callers should handle TUI consistency.
+func EnsureToolInstalled(toolName string, purpose string, interactive bool) (bool, error) {
+	tool, err := GetTool(toolName)
+	if err != nil {
+		return false, fmt.Errorf("unknown tool: %s", toolName)
+	}
+	
+	if tool.IsInstalled() {
+		return true, nil
+	}
+	
+	// Tool is not installed
+	if !interactive {
+		return false, nil
+	}
+	
+	// Check if it's brew-installable
+	if tool.Category() == CategoryBrew {
+		fmt.Printf("%s is not installed — needed for %s. Install now? [Y/n] ", tool.Name(), purpose)
+		
+		// Read user input
+		var response string
+		_, err := fmt.Scanln(&response)
+		if err != nil {
+			// If there's an error reading input (e.g., non-interactive), treat as no
+			return false, nil
+		}
+		
+		response = strings.ToLower(strings.TrimSpace(response))
+		if response == "y" || response == "" {
+			if err := InstallTool(tool); err != nil {
+				return false, err
+			}
+			return true, nil
+		}
+		return false, nil
+	}
+	
+	// For non-brew tools, just explain
+	fmt.Printf("%s is not installed — needed for %s.\n", tool.Name(), purpose)
+	fmt.Printf("Install it with: %s\n", tool.InstallInstructions())
+	return false, nil
+}
+
+// ToolInfo returns the Tool interface and whether it's installed for a given tool name
+func ToolInfo(name string) (Tool, bool, error) {
+	tool, err := GetTool(name)
+	if err != nil {
+		return nil, false, err
+	}
+	return tool, tool.IsInstalled(), nil
+}
+
 // =============================================================================
 // Tool implementations
 // =============================================================================

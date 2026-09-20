@@ -246,6 +246,22 @@ Examples:
 		signSucceeded := false
 		verifySucceeded := false
 		deploySucceeded := false
+		
+		// Just-in-time tool check for registry provider
+		if !registryProvider.IsInstalled() {
+			installed, err := workflow.EnsureToolInstalled(registryProvider.Name(), "packaging", interactive())
+			if err != nil {
+				return err
+			}
+			if !installed {
+				fmt.Println(warningStyle.Render("Warning: Registry tool not installed"))
+				fmt.Printf("   Install with: %s\n\n", registryProvider.InstallInstructions())
+			} else {
+				// Tool was just installed, re-check
+				registryProvider, _ = workflow.GetRegistryProvider(localRegistryTool)
+			}
+		}
+		
 		if !registryProvider.IsInstalled() {
 			fmt.Println(warningStyle.Render("Warning: Registry tool not installed"))
 			fmt.Printf("   Install with: %s\n\n", registryProvider.InstallInstructions())
@@ -293,7 +309,19 @@ Examples:
 				return err
 			}
 			if !sbomGenerator.IsInstalled() {
-				return fmt.Errorf("%s is required to harden this artifact; install it with: %s", sbomGenerator.Name(), sbomGenerator.InstallInstructions())
+				// Just-in-time check with option to install
+				installed, err := workflow.EnsureToolInstalled(sbomTool, "SBOM generation", interactive())
+				if err != nil {
+					return err
+				}
+				if !installed {
+					return fmt.Errorf("%s is required to harden this artifact; install it with: %s", sbomGenerator.Name(), sbomGenerator.InstallInstructions())
+				}
+				// Tool was just installed, re-check
+				sbomGenerator, err = workflow.GetSBOMGenerator(sbomTool)
+				if err != nil {
+					return err
+				}
 			}
 
 			annotations := workflow.NewAnnotationSet()
@@ -412,8 +440,21 @@ Examples:
 
 			signSucceeded = false
 			if !sp.IsInstalled() {
-				fmt.Println(warningStyle.Render("⚠ Signing tool not installed"))
-				fmt.Printf("   Install with: %s\n\n", sp.InstallInstructions())
+				// Just-in-time check with option to install
+				installed, err := workflow.EnsureToolInstalled(cfg.Signer, "signing", interactive())
+				if err != nil {
+					return err
+				}
+				if !installed {
+					fmt.Println(warningStyle.Render("⚠ Signing tool not installed"))
+					fmt.Printf("   Install with: %s\n\n", sp.InstallInstructions())
+				} else {
+					// Tool was just installed, re-check
+					sp, err = workflow.GetSigningProvider(cfg.Signer)
+					if err != nil {
+						return err
+					}
+				}
 			} else {
 				fmt.Printf("Simulating signing %s with %s...\n", fullArtifact, cfg.Signer)
 				fmt.Println(successStyle.Render("✓ Signing path demonstrated"))
@@ -433,8 +474,21 @@ Examples:
 
 			verifySucceeded = false
 			if !sp.IsInstalled() {
-				fmt.Println(warningStyle.Render("⚠ Signing tool not installed"))
-				fmt.Printf("   Install with: %s\n\n", sp.InstallInstructions())
+				// Just-in-time check with option to install
+				installed, err := workflow.EnsureToolInstalled(cfg.Signer, "signature verification", interactive())
+				if err != nil {
+					return err
+				}
+				if !installed {
+					fmt.Println(warningStyle.Render("⚠ Signing tool not installed"))
+					fmt.Printf("   Install with: %s\n\n", sp.InstallInstructions())
+				} else {
+					// Tool was just installed, re-check
+					sp, err = workflow.GetSigningProvider(cfg.Signer)
+					if err != nil {
+						return err
+					}
+				}
 			} else {
 				fmt.Printf("Simulating signature verification for %s...\n", fullArtifact)
 				fmt.Println(successStyle.Render("✓ Verification path demonstrated"))
