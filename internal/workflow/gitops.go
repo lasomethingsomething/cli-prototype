@@ -87,7 +87,7 @@ func (f *FluxProvider) Deploy(modelName, repoURL, path string) error {
 			return fmt.Errorf("git commit failed: %s", out)
 		}
 	}
-	if out, err := exec.Command("git", "pull", "--rebase").CombinedOutput(); err != nil {
+	if out, err := exec.Command("git", "pull", "--rebase", "--autostash").CombinedOutput(); err != nil {
 		return fmt.Errorf("git pull --rebase failed: %s", out)
 	}
 	if out, err := exec.Command("git", "push").CombinedOutput(); err != nil {
