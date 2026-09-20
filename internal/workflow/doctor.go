@@ -103,15 +103,18 @@ func CheckAll() *DoctorReport {
 
 // checkToolStatus checks a tool and returns its status and hint
 func checkToolStatus(tool Tool) *ToolResult {
-	installed := tool.IsInstalled()
 	status := StatusMissing
 	hint := ""
+	installed := tool.IsInstalled()
 	
-	if !installed {
-		status = StatusMissing
-	} else {
-		// Special handling for podman: check if machine is running
-		if tool.Name() == "podman" {
+	// Special handling for tools with running state beyond just being installed
+	if tool.Name() == "podman" {
+		// podman: check binary first, then machine state
+		_, err := exec.LookPath("podman")
+		if err != nil {
+			status = StatusMissing
+		} else {
+			// Binary installed, check if machine is running
 			cmd := exec.Command("podman", "machine", "inspect")
 			if err := cmd.Run(); err != nil {
 				status = StatusInstalledNotRunning
@@ -119,17 +122,28 @@ func checkToolStatus(tool Tool) *ToolResult {
 			} else {
 				status = StatusReady
 			}
-		} else if tool.Category() == CategoryCluster {
-			// For cluster tools, check if kubectl can reach the cluster
-			cmd := exec.Command("kubectl", "get", "deployments", "-A", "-o", "name")
-			if err := cmd.Run(); err != nil {
+		}
+	} else if tool.Category() == CategoryCluster {
+		// Cluster tools: check kubectl reachability, then deployment presence
+		cmd := exec.Command("kubectl", "get", "deployments", "-A", "-o", "name")
+		if err := cmd.Run(); err != nil {
+			// kubectl cannot reach cluster
+			status = StatusMissing
+		} else {
+			// kubectl works, check if the specific deployment exists
+			if installed {
+				status = StatusReady
+			} else {
 				status = StatusInstalledNotRunning
 				hint = "minikube start / see README bootstrap"
-			} else {
-				status = StatusReady
 			}
-		} else {
+		}
+	} else {
+		// Regular tools: just use IsInstalled()
+		if installed {
 			status = StatusReady
+		} else {
+			status = StatusMissing
 		}
 	}
 	

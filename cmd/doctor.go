@@ -193,13 +193,26 @@ func printCategory(title string, results []workflow.ToolResult) {
 	
 	for _, result := range results {
 		status := "✓"
-		if !result.Installed {
+		statusDetail := ""
+		
+		switch result.Status {
+		case workflow.StatusMissing:
 			status = "✗"
+			statusDetail = "missing"
+		case workflow.StatusInstalledNotRunning:
+			status = "⚠"
+			statusDetail = "installed but not running"
+		case workflow.StatusReady:
+			status = "✓"
+			statusDetail = "ready"
 		}
 		
-		fmt.Printf("  %s %-15s %s\n", status, result.Tool.Name(), result.Tool.Description())
+		fmt.Printf("  %s %-15s %s (%s)\n", status, result.Tool.Name(), result.Tool.Description(), statusDetail)
 		
-		if !result.Installed {
+		if result.Hint != "" {
+			fmt.Printf("      Hint: %s\n", result.Hint)
+		}
+		if !result.Installed && result.Hint == "" {
 			fmt.Printf("      Install: %s\n", result.Tool.InstallInstructions())
 		}
 	}
