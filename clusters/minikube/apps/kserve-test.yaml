@@ -10,8 +10,8 @@ spec:
     model:
       modelFormat:
         name: sklearn
-      runtime: kserve-mlserver
-      storageUri: "gs://kfserving-examples/models/sklearn/irisv2"
+      runtime: kserve-sklearnserver
+      storageUri: "https://raw.githubusercontent.com/lasomethingsomething/cli-prototype/main/models/iris/model.joblib"
       resources:
         requests:
           cpu: 100m
