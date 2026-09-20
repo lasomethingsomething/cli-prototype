@@ -2,10 +2,6 @@
 
 **Your tour guide through the CNCF's "[Cloud Native and OCI Compliant Inner-Loop Tooling & Packaging for AI Engineers](https://github.com/cncf/toc/issues/1740)" initiative.**
 
-# Model CLI
-
-Your tour guide through the CNCF's "Cloud Native and OCI Compliant Inner-Loop Tooling & Packaging for AI Engineers" initiative.
-
 ## What is this, in plain words?
 
 A trained ML model is a folder of files. Moving it safely from your laptop to production requires packaging, security checks, publishing, and deployment. Specialized tools in the CNCF ecosystem already handle each task.
