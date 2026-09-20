@@ -1,0 +1,21 @@
+version: 2
+
+builds:
+  - binary: model-cli
+    main: .
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    env:
+      - CGO_ENABLED=0
+
+archives:
+  - format: tar.gz
+    name_template: "model-cli_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: "model-cli_{{ .Version }}_checksums.txt"
+  algorithm: sha256
