@@ -8,10 +8,10 @@ metadata:
 spec:
   predictor:
     model:
-      runtime: kserve-sklearnserver
       modelFormat:
         name: sklearn
-      storageUri: "gs://kfserving-examples/models/sklearn/1.3/model.joblib"
+      runtime: kserve-mlserver
+      storageUri: "gs://kfserving-examples/models/sklearn/irisv2"
       resources:
         requests:
           cpu: 100m
