@@ -96,7 +96,7 @@ func (o *ORASProvider) Push(artifact, registry, sourcePath string, annotations m
 		return "", fmt.Errorf("source path %q is not accessible: %v", sourcePath, err)
 	}
 
-	args := []string{"push", registry + "/" + artifact, "--artifact-type", artifactTypeFor(annotations), "--format", "json"}
+	args := []string{"push", withDefaultTag(registry + "/" + artifact), "--artifact-type", artifactTypeFor(annotations), "--format", "json"}
 	args = append(args, annotationArgs(annotations)...)
 	configArgs, err := configBlobArgs(absSource)
 	if err != nil {
@@ -162,6 +162,17 @@ func digestFromORASOutput(output []byte) string {
 }
 
 var digestPattern = regexp.MustCompile(`sha256:[0-9a-f]{64}`)
+
+// withDefaultTag appends :latest to a reference that has no tag or digest.
+func withDefaultTag(ref string) string {
+	if i := strings.LastIndex(ref, "/"); i >= 0 {
+		last := ref[i+1:]
+		if !strings.Contains(last, ":") && !strings.Contains(last, "@") {
+			return ref + ":latest"
+		}
+	}
+	return ref
+}
 
 // artifactTypeFor derives the OCI artifactType for a push from the
 // org.cncf.ai.artifact.type annotation, defaulting to a model.
@@ -413,6 +424,7 @@ func orasLines(args ...string) ([]string, error) {
 
 func (o *ORASProvider) FetchManifestAnnotations(artifactRef string) (map[string]string, error) {
 	// Use oras manifest fetch to get the manifest JSON, then extract annotations
+	artifactRef = withDefaultTag(artifactRef)
 	cmd := exec.Command("oras", "manifest", "fetch", artifactRef)
 	output, err := cmd.Output()
 	if err != nil {

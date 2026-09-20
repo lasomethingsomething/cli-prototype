@@ -38,3 +38,4 @@ build/
 # Temporary files
 tmp/
 temp/
+flux-deploy-key*
