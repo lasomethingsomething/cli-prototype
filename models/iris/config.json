@@ -1,0 +1,8 @@
+{
+  "ai.model.format": "",
+  "ai.model.input.format": "",
+  "ai.model.output.format": "",
+  "ai.model.type": "text-generation",
+  "architecture": "amd64",
+  "os": "linux"
+}

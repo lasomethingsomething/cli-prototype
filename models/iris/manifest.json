@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 2,
+  "mediaType": "application/vnd.oci.image.manifest.v1+json",
+  "artifactType": "application/vnd.cncf.ai.model",
+  "config": {
+    "mediaType": "application/vnd.cncf.ai.model.config.v1+json",
+    "digest": "sha256:98fa0e3373ea7bd3109c21d6366cdae8a46a91da070fe2b31146cc5cc2f1b30b",
+    "size": 172
+  },
+  "layers": [
+    {
+      "mediaType": "application/vnd.oci.image.layer.v1.tar",
+      "digest": "sha256:3f3b003723e51adcd594619e79f896a7d8020417d4ee3bed43ec23ecf956ca4f",
+      "size": 991,
+      "annotations": {
+        "org.opencontainers.image.title": "model.joblib"
+      }
+    }
+  ],
+  "annotations": {
+    "org.cncf.ai.accelerator": "nvidia-gpu",
+    "org.cncf.ai.accelerator.cuda.min": "12.1",
+    "org.cncf.ai.artifact.type": "model",
+    "org.cncf.ai.interop.profile.version": "1.0.0",
+    "org.cncf.ai.model.mof.class": "III",
+    "org.cncf.ai.model.mof.components": "weights",
+    "org.cncf.ai.model.mof.version": "1.0",
+    "org.cncf.ai.packaging.format": "oci",
+    "org.cncf.ai.resource.memory.min": "24GiB",
+    "org.cncf.ai.runtime": "vllm",
+    "org.cncf.ai.security.provenance.type": "slsa-v1.0",
+    "org.cncf.ai.security.sbom.format": "spdx-json",
+    "org.cncf.ai.security.signing.framework": "sigstore-cosign",
+    "org.opencontainers.image.title": "test-model/iris"
+  },
+  "aiConfig": {
+    "ai.model.format": "",
+    "ai.model.input.format": "",
+    "ai.model.output.format": "",
+    "ai.model.type": "text-generation",
+    "architecture": "amd64",
+    "os": "linux"
+  }
+}

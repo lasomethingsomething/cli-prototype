@@ -1,0 +1,50 @@
+{
+  "mof_version": "1.0",
+  "release": {
+    "name": "iris",
+    "version": "1.0.0",
+    "date": "2026-09-20",
+    "type": "model",
+    "license": "CC-BY-4.0"
+  },
+  "model": {
+    "name": "iris",
+    "class": "III",
+    "class_name": "Closed/Proprietary",
+    "explanation": "Closed: weights available but no transparency into training process"
+  },
+  "components": [
+    {
+      "type": "weights",
+      "description": "Model weights/parameters",
+      "identifier": "model-weights",
+      "present": true
+    },
+    {
+      "type": "code",
+      "description": "Training or inference code",
+      "identifier": "training-code",
+      "present": false
+    },
+    {
+      "type": "training-data",
+      "description": "Training datasets and corpora",
+      "identifier": "training-data",
+      "present": false
+    },
+    {
+      "type": "documentation",
+      "description": "Model documentation (README, etc.)",
+      "identifier": "model-documentation",
+      "present": false
+    },
+    {
+      "type": "license",
+      "description": "Model license file(s)",
+      "identifier": "model-license",
+      "present": false
+    }
+  ],
+  "generated_at": "2026-09-20T17:16:36.344234Z",
+  "generator": "model-cli"
+}
