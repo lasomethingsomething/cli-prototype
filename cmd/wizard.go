@@ -583,6 +583,18 @@ Examples:
 			fmt.Println(stepStyle.Render("Deploying through GitOps"))
 			fmt.Println()
 
+			// Select, do not install: show what the cluster already provides via Git
+			ingredients := workflow.DetectIngredients()
+			fmt.Println("Cluster ingredients (managed by Flux in Git):")
+			for _, ing := range ingredients {
+				status := "-"
+				if ing.Present {
+					status = "+"
+				}
+				fmt.Printf("  [%s] %s - %s\n", status, ing.Name, ing.Description)
+			}
+			fmt.Println()
+
 			// Check if GitOps and registry providers are installed before deploying
 			gitOpsProvider, err := workflow.GetGitOpsProvider(cfg.GitOps)
 			if err != nil {

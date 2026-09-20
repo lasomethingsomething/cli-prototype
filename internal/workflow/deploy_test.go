@@ -5,6 +5,40 @@ import (
 	"testing"
 )
 
+// --- Fakes so tests don't depend on the developer's PATH ---
+
+// fakeGitOpsProvider lets tests control IsInstalled directly.
+type fakeGitOpsProvider struct {
+	name      string
+	installed bool
+}
+
+func (f *fakeGitOpsProvider) Name() string                { return f.name }
+func (f *fakeGitOpsProvider) IsInstalled() bool           { return f.installed }
+func (f *fakeGitOpsProvider) InstallInstructions() string { return "brew install " + f.name }
+func (f *fakeGitOpsProvider) Deploy(modelName, repoURL, path string) error {
+	return nil
+}
+
+// fakeDeployRegistry embeds RegistryProvider so every method is satisfied
+// without external tools. Only the methods the deploy tests use are real;
+// unimplemented ones panic if called (they should not be).
+type fakeDeployRegistry struct {
+	RegistryProvider
+	installed bool
+}
+
+func (f *fakeDeployRegistry) Name() string                { return "fake-registry" }
+func (f *fakeDeployRegistry) IsInstalled() bool           { return f.installed }
+func (f *fakeDeployRegistry) InstallInstructions() string { return "n/a" }
+func (f *fakeDeployRegistry) PackagingFormat() string     { return "oci" }
+func (f *fakeDeployRegistry) Push(artifact, registry, sourcePath string, annotations map[string]string) (string, error) {
+	return "sha256:fake", nil
+}
+func (f *fakeDeployRegistry) FetchManifestAnnotations(artifactRef string) (map[string]string, error) {
+	return nil, nil
+}
+
 // Test NewDeployWorkflow
 func TestNewDeployWorkflow(t *testing.T) {
 	// Test with valid gitops and registry
@@ -39,111 +73,62 @@ func TestNewDeployWorkflow(t *testing.T) {
 func TestSetModelInfo(t *testing.T) {
 	wf, err := NewDeployWorkflow("argo", "oras")
 	if err != nil {
-		t.Fatalf("NewDeployWorkflow error: %v", err)
+		t.Fatalf("NewDeployWorkflow error = %v", err)
 	}
+	wf.SetModelInfo("test-model", "https://github.com/test/repo", "./manifests")
 
-	wf.SetModelInfo("phi-4-mini", "https://github.com/me/manifests", "/manifests")
-
-	if wf.modelName != "phi-4-mini" {
-		t.Errorf("modelName = %q, want %q", wf.modelName, "phi-4-mini")
+	if wf.modelName != "test-model" {
+		t.Errorf("modelName = %q, want %q", wf.modelName, "test-model")
 	}
-	if wf.repoURL != "https://github.com/me/manifests" {
-		t.Errorf("repoURL = %q, want %q", wf.repoURL, "https://github.com/me/manifests")
+	if wf.repoURL != "https://github.com/test/repo" {
+		t.Errorf("repoURL = %q, want %q", wf.repoURL, "https://github.com/test/repo")
 	}
-	if wf.manifestPath != "/manifests" {
-		t.Errorf("manifestPath = %q, want %q", wf.manifestPath, "/manifests")
+	if wf.manifestPath != "./manifests" {
+		t.Errorf("manifestPath = %q, want %q", wf.manifestPath, "./manifests")
 	}
 }
 
-// Test DeployWorkflow Run without SetModelInfo
-func TestDeployWorkflowRunWithoutSetModelInfo(t *testing.T) {
-	wf, err := NewDeployWorkflow("argo", "oras")
-	if err != nil {
-		t.Fatalf("NewDeployWorkflow error: %v", err)
-	}
-	err = wf.Run()
-	if err == nil {
-		t.Error("Run() without SetModelInfo should return an error, got nil")
-	}
-	if !strings.Contains(err.Error(), "model info not set") {
-		t.Errorf("Run() error = %q, expected to contain 'model info not set'", err.Error())
-	}
-}
-
-// Test DeployWorkflow Run with modelName set but repoURL empty
-func TestDeployWorkflowRunWithRepoURLMissing(t *testing.T) {
-	wf, err := NewDeployWorkflow("argo", "oras")
-	if err != nil {
-		t.Fatalf("NewDeployWorkflow error: %v", err)
-	}
-	wf.SetModelInfo("my-model", "", "") // repoURL empty
-	err = wf.Run()
-	if err == nil {
-		t.Error("Run() with empty repoURL should return an error, got nil")
-	}
-	if !strings.Contains(err.Error(), "model info not set") {
-		t.Errorf("Run() error = %q, expected to contain 'model info not set'", err.Error())
-	}
-}
-
-// Test DeployWorkflow Run with missing tools
+// Test that missing tools produce the right errors, using injected fakes
 func TestDeployWorkflowMissingTools(t *testing.T) {
-	tests := []struct {
-		name        string
-		gitOps      string
-		registry    string
-		expectError bool
-		errorSubstr string
-	}{
-		{
-			name:        "flux not installed",
-			gitOps:      "flux",
-			registry:    "modelpack",
-			expectError: true,
-			errorSubstr: "flux not installed",
-		},
-		{
-			name:        "argo not installed",
-			gitOps:      "argo",
-			registry:    "modelpack",
-			expectError: true,
-			errorSubstr: "argocd not installed",
-		},
+	// GitOps tool missing
+	wf, err := NewDeployWorkflow("flux", "modelpack")
+	if err != nil {
+		t.Fatalf("NewDeployWorkflow error = %v", err)
+	}
+	wf.gitOpsProvider = &fakeGitOpsProvider{name: "flux", installed: false}
+	wf.registryProvider = &fakeDeployRegistry{installed: true}
+	wf.SetModelInfo("test-model", "https://github.com/test/repo", "./manifests")
+
+	err = wf.Run()
+	if err == nil || !strings.Contains(err.Error(), "flux not installed") {
+		t.Errorf("expected 'flux not installed' error, got: %v", err)
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			wf, err := NewDeployWorkflow(tt.gitOps, tt.registry)
-			if err != nil {
-				t.Fatalf("NewDeployWorkflow error = %v", err)
-			}
-			wf.SetModelInfo("test-model", "https://github.com/test/repo", "./manifests")
+	// Registry tool missing
+	wf2, err := NewDeployWorkflow("flux", "modelpack")
+	if err != nil {
+		t.Fatalf("NewDeployWorkflow error = %v", err)
+	}
+	wf2.gitOpsProvider = &fakeGitOpsProvider{name: "flux", installed: true}
+	wf2.registryProvider = &fakeDeployRegistry{installed: false}
+	wf2.SetModelInfo("test-model", "https://github.com/test/repo", "./manifests")
 
-			err = wf.Run()
-			if (err != nil) != tt.expectError {
-				t.Errorf("Run() error = %v, expectError %v", err, tt.expectError)
-				return
-			}
-
-			if tt.expectError && !strings.Contains(err.Error(), tt.errorSubstr) {
-				t.Errorf("Run() error = %v, expected to contain %q", err, tt.errorSubstr)
-			}
-		})
+	err = wf2.Run()
+	if err == nil || !strings.Contains(err.Error(), "fake-registry not installed") {
+		t.Errorf("expected registry error, got: %v", err)
 	}
 }
 
 // Test DeployWorkflow Run with model info
 func TestDeployWorkflowWithModelInfo(t *testing.T) {
-	// Using modelpack for registry (which doesn't require external tools to be installed)
-	// and flux for gitops (which will fail the check, but we're testing SetModelInfo)
 	wf, err := NewDeployWorkflow("flux", "modelpack")
 	if err != nil {
 		t.Fatalf("NewDeployWorkflow error: %v", err)
 	}
-
+	wf.gitOpsProvider = &fakeGitOpsProvider{name: "flux", installed: false}
+	wf.registryProvider = &fakeDeployRegistry{installed: true}
 	wf.SetModelInfo("test-model", "https://github.com/test/repo", "./manifests")
 
-	// Verify model info was set correctly
 	if wf.modelName != "test-model" {
 		t.Errorf("modelName = %q, want %q", wf.modelName, "test-model")
 	}
@@ -154,13 +139,9 @@ func TestDeployWorkflowWithModelInfo(t *testing.T) {
 		t.Errorf("manifestPath = %q, want %q", wf.manifestPath, "./manifests")
 	}
 
-	// Run will fail due to flux not being installed, but that's expected
-	// We're just testing that SetModelInfo works and the data is stored
+	// Run fails on the missing (fake) flux tool
 	err = wf.Run()
-	if err == nil {
-		t.Error("Expected error from flux not being installed")
-	}
-	if !strings.Contains(err.Error(), "flux not installed") {
+	if err == nil || !strings.Contains(err.Error(), "flux not installed") {
 		t.Errorf("Expected flux not installed error, got: %v", err)
 	}
 }

@@ -1,16 +1,18 @@
 package workflow
 
 import (
-	"fmt"
-	"os/exec"
+    "fmt"
+    "os"
+    "os/exec"
+    "strings"
 )
 
 // GitOpsProvider defines the interface for GitOps tools like ArgoCD and Flux
 type GitOpsProvider interface {
-	Name() string
-	IsInstalled() bool
-	InstallInstructions() string
-	Deploy(modelName, repoURL, path string) error
+    Name() string
+    IsInstalled() bool
+    InstallInstructions() string
+    Deploy(modelName, repoURL, path string) error
 }
 
 // --- ArgoCD Provider ---
@@ -18,24 +20,24 @@ type GitOpsProvider interface {
 type ArgoCDProvider struct{}
 
 func (a *ArgoCDProvider) Name() string {
-	return "argocd"
+    return "argocd"
 }
 
 func (a *ArgoCDProvider) IsInstalled() bool {
-	return exec.Command("argocd", "version").Run() == nil
+    return exec.Command("argocd", "version").Run() == nil
 }
 
 func (a *ArgoCDProvider) InstallInstructions() string {
-	return "brew install argoproj/tap/argocd"
+    return "brew install argoproj/tap/argocd"
 }
 
 func (a *ArgoCDProvider) Deploy(modelName, repoURL, path string) error {
-	cmd := exec.Command("argocd", "app", "create", modelName, "--repo", repoURL, "--path", path, "--dest-namespace", "default")
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to create ArgoCD application: %v", err)
-	}
-	fmt.Printf("Created ArgoCD application: %s\n", modelName)
-	return nil
+    cmd := exec.Command("argocd", "app", "create", modelName, "--repo", repoURL, "--path", path, "--dest-namespace", "default")
+    if err := cmd.Run(); err != nil {
+        return fmt.Errorf("failed to create ArgoCD application: %v", err)
+    }
+    fmt.Printf("Created ArgoCD application: %s\n", modelName)
+    return nil
 }
 
 // --- Flux Provider ---
@@ -43,39 +45,113 @@ func (a *ArgoCDProvider) Deploy(modelName, repoURL, path string) error {
 type FluxProvider struct{}
 
 func (f *FluxProvider) Name() string {
-	return "flux"
+    return "flux"
 }
 
 func (f *FluxProvider) IsInstalled() bool {
-	return exec.Command("flux", "version").Run() == nil
+    return exec.Command("flux", "version").Run() == nil
 }
 
 func (f *FluxProvider) InstallInstructions() string {
-	return "brew install fluxcd/tap/flux"
+    return "brew install fluxcd/tap/flux"
 }
 
 func (f *FluxProvider) Deploy(modelName, repoURL, path string) error {
-	cmd := exec.Command("flux", "create", "source", "git", modelName+"-"+"git", "--url", repoURL, "--branch", "main")
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to create Flux git source: %v", err)
-	}
-	cmd = exec.Command("flux", "create", "kustomization", modelName, "--source", modelName+"-"+"git", "--path", path)
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to create Flux kustomization: %v", err)
-	}
-	fmt.Printf("Created Flux deployment: %s\n", modelName)
-	return nil
+    // GitOps: the CLI never touches the cluster directly.
+    // It commits the manifest into the Git repo and lets Flux reconcile.
+
+    // 1. Verify the working tree is the target repo
+    remote, err := exec.Command("git", "remote", "get-url", "origin").Output()
+    if err != nil {
+        return fmt.Errorf("not in a git repo: %v", err)
+    }
+    remoteURL := strings.TrimSpace(string(remote))
+    if repoURL != "" && !strings.Contains(remoteURL, strings.TrimSuffix(repoURL, ".git")) &&
+        !strings.Contains(repoURL, strings.TrimSuffix(remoteURL, ".git")) {
+        return fmt.Errorf("current repo origin (%s) does not match target (%s)", remoteURL, repoURL)
+    }
+
+    // 2. Commit the manifest path
+    if path == "" {
+        return fmt.Errorf("manifest path is empty; nothing to commit")
+    }
+    if out, err := exec.Command("git", "add", path).CombinedOutput(); err != nil {
+        return fmt.Errorf("git add %s failed: %s", path, out)
+    }
+    commit := exec.Command("git", "commit", "-m", "Deploy model "+modelName+" via wizard")
+    commit.Env = append(os.Environ(), "GIT_EDITOR=true")
+    if out, err := commit.CombinedOutput(); err != nil {
+        // "nothing to commit" is fine - manifest already committed
+        if !strings.Contains(string(out), "nothing to commit") &&
+            !strings.Contains(string(out), "no changes added") {
+            return fmt.Errorf("git commit failed: %s", out)
+        }
+    }
+    if out, err := exec.Command("git", "pull", "--rebase").CombinedOutput(); err != nil {
+        return fmt.Errorf("git pull --rebase failed: %s", out)
+    }
+    if out, err := exec.Command("git", "push").CombinedOutput(); err != nil {
+        return fmt.Errorf("git push failed: %s", out)
+    }
+
+    // 3. Ask Flux to pick it up now (optional; interval would do it anyway)
+    reconcile := exec.Command("flux", "reconcile", "kustomization", modelName, "--with-source")
+    if err := reconcile.Run(); err != nil {
+        fmt.Printf("Pushed to Git. Flux will reconcile %s on its next interval (couldn't trigger immediately: %v)\n", modelName, err)
+    } else {
+        fmt.Printf("Pushed to Git and reconciled Flux Kustomization: %s\n", modelName)
+    }
+    return nil
+}
+
+// Ingredient describes a cluster component that the Git repo provides.
+type Ingredient struct {
+    Name        string
+    Description string
+    Present     bool
+}
+
+// DetectIngredients checks which infrastructure components the cluster
+// already runs (via Flux), so the wizard can select instead of install.
+func DetectIngredients() []Ingredient {
+    known := []struct{ name, desc, kustomization string }{
+        {"kserve", "model serving operator", "infra"},
+        {"cert-manager", "TLS certificates", "infra"},
+        {"metrics-server", "resource metrics / HPA", "infra"},
+        {"flux", "GitOps agent", "flux-system"},
+    }
+
+    out, err := exec.Command("flux", "get", "kustomization", "--all-namespaces").CombinedOutput()
+    text := string(out)
+    if err != nil && text == "" {
+        // No cluster access: report all unknown rather than failing
+        ings := make([]Ingredient, 0, len(known))
+        for _, k := range known {
+            ings = append(ings, Ingredient{Name: k.name, Description: k.desc, Present: false})
+        }
+        return ings
+    }
+
+    ings := make([]Ingredient, 0, len(known))
+    for _, k := range known {
+        ings = append(ings, Ingredient{
+            Name:        k.name,
+            Description: k.desc,
+            Present:     strings.Contains(text, k.kustomization) && !strings.Contains(text, "False"),
+        })
+    }
+    return ings
 }
 
 // GetGitOpsProvider returns the GitOps provider for an option name from
 // GitOpsOptions. "argo" is an accepted alias for "argocd".
 func GetGitOpsProvider(name string) (GitOpsProvider, error) {
-	switch name {
-	case "argo", "argocd":
-		return &ArgoCDProvider{}, nil
-	case "flux":
-		return &FluxProvider{}, nil
-	default:
-		return nil, fmt.Errorf("unknown GitOps provider: %s (supported: argocd, flux)", name)
-	}
+    switch name {
+    case "argo", "argocd":
+        return &ArgoCDProvider{}, nil
+    case "flux":
+        return &FluxProvider{}, nil
+    default:
+        return nil, fmt.Errorf("unknown GitOps provider: %s (supported: argocd, flux)", name)
+    }
 }
