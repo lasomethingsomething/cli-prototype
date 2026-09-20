@@ -24,22 +24,7 @@ If terms like SBOM, MOF, or admission are new to you, see the [Concepts and Glos
 
 ## System Requirements
 
-For the full Test Drive, install these prerequisites before starting the wizard:
-
-> This list intentionally includes the recommended tools needed to demonstrate the complete flow. In normal use, Model CLI lets you choose a tool per phase and checks for it only when that phase runs.
-   Requirement | Why it is needed | Install or check |
- |---|---|---|
- | Go 1.23+ | Build Model CLI | `go version` |
- | Homebrew | Install the external tools | [brew.sh](https://brew.sh) |
- | Current Xcode Command Line Tools | Required when Homebrew builds a dependency | System Settings > General > Software Update; if no update is offered, run `xcode-select --install` |
- | Git | The wizard commits and pushes the manifest to your repository | `git --version`; run `git status` before starting — **your working copy must be clean** |
- | ORAS (recommended) | Create OCI artifacts; ModelPack is the alternative | `brew install oras` |
- | Syft (recommended) | Generate the SBOM; Trivy and cdxgen are alternatives | `brew install anchore/syft/syft` |
- | Cosign (recommended) | Sign and verify the artifact (Sigstore); Notation is the alternative | `brew install sigstore/tap/cosign` |
- | Podman (recommended for local publishing) | Run a local OCI registry without an account or cloud service | `brew install podman` |
- | Flux (recommended) | Execute the GitOps path against a Kubernetes cluster; Argo CD is the alternative | `brew install fluxcd/tap/flux` |
- | kubectl + minikube | Run the bootstrapped cluster from this repository | `brew install kubectl minikube` |
- | KServe | Serve the model in the cluster; installed by the Flux bootstrap below | part of `clusters/minikube/` |
+macOS with Homebrew is recommended. Use `model-cli doctor` to check your environment; the wizard installs missing tools (oras, syft, cosign, flux, podman, kubectl, minikube) just-in-time via brew when each phase runs.
 
 The publish demonstration uses Podman's Linux VM and the open-source OCI Distribution Registry at `localhost:5000`. It does not require Docker Desktop.
 
@@ -51,16 +36,19 @@ This is the recommended path: a real Flux-managed cluster in minikube, a real lo
 
 No cluster? The wizard falls back to guided simulations for phases 5–7; see the Clusterless Quick Tour at the end.
 
-### 0. Fork and clone
+### 0. Install
 
-The wizard pushes to your repository's `origin`, so you need your own fork:
+Download the pre-built binary from [GitHub Releases](https://github.com/lasomethingsomething/cli-prototype/releases/latest):
 
 ```bash
-# In GitHub: fork lasomethingsomething/cli-prototype, then:
-git clone https://github.com/<you>/cli-prototype.git
-cd cli-prototype
-go build -o model-cli .
+# macOS - use $(uname -m) to pick arm64 or amd64 based on your CPU
+arch=$(uname -m)
+curl -sL https://github.com/lasomethingsomething/cli-prototype/releases/download/v0.1.0/model-cli_v0.1.0_darwin_${arch}.tar.gz | tar xz
+chmod +x model-cli
+./model-cli doctor
 ```
+
+For Linux, replace `darwin` with `linux` in the URL.
 
 **Your working copy must be clean before starting the wizard** (`git status` shows nothing modified). The wizard commits the manifest and pushes; uncommitted changes will make the deploy step fail.
 
