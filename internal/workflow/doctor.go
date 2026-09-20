@@ -63,7 +63,7 @@ func AllTools() []Tool {
 		&podmanTool{},
 		&kubectlTool{},
 		&minikubeTool{},
-		&notationTool{},
+		&notaryTool{},
 		
 		// Environment prerequisites
 		&xcodeCLTTool{},
@@ -268,7 +268,7 @@ type cosignTool struct{}
 
 func (c *cosignTool) Name() string              { return "cosign" }
 func (c *cosignTool) Category() ToolCategory    { return CategoryBrew }
-func (c *cosignTool) IsInstalled() bool          { return exec.Command("cosign", "version").Run() == nil }
+func (c *cosignTool) IsInstalled() bool          { _, err := exec.LookPath("cosign"); return err == nil }
 func (c *cosignTool) InstallInstructions() string { return "brew install sigstore/tap/cosign" }
 func (c *cosignTool) Description() string         { return "Sigstore container signing and verification" }
 
@@ -304,13 +304,13 @@ func (m *minikubeTool) IsInstalled() bool          { return exec.Command("miniku
 func (m *minikubeTool) InstallInstructions() string { return "brew install minikube" }
 func (m *minikubeTool) Description() string         { return "Local Kubernetes cluster" }
 
-type notationTool struct{}
+type notaryTool struct{}
 
-func (n *notationTool) Name() string              { return "notation" }
-func (n *notationTool) Category() ToolCategory    { return CategoryBrew }
-func (n *notationTool) IsInstalled() bool          { return exec.Command("notation", "version").Run() == nil }
-func (n *notationTool) InstallInstructions() string { return "brew install notation" }
-func (n *notationTool) Description() string         { return "Notary v2 container signing and verification" }
+func (n *notaryTool) Name() string              { return "notary" }
+func (n *notaryTool) Category() ToolCategory    { return CategoryBrew }
+func (n *notaryTool) IsInstalled() bool          { _, err := exec.LookPath("notation"); return err == nil }
+func (n *notaryTool) InstallInstructions() string { return "brew install notation" }
+func (n *notaryTool) Description() string         { return "Notary v2 container signing and verification" }
 
 // --- Environment prerequisites ---
 

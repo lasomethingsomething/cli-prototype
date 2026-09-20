@@ -105,7 +105,7 @@ func TestCheckToolUnknown(t *testing.T) {
 // TestGetTool verifies that GetTool works for known tools
 func TestGetTool(t *testing.T) {
 	// Test with known tools
-	knownTools := []string{"oras", "syft", "cosign", "flux", "xcode-clt", "kserve"}
+	knownTools := []string{"oras", "syft", "cosign", "flux", "notary", "xcode-clt", "kserve"}
 	
 	for _, toolName := range knownTools {
 		tool, err := GetTool(toolName)
@@ -249,7 +249,7 @@ func TestToolCategories(t *testing.T) {
 		"podman":       CategoryBrew,
 		"kubectl":      CategoryBrew,
 		"minikube":     CategoryBrew,
-		"notation":     CategoryBrew,
+		"notary":       CategoryBrew,
 		"xcode-clt":    CategoryEnvironment,
 		"ssh-key":      CategoryEnvironment,
 		"kserve":       CategoryCluster,
@@ -331,5 +331,33 @@ func TestPodmanToolIsInstalled(t *testing.T) {
 
 	if installed != expected {
 		t.Errorf("podmanTool.IsInstalled() returned %v, expected %v", installed, expected)
+	}
+}
+
+// TestCosignToolIsInstalled verifies the cosign tool's IsInstalled method
+func TestCosignToolIsInstalled(t *testing.T) {
+	tool := &cosignTool{}
+
+	// Verify that IsInstalled returns the same result as exec.LookPath
+	_, err := exec.LookPath("cosign")
+	expected := err == nil
+	installed := tool.IsInstalled()
+
+	if installed != expected {
+		t.Errorf("cosignTool.IsInstalled() returned %v, expected %v", installed, expected)
+	}
+}
+
+// TestNotaryToolIsInstalled verifies the notary tool's IsInstalled method
+func TestNotaryToolIsInstalled(t *testing.T) {
+	tool := &notaryTool{}
+
+	// Verify that IsInstalled returns the same result as exec.LookPath for notation binary
+	_, err := exec.LookPath("notation")
+	expected := err == nil
+	installed := tool.IsInstalled()
+
+	if installed != expected {
+		t.Errorf("notaryTool.IsInstalled() returned %v, expected %v", installed, expected)
 	}
 }

@@ -25,7 +25,8 @@ func (s *SigstoreProvider) Name() string {
 }
 
 func (s *SigstoreProvider) IsInstalled() bool {
-	return exec.Command("cosign", "version").Run() == nil
+	_, err := exec.LookPath("cosign")
+	return err == nil
 }
 
 func (s *SigstoreProvider) InstallInstructions() string {
@@ -74,7 +75,8 @@ func (n *NotaryV2Provider) Name() string {
 }
 
 func (n *NotaryV2Provider) IsInstalled() bool {
-	return exec.Command("notation", "version").Run() == nil
+	_, err := exec.LookPath("notation")
+	return err == nil
 }
 
 func (n *NotaryV2Provider) InstallInstructions() string {
