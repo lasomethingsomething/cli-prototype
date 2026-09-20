@@ -305,3 +305,31 @@ func TestToolDescription(t *testing.T) {
 		}
 	}
 }
+
+// TestFluxToolIsInstalled verifies the flux tool's IsInstalled method
+func TestFluxToolIsInstalled(t *testing.T) {
+	tool := &fluxTool{}
+
+	// Verify that IsInstalled returns the same result as exec.LookPath
+	_, err := exec.LookPath("flux")
+	expected := err == nil
+	installed := tool.IsInstalled()
+
+	if installed != expected {
+		t.Errorf("fluxTool.IsInstalled() returned %v, expected %v", installed, expected)
+	}
+}
+
+// TestPodmanToolIsInstalled verifies the podman tool's IsInstalled method
+func TestPodmanToolIsInstalled(t *testing.T) {
+	tool := &podmanTool{}
+
+	// Verify that IsInstalled returns the same result as exec.LookPath
+	_, err := exec.LookPath("podman")
+	expected := err == nil
+	installed := tool.IsInstalled()
+
+	if installed != expected {
+		t.Errorf("podmanTool.IsInstalled() returned %v, expected %v", installed, expected)
+	}
+}

@@ -2,7 +2,9 @@ package workflow
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -27,10 +29,21 @@ type Tool interface {
 	Description() string
 }
 
+// ToolStatus represents the status of a tool check
+type ToolStatus string
+
+const (
+	StatusMissing          ToolStatus = "missing"
+	StatusInstalledNotRunning ToolStatus = "installed-not-running"
+	StatusReady            ToolStatus = "ready"
+)
+
 // ToolResult represents the check result for a single tool
 type ToolResult struct {
 	Tool      Tool
 	Installed bool
+	Status    ToolStatus
+	Hint      string
 	Error     error
 }
 
@@ -81,25 +94,59 @@ func CheckAll() *DoctorReport {
 	}
 	
 	for _, tool := range AllTools() {
-		report.Results = append(report.Results, ToolResult{
-			Tool:      tool,
-			Installed: tool.IsInstalled(),
-			Error:     nil,
-		})
+		result := checkToolStatus(tool)
+		report.Results = append(report.Results, *result)
 	}
 	
 	return report
+}
+
+// checkToolStatus checks a tool and returns its status and hint
+func checkToolStatus(tool Tool) *ToolResult {
+	installed := tool.IsInstalled()
+	status := StatusMissing
+	hint := ""
+	
+	if !installed {
+		status = StatusMissing
+	} else {
+		// Special handling for podman: check if machine is running
+		if tool.Name() == "podman" {
+			cmd := exec.Command("podman", "machine", "inspect")
+			if err := cmd.Run(); err != nil {
+				status = StatusInstalledNotRunning
+				hint = "podman machine start"
+			} else {
+				status = StatusReady
+			}
+		} else if tool.Category() == CategoryCluster {
+			// For cluster tools, check if kubectl can reach the cluster
+			cmd := exec.Command("kubectl", "get", "deployments", "-A", "-o", "name")
+			if err := cmd.Run(); err != nil {
+				status = StatusInstalledNotRunning
+				hint = "minikube start / see README bootstrap"
+			} else {
+				status = StatusReady
+			}
+		} else {
+			status = StatusReady
+		}
+	}
+	
+	return &ToolResult{
+		Tool:      tool,
+		Installed: installed,
+		Status:    status,
+		Hint:      hint,
+		Error:     nil,
+	}
 }
 
 // CheckTool checks a specific tool
 func CheckTool(name string) (*ToolResult, error) {
 	for _, tool := range AllTools() {
 		if tool.Name() == name {
-			return &ToolResult{
-				Tool:      tool,
-				Installed: tool.IsInstalled(),
-				Error:     nil,
-			}, nil
+			return checkToolStatus(tool), nil
 		}
 	}
 	return nil, fmt.Errorf("unknown tool: %s", name)
@@ -229,7 +276,7 @@ type fluxTool struct{}
 
 func (f *fluxTool) Name() string              { return "flux" }
 func (f *fluxTool) Category() ToolCategory    { return CategoryBrew }
-func (f *fluxTool) IsInstalled() bool          { return exec.Command("flux", "version").Run() == nil }
+func (f *fluxTool) IsInstalled() bool          { _, err := exec.LookPath("flux"); return err == nil }
 func (f *fluxTool) InstallInstructions() string { return "brew install fluxcd/tap/flux" }
 func (f *fluxTool) Description() string         { return "GitOps continuous delivery tool" }
 
@@ -237,7 +284,7 @@ type podmanTool struct{}
 
 func (p *podmanTool) Name() string              { return "podman" }
 func (p *podmanTool) Category() ToolCategory    { return CategoryBrew }
-func (p *podmanTool) IsInstalled() bool          { return exec.Command("podman", "version").Run() == nil }
+func (p *podmanTool) IsInstalled() bool          { _, err := exec.LookPath("podman"); return err == nil }
 func (p *podmanTool) InstallInstructions() string { return "brew install podman" }
 func (p *podmanTool) Description() string         { return "Container engine (Docker alternative)" }
 
@@ -285,8 +332,21 @@ func (s *sshKeyTool) Name() string           { return "ssh-key" }
 func (s *sshKeyTool) Category() ToolCategory { return CategoryEnvironment }
 func (s *sshKeyTool) IsInstalled() bool {
 	// Check if there's at least one SSH key in the default location
-	cmd := exec.Command("ls", "~/.ssh/id_*.pub")
-	return cmd.Run() == nil
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return false
+	}
+	sshDir := filepath.Join(homeDir, ".ssh")
+	entries, err := os.ReadDir(sshDir)
+	if err != nil {
+		return false
+	}
+	for _, entry := range entries {
+		if filepath.Ext(entry.Name()) == ".pub" {
+			return true
+		}
+	}
+	return false
 }
 func (s *sshKeyTool) InstallInstructions() string { 
 	return "ssh-keygen -t ed25519 -C \"your_email@example.com\"" 
