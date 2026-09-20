@@ -2,216 +2,193 @@
 
 **Your tour guide through the CNCF's "[Cloud Native and OCI Compliant Inner-Loop Tooling & Packaging for AI Engineers](https://github.com/cncf/toc/issues/1740)" initiative.**
 
+# Model CLI
+
+Your tour guide through the CNCF's "Cloud Native and OCI Compliant Inner-Loop Tooling & Packaging for AI Engineers" initiative.
+
 ## What is this, in plain words?
 
-A trained ML model is a folder of files. Moving it safely from your laptop to production requires packaging, security checks, publishing, and deployment. Specialized tools in the [CNCF ecosystem](https://www.cncf.io/) already handle each task.
+A trained ML model is a folder of files. Moving it safely from your laptop to production requires packaging, security checks, publishing, and deployment. Specialized tools in the CNCF ecosystem already handle each task.
 
 Model CLI guides you through that journey, collects the needed details, and lets you choose an appropriate tool for each task.
 
-The workflow, in seven action-led steps:
+## The workflow, in seven action-led steps
 
 1. **Develop & Package**: Creates a local OCI artifact manifest from the model folder and tags it with CNCF AI Interoperability Profile metadata.
 2. **Local Hardening & Compliance**: Generates an SBOM and MOF classification, and records both in the packaged artifact.
-3. **Supply Chain Check**: Cryptographically signs the artifact so tampering can be detected later, and records a proof of origin (provenance) for the finished artifact.
+3. **Supply Chain Check**: Cryptographically signs the artifact with Cosign so tampering can be detected later, and records a proof of origin (provenance) for the finished artifact.
 4. **Manifest-Level Validation**: Delegates upload to a registry to ORAS or ModelPack.
-5. **GitOps Admission & Policy Enforcement**: Hands the artifact to Argo CD or Flux as a prototype. _Does not auto-enforce policy_.
-6. **Infrastructure & Resource Orchestration**: Validates that infrastructure matches the artifact’s runtime and hardware requirements.
-7. **Runtime Execution & Optimization**: Validates serving runtime availability (vLLM, KServe). _Does not execute or optimize_.
+5. **GitOps Admission & Policy Enforcement**: Commits the artifact manifest to your Git repository and pushes it. A connected Flux installation reconciles the change and rolls out the model with KServe. Does not auto-enforce policy.
+6. **Infrastructure & Resource Orchestration**: Validates that infrastructure matches the artifact's runtime and hardware requirements.
+7. **Runtime Execution & Optimization**: Validates serving runtime availability (vLLM, KServe). When deployed through the GitOps path, the KServe InferenceService is real and serving.
 
-If terms like *SBOM*, *MOF*, or *admission* are new to you, see the
-[Concepts and Glossary](docs/concepts-and-glossary.md).
+If terms like SBOM, MOF, or admission are new to you, see the [Concepts and Glossary](docs/concepts-and-glossary.md).
 
-> **Status: prototype.** Model CLI guides ML-model packaging and delivery as OCI artifacts. It collects intent, writes standardized metadata, and delegates supported operations to selected tools such as ORAS, Syft, Cosign, Flux, and Argo CD. Some wizard stages and integrations remain simulated or incomplete; see [Known limitations](#known-limitations) before relying on a step in production.
+> **Status: prototype.** Model CLI guides ML-model packaging and delivery as OCI artifacts. It collects intent, writes standardized metadata, and delegates supported operations to selected tools such as ORAS, Syft, Cosign, Flux, and Argo CD. Some wizard stages and integrations remain simulated or incomplete; see Known limitations before relying on a step in production.
 
 ## System Requirements
 
-For the macOS Quick Test Drive, install these prerequisites before starting the
-wizard:
+For the full Test Drive, install these prerequisites before starting the wizard:
 
-> This list intentionally includes the recommended tools needed to demonstrate
-> the complete flow. In normal use, Model CLI lets you choose a tool per phase
-> and checks for it only when that phase runs.
+> This list intentionally includes the recommended tools needed to demonstrate the complete flow. In normal use, Model CLI lets you choose a tool per phase and checks for it only when that phase runs.
+   Requirement | Why it is needed | Install or check |
+ |---|---|---|
+ | Go 1.23+ | Build Model CLI | `go version` |
+ | Homebrew | Install the external tools | [brew.sh](https://brew.sh) |
+ | Current Xcode Command Line Tools | Required when Homebrew builds a dependency | System Settings > General > Software Update; if no update is offered, run `xcode-select --install` |
+ | Git | The wizard commits and pushes the manifest to your repository | `git --version`; run `git status` before starting — **your working copy must be clean** |
+ | ORAS (recommended) | Create OCI artifacts; ModelPack is the alternative | `brew install oras` |
+ | Syft (recommended) | Generate the SBOM; Trivy and cdxgen are alternatives | `brew install anchore/syft/syft` |
+ | Cosign (recommended) | Sign and verify the artifact (Sigstore); Notation is the alternative | `brew install sigstore/tap/cosign` |
+ | Podman (recommended for local publishing) | Run a local OCI registry without an account or cloud service | `brew install podman` |
+ | Flux (recommended) | Execute the GitOps path against a Kubernetes cluster; Argo CD is the alternative | `brew install fluxcd/tap/flux` |
+ | kubectl + minikube | Run the bootstrapped cluster from this repository | `brew install kubectl minikube` |
+ | KServe | Serve the model in the cluster; installed by the Flux bootstrap below | part of `clusters/minikube/` |
 
-| Requirement | Why it is needed | Install or check |
-|-------------|------------------|------------------|
-| Go 1.23+ | Build Model CLI | `go version` |
-| Homebrew | Install the external tools | [brew.sh](https://brew.sh/) |
-| Current Xcode Command Line Tools | Required when Homebrew builds a dependency | System Settings > General > Software Update; if no update is offered, run `xcode-select --install` |
-| ORAS (recommended) | Create OCI artifacts; ModelPack is the alternative | `brew install oras` |
-| Syft (recommended) | Generate the SBOM; Trivy and cdxgen are alternatives | `brew install anchore/syft/syft` |
-| Cosign (recommended) | Show the Sigstore signing and verification branch; Notation is the alternative | `brew install sigstore/tap/cosign` |
-| Podman (recommended for local publishing) | Run a local OCI registry without an account or cloud service | `brew install podman` |
-| Flux (recommended) | Execute the GitOps path against a Kubernetes cluster; Argo CD is the alternative | `brew install fluxcd/tap/flux` |
-| kubectl and a Kubernetes cluster | Execute real GitOps admission, node checks, and runtime checks | `brew install kubectl` |
-| vLLM (recommended) and/or KServe | Execute serving instead of the wizard's runtime simulation; KServe can manage a Kubernetes deployment that uses vLLM | vLLM: `pip install vllm`; KServe: install its Kubernetes operator |
+The publish demonstration uses Podman's Linux VM and the open-source OCI Distribution Registry at `localhost:5000`. It does not require Docker Desktop.
 
-The publish demonstration uses Podman's Linux VM and the open-source OCI
-Distribution Registry at `localhost:5000`. It does not require Docker Desktop.
-Flux, `kubectl`, a Kubernetes cluster, and a runtime are not needed for the
-macOS test drive: without a cluster, the wizard demonstrates phases 5-7 as
-guided simulations. Argo CD and KServe remain supported alternatives to Flux
-and vLLM, respectively.
+> **Note on the registry vs. the deployment:** the local registry at `localhost:5000` is only used for the publish and verification phases (Steps 3–4). The deployed KServe InferenceService fetches the model file directly from the raw GitHub URL in your repository, so no networking between minikube and the local registry is required.
 
-## Quick Test Drive (5 minutes)
+## Test Drive (about 20 minutes, fully real)
 
-Try the complete local package, harden, compliance, and publish flow with a
-plain text file. No real model, registry account, or GPU is required.
+This is the recommended path: a real Flux-managed cluster in minikube, a real local registry, real signing and publishing, and a real KServe deployment serving predictions. Every phase executes against live infrastructure.
 
-### Interactive Wizard
+No cluster? The wizard falls back to guided simulations for phases 5–7; see the Clusterless Quick Tour at the end.
 
-#### Before Step 1: Build And Prepare
+### 0. Fork and clone
 
-Choose the build path that matches where you are starting:
+The wizard pushes to your repository's `origin`, so you need your own fork:
 
 ```bash
-# First-time user (requires Go 1.23+)
-git clone https://github.com/lasomethingsomething/cli-prototype.git
+# In GitHub: fork lasomethingsomething/cli-prototype, then:
+git clone https://github.com/<you>/cli-prototype.git
 cd cli-prototype
 go build -o model-cli .
 ```
 
+**Your working copy must be clean before starting the wizard** (`git status` shows nothing modified). The wizard commits the manifest and pushes; uncommitted changes will make the deploy step fail.
+
+### 1. Start the cluster from the repo
+
+The repository contains a bootstrapped Flux cluster configuration in `clusters/minikube/`. Start minikube and connect Flux to your fork:
+
 ```bash
-# Contributor: run this from your existing cli-prototype checkout
-go build -o model-cli .
+minikube start --cpus=4 --memory=8g
+flux bootstrap git --url=ssh://git@github.com/<you>/cli-prototype.git \
+  --branch=main --path=./clusters/minikube
 ```
 
-From the `cli-prototype` directory, create the harmless dummy model and install
-the local package and hardening tools:
+(If you prefer HTTPS over SSH, use `flux bootstrap github --owner=<you> --repository=cli-prototype --path=./clusters/minikube` instead.)
+
+Wait until everything is reconciled:
 
 ```bash
-mkdir -p ~/test-model
-echo "test" > ~/test-model/model.txt
-brew install oras
-brew install anchore/syft/syft
-brew install sigstore/tap/cosign
+kubectl get kustomizations -n flux-system
+# cert-manager, flux-system, kserve, metrics-server, test-model — all True
 ```
 
-To include the optional publish demonstration, prepare the local registry before
-starting the wizard. Run `podman machine init` only the first time.
+Flux installs KServe (model serving), cert-manager, and metrics-server, and keeps them synced to the repo.
+
+### 2. Start the local registry
 
 ```bash
-brew install podman
-podman machine init
+podman machine init    # first time only
 podman machine start
 podman run -d --rm --name model-cli-registry -p 5000:5000 registry:2
-curl http://localhost:5000/v2/
+curl http://localhost:5000/v2/    # {} means ready
 ```
 
-`{}` from `curl` means the local registry is ready. Start the wizard. Without a
-Kubernetes cluster, it simulates phases 5-7 so you can see the complete
-journey:
+### 3. Run the wizard
 
 ```bash
 ./model-cli wizard
 ```
 
-#### Step 1: Develop & Package
+Answers that produce a fully real deployment, using the sample model in this repo:
+ | Prompt | Answer |
+ |---|---|
+ | Model name | `iris` |
+ | Model path | `./models/iris` |
+ | Artifact name | `test-model/iris` |
+ | SBOM tool | `syft` |
+ | MOF class | `auto` |
+ | Signing tool | `cosign` (real signing and verification) |
+ | Publish to registry? | Yes |
+ | Registry | local Podman registry at `localhost:5000` |
+ | Registry client | `oras` |
+ | GitOps tool | `flux` |
+ | Do you have a Kubernetes cluster? | **Yes** |
+ | Git repository URL | your fork's URL |
+ | Branch | `main` |
+ | Manifest path in repo | `clusters/minikube/apps` |
+ | Serving topology | `kserve` (matches the deployed InferenceService; `vllm` targets LLM runtimes) |
 
-| Prompt | Answer |
-|--------|--------|
-| Model name | `test-model` |
-| Model path | `~/test-model` |
-| Artifact name | `test:v1` |
-| Include RAG context? | `No` to skip |
+### 4. Verify the deployment
 
-Press Enter at the context panel to package the model locally. It writes `manifest.json` and `config.json` to `~/test-model` without contacting a registry; that choice comes at the publish prompt in Step 3.
+```bash
+kubectl get kustomizations -n flux-system        # new revision applied
+kubectl get inferenceservice sklearn-iris -n test-model   # READY True
+kubectl port-forward -n test-model deploy/sklearn-iris-predictor 8080:8080
+```
 
-#### Step 2: Local Hardening & Compliance
+Then in another terminal, send a prediction. Note: the sklearn predictor speaks the **V1 protocol** — use `instances`, not the V2-style `inputs` payload:
 
-| Prompt | Answer |
-|--------|--------|
-| SBOM tool | `syft (recommended)` |
-| Model Openness Framework class | `auto (recommended)` |
+```bash
+curl -s http://localhost:8080/v1/models/sklearn-iris\:predict \
+  -H "Content-Type: application/json" \
+  -d '{"instances": [[5.1, 3.5, 1.4, 0.2]]}'
+# -> {"predictions":[0]}   (setosa)
+```
 
-Press Enter to run the local compliance check after hardening completes. This generates the SBOM and MOF metadata, then checks both before the artifact can continue.
+### What just happened
 
-#### Step 3: Supply Chain Check
+1. The model folder was packaged as an OCI artifact with AI Interoperability Profile annotations
+2. An SBOM (Syft) and MOF classification were generated and attached
+3. The artifact was signed (Cosign), verified, and pushed to your local registry (ORAS)
+4. The wizard committed the manifest to your git repository and pushed
+5. Flux reconciled the new revision and KServe rolled out a new predictor pod
+6. The InferenceService serves predictions over the V1 protocol
 
-| Prompt | Answer |
-|--------|--------|
-| Signing tool | `cosign (recommended) - Sigstore` |
+### Cleanup
 
-The wizard shows the signing and verification stages. Those stages are currently guided simulations; use the standalone `model-cli sign` and `model-cli verify` commands for external tool execution. To omit this branch, run `./model-cli wizard --skip-signing` instead.
+```bash
+podman stop model-cli-registry
+minikube delete
+```
 
-At the publish prompt, use:
+## Clusterless Quick Tour (5 minutes)
 
-| Prompt | Answer |
-|--------|--------|
-| Publish this artifact to an OCI registry? | `Yes` |
-| Where is the OCI registry? | `a local Podman registry at localhost:5000` |
-| Which client should publish the artifact? | `oras (recommended)` |
+Try the complete local package, harden, compliance, and publish flow with a plain text file. No real model, registry account, GPU, or cluster required. Without a cluster, the wizard demonstrates phases 5–7 as guided simulations.
 
-The wizard verifies `localhost:5000` before it pushes `test:v1`.
+```bash
+mkdir -p ~/test-model
+echo "test" > ~/test-model/model.txt
+./model-cli wizard
+```
 
-ORAS works with Harbor, GHCR, zot, and other OCI registries; those are destinations, not alternative clients. `modelpack` is the alternative CNCF ModelPack option.
+Key answers: model name `test-model`, model path `~/test-model`, artifact name `test:v1`, skip RAG context, SBOM tool `syft`, MOF class `auto`, signing tool `cosign`. At the publish prompt choose Yes with the local Podman registry at `localhost:5000` and the `oras` client. At the GitOps prompt (Step 5), answer **No** when asked whether you have a cluster: phases 5–7 run as guided simulations.
 
-#### Step 4: Manifest-Level Validation
-
-The wizard retrieves `manifest.json` after the publish choice and displays its
-annotation count without enforcing an evolving annotation contract. When you
-chose the local Podman registry, it fetches
-`localhost:5000/test:v1`; when you chose not to publish, it inspects the local
-`~/test-model/manifest.json` instead. The Journey Complete summary then
-shows the exact command to inspect the local manifest and, when published, the
-registry copy.
-
-Annotation conventions and model metadata are evolving as part of the
-[CNCF AI inner-loop initiative #1740](https://github.com/cncf/toc/issues/1740),
-so this wizard inspects them without enforcing a fixed contract.
-
-#### Step 5: GitOps Admission & Policy Enforcement
-
-| Prompt | Answer |
-|--------|--------|
-| GitOps tool | `flux (recommended)` |
-| Do you have a Kubernetes cluster? | `No` |
-
-After Step 4 inspects the manifest, the wizard asks how to promote the artifact.
-For this Quick Test Drive, choose `No`: the wizard simulates the GitOps
-admission and policy stage without requiring a cluster.
-
-A connected-cluster path exists, but is still a prototype integration: it asks for the Git
-repository URL and manifest path, then invokes the selected Flux or Argo CD client against a preconfigured cluster. Press Enter at the next context panel to continue to infrastructure orchestration.
-
-#### Step 6: Infrastructure & Resource Orchestration
-
-The wizard simulates how Kubernetes would match the artifact's declared
-hardware requirements to cluster nodes. With a configured cluster,
-`model-cli validate nodes` uses `kubectl` to check declared GPU type, vRAM, and
-topology; Kubernetes still makes the final scheduling decision. Press Enter at
-the next context panel to continue to runtime execution.
-
-#### Step 7: Runtime Execution & Optimization
-
-| Prompt | Answer |
-|--------|--------|
-| Serving topology | `vllm (recommended) - direct model server` |
-
-The wizard offers direct `vllm (recommended)`, `kserve`, or `kserve-vllm` for a
-KServe-managed vLLM deployment. This is a guided simulation: it does not yet
-write the selected topology into the artifact or start a runtime. For an
-artifact that declares runtime requirements, use `model-cli validate runtime`
-against a cluster. `model-cli serve --runtime vllm` starts local vLLM; the
-current KServe provider reports the intended InferenceService rather than
-creating it.
-
-The test creates these local files. When you publish, ORAS uploads the model
-directory and its manifest annotations to the selected registry:
+The test creates these local files. When you publish, ORAS uploads the model directory and its manifest annotations to the selected registry:
 
 - `~/test-model/manifest.json` - an OCI manifest carrying CNCF AI Interoperability Profile, SBOM format, and MOF annotations
 - `~/test-model/sbom.spdx-json` - the SBOM
 - `~/test-model/mof.json` - the MOF metadata
-
-Phases 5-7 are guided simulations when no Kubernetes cluster is connected.
-The standalone `validate`, `deploy`, `schedule`, and `serve` commands provide
-the corresponding cluster and runtime entry points; see their individual
-prototype limits above.
 
 Stop the temporary local registry when the test is complete:
 
 ```bash
 podman stop model-cli-registry
 ```
+
+## Known limitations
+
+- The GitOps step assumes a clean git working copy; generated files (SBOM, MOF) can dirty the tree between runs. Commit or clean them before re-deploying.
+- `flux reconcile` is invoked with the model name; if your Kustomization is named differently (as in the sample cluster, where it is `test-model`), immediate reconciliation falls back to Flux's periodic interval.
+- The serving-topology recommendation does not yet account for the packaged model's runtime (a sklearn artifact is offered `vllm`).
+- The sklearn predictor serves the V1 protocol; V2-style `inputs` payloads are rejected.
+- Generated SBOM and manifest metadata are not deterministic (timestamps, UUIDs), which dirties the repo on every run.
+
+Annotation conventions and model metadata are evolving as part of the CNCF AI inner-loop initiative #1740, so the wizard inspects them without enforcing a fixed contract.
 
 ## Documentation
 
@@ -220,4 +197,4 @@ podman stop model-cli-registry
 - [Architecture](docs/architecture.md)
 - [TUI Guide](docs/tui.md)
 - [Resources](docs/resources.md)
-- [Contributing](CONTRIBUTING.md)
+- Contributing
