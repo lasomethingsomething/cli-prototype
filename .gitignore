@@ -35,6 +35,13 @@ build/
 # Config
 .model-cli.yaml
 
+# Generated model artifacts (created by model-cli package/harden/sign)
+manifest.json
+sbom.*
+mof.json
+config.json
+attestation.json
+
 # Temporary files
 tmp/
 temp/

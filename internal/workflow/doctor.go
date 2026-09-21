@@ -35,6 +35,7 @@ type ToolStatus string
 const (
 	StatusMissing          ToolStatus = "missing"
 	StatusInstalledNotRunning ToolStatus = "installed-not-running"
+	StatusNotDeployed      ToolStatus = "not-deployed"
 	StatusReady            ToolStatus = "ready"
 )
 
@@ -129,13 +130,15 @@ func checkToolStatus(tool Tool) *ToolResult {
 		if err := cmd.Run(); err != nil {
 			// kubectl cannot reach cluster
 			status = StatusMissing
+			hint = "minikube start / see README bootstrap"
 		} else {
 			// kubectl works, check if the specific deployment exists
 			if installed {
 				status = StatusReady
 			} else {
-				status = StatusInstalledNotRunning
-				hint = "minikube start / see README bootstrap"
+				// Cluster is reachable but deployment not yet created (e.g., Flux still reconciling)
+				status = StatusNotDeployed
+				hint = "Wait for Flux reconciliation or check Flux logs with 'flux get kustomizations -A'"
 			}
 		}
 	} else {

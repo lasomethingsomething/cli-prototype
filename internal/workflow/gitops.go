@@ -95,11 +95,13 @@ func (f *FluxProvider) Deploy(modelName, repoURL, path string) error {
 	}
 
 	// 3. Ask Flux to pick it up now (optional; interval would do it anyway)
-	reconcile := exec.Command("flux", "reconcile", "kustomization", modelName, "--with-source")
+	// Reconcile the source which will trigger dependent Kustomizations automatically
+	reconcile := exec.Command("flux", "reconcile", "source", "flux-system")
 	if err := reconcile.Run(); err != nil {
-		fmt.Printf("Pushed to Git. Flux will reconcile %s on its next interval (couldn't trigger immediately: %v)\n", modelName, err)
+		// If source reconcile fails, Flux will still pick up changes on its next interval
+		fmt.Printf("Pushed to Git. Flux will reconcile on its next interval (couldn't trigger immediately: %v)\n", err)
 	} else {
-		fmt.Printf("Pushed to Git and reconciled Flux Kustomization: %s\n", modelName)
+		fmt.Printf("Pushed to Git and reconciled Flux source. Kustomizations will update automatically.\n")
 	}
 	return nil
 }

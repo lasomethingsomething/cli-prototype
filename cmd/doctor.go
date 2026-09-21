@@ -203,6 +203,9 @@ func printCategory(title string, results []workflow.ToolResult) {
 		case workflow.StatusInstalledNotRunning:
 			status = "⚠"
 			statusDetail = "installed but not running"
+		case workflow.StatusNotDeployed:
+			status = "⚠"
+			statusDetail = "not deployed"
 		case workflow.StatusReady:
 			status = "✓"
 			statusDetail = "ready"
