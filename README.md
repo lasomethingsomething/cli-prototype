@@ -24,7 +24,13 @@ If terms like SBOM, MOF, or admission are new to you, see the [Concepts and Glos
 
 ## System Requirements
 
-macOS with Homebrew is recommended. Use `model-cli doctor` to check your environment; the wizard installs missing tools (oras, syft, cosign, flux, podman, kubectl, minikube) just-in-time via brew when each phase runs.
+macOS with Homebrew, Git, and an SSH key registered with GitHub are required.
+
+The wizard installs oras/syft/cosign just-in-time, BUT the cluster setup in Steps 1–2 runs before the wizard, so those tools must be pre-installed:
+
+```bash
+brew install minikube kubectl fluxcd/tap/flux podman
+```
 
 The publish demonstration uses Podman's Linux VM and the open-source OCI Distribution Registry at `localhost:5000`. It does not require Docker Desktop.
 
@@ -41,14 +47,30 @@ No cluster? The wizard falls back to guided simulations for phases 5–7; see th
 Download the pre-built binary from [GitHub Releases](https://github.com/lasomethingsomething/cli-prototype/releases/latest):
 
 ```bash
-# macOS - use $(uname -m) to pick arm64 or amd64 based on your CPU
-arch=$(uname -m)
-curl -sL https://github.com/lasomethingsomething/cli-prototype/releases/download/v0.1.0/model-cli_v0.1.0_darwin_${arch}.tar.gz | tar xz
+# macOS - use sed to map x86_64 to amd64 (Intel Macs report x86_64, but assets use amd64)
+arch=$(uname -m | sed 's/x86_64/amd64/')
+curl -sL https://github.com/lasomethingsomething/cli-prototype/releases/download/v0.1.0/model-cli_0.1.0_darwin_${arch}.tar.gz | tar xz
 chmod +x model-cli
 ./model-cli doctor
 ```
 
+> **Note:** The release tag is `v0.1.0` but the asset filenames have no `v` prefix (e.g., `model-cli_0.1.0_darwin_arm64.tar.gz`). macOS reports Intel CPUs as `x86_64` but the release assets use `amd64`, hence the `sed` substitution.
+
 For Linux, replace `darwin` with `linux` in the URL.
+
+### 0.5. Fork and clone this repository
+
+The Test Drive needs the repository (sample model `models/iris`, Flux config `clusters/minikube/`, a fork to push to).
+
+```bash
+# In GitHub: fork lasomethingsomething/cli-prototype, then:
+git clone https://github.com/<you>/cli-prototype.git
+cd cli-prototype
+# Copy the downloaded binary here
+cp ~/Downloads/model-cli .
+```
+
+> **Note:** Replace `<you>` with your GitHub username everywhere below.
 
 **Your working copy must be clean before starting the wizard** (`git status` shows nothing modified). The wizard commits the manifest and pushes; uncommitted changes will make the deploy step fail.
 
@@ -181,4 +203,4 @@ Annotation conventions and model metadata are evolving as part of the CNCF AI in
 - [Architecture](docs/architecture.md)
 - [TUI Guide](docs/tui.md)
 - [Resources](docs/resources.md)
-- Contributing
+- [Contributing](CONTRIBUTING.md)
