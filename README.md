@@ -26,8 +26,6 @@ If terms like SBOM, MOF, or admission are new to you, see the [Concepts and Glos
 
 macOS with Homebrew, Git, and an SSH key registered with GitHub are required.
 
-`model-cli setup` installs all brew-installable tools (oras, syft, cosign, flux, podman, kubectl, minikube, notation) automatically. Run it before starting the cluster.
-
 The publish demonstration uses Podman's Linux VM and the open-source OCI Distribution Registry at `localhost:5000`. It does not require Docker Desktop.
 
 > **Note on the registry vs. the deployment:** the local registry at `localhost:5000` is only used for the publish and verification phases (Steps 3–4). The deployed KServe InferenceService fetches the model file directly from the raw GitHub URL in your repository, so no networking between minikube and the local registry is required.
@@ -45,16 +43,15 @@ Download the pre-built binary from [GitHub Releases](https://github.com/lasometh
 ```bash
 # macOS - use sed to map x86_64 to amd64 (Intel Macs report x86_64, but assets use amd64)
 arch=$(uname -m | sed 's/x86_64/amd64/')
-curl -sL https://github.com/lasomethingsomething/cli-prototype/releases/download/v0.1.1/model-cli_v0.1.1_darwin_${arch}.tar.gz | tar xz
+curl -sL https://github.com/lasomethingsomething/cli-prototype/releases/download/v0.1.1/model-cli_0.1.1_darwin_${arch}.tar.gz | tar xz
 chmod +x model-cli
-./model-cli setup --yes
 ```
 
-> **Note:** The release tag and asset filenames both use a `v` prefix (e.g., `model-cli_v0.1.1_darwin_amd64.tar.gz`). macOS reports Intel CPUs as `x86_64` but the release assets use `amd64`, hence the `sed` substitution.
+> **Note:** The release tag is `v0.1.1` but the asset filenames have no `v` prefix (e.g., `model-cli_0.1.1_darwin_amd64.tar.gz`). macOS reports Intel CPUs as `x86_64` but the release assets use `amd64`, hence the `sed` substitution.
 
 For Linux, replace `darwin` with `linux` in the URL.
 
-### 0.5. Fork and clone this repository
+### 1. Fork, clone, and install prerequisites
 
 The Test Drive needs the repository (sample model `models/iris`, Flux config `clusters/minikube/`, a fork to push to).
 
@@ -62,18 +59,23 @@ The Test Drive needs the repository (sample model `models/iris`, Flux config `cl
 # In GitHub: fork lasomethingsomething/cli-prototype, then:
 git clone https://github.com/<you>/cli-prototype.git
 cd cli-prototype
-# Copy the downloaded binary here
-cp ~/Downloads/model-cli .
+```
+
+model-cli is a thin orchestrator: it delegates to external tools like oras, syft, cosign, flux, podman, kubectl, minikube, and notation. These must all be installed and on your PATH before the cluster steps. Run the following to install any missing tools:
+
+```bash
+./model-cli setup --yes
 ```
 
 > **Note:** Replace `<you>` with your GitHub username everywhere below.
 
 **Your working copy must be clean before starting the wizard** (`git status` shows nothing modified). The wizard commits the manifest and pushes; uncommitted changes will make the deploy step fail.
 
-### 1. Start the cluster from the repo
+### 2. Start the cluster and bootstrap Flux (optional - the wizard can do this)
+
+If you want to set up the cluster manually before running the wizard, or if you're using an existing cluster:
 
 ```bash
-./model-cli setup
 minikube start --cpus=4 --memory=8g
 flux bootstrap git --url=ssh://git@github.com/<you>/cli-prototype.git \
   --branch=main --path=./clusters/minikube
@@ -94,7 +96,11 @@ kubectl get kustomizations -n flux-system
 
 Flux installs KServe (model serving), cert-manager, and metrics-server, and keeps them synced to the repo.
 
-### 2. Start the local registry
+**Or:** Skip this step entirely — when you run the wizard and it asks "Do you have a Kubernetes cluster?", say No and the wizard will offer to set up minikube and Flux automatically.
+
+### 3. Start the local registry (optional - the wizard can do this)
+
+If you want to start the registry manually:
 
 ```bash
 podman machine init    # first time only
@@ -103,7 +109,9 @@ podman run -d --rm --name model-cli-registry -p 5000:5000 registry:2
 curl http://localhost:5000/v2/    # {} means ready
 ```
 
-### 3. Run the wizard
+**Or:** Skip this step entirely — when you run the wizard and choose to publish to a local Podman registry, the wizard will offer to set it up automatically.
+
+### 4. Run the wizard
 
 ```bash
 ./model-cli wizard
@@ -128,7 +136,7 @@ Answers that produce a fully real deployment, using the sample model in this rep
  | Manifest path in repo | `clusters/minikube/apps` |
  | Serving topology | `kserve` (matches the deployed InferenceService; `vllm` targets LLM runtimes) |
 
-### 4. Verify the deployment
+### 5. Verify the deployment
 
 ```bash
 kubectl get kustomizations -n flux-system        # new revision applied

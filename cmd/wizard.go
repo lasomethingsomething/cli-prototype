@@ -535,12 +535,31 @@ Examples:
 			var destination string
 			if publishTarget == "local-podman" {
 				if err := verifyLocalRegistry(); err != nil {
-					fmt.Println("\nStart a local registry with Podman, then run the wizard again:")
-					fmt.Println("  brew install podman")
-					fmt.Println("  podman machine init")
-					fmt.Println("  podman machine start")
-					fmt.Println("  podman run -d --rm --name model-cli-registry -p 5000:5000 registry:2")
-					return fmt.Errorf("local OCI registry is unavailable at localhost:5000: %w", err)
+					// Offer to set up the registry
+					var setupRegistry bool
+					if err := huh.NewConfirm().
+						Title("Set up a local Podman registry now?").
+						Description("This will install podman if needed, initialize the VM, and start the registry container.").
+						Value(&setupRegistry).
+						Run(); err != nil {
+						return err
+					}
+					
+					if setupRegistry {
+						fmt.Println()
+						fmt.Println(stepStyle.Render("Setting up local registry..."))
+						fmt.Println()
+						if err := workflow.RegistrySetup(); err != nil {
+							return fmt.Errorf("failed to set up local registry: %v", err)
+						}
+					} else {
+						fmt.Println("\nStart a local registry with Podman, then run the wizard again:")
+						fmt.Println("  brew install podman")
+						fmt.Println("  podman machine init")
+						fmt.Println("  podman machine start")
+						fmt.Println("  podman run -d --rm --name model-cli-registry -p 5000:5000 registry:2")
+						return fmt.Errorf("local OCI registry is unavailable at localhost:5000: %w", err)
+					}
 				}
 				destination = "localhost:5000"
 			} else {
@@ -595,6 +614,8 @@ Examples:
 		var hasKubernetes bool
 		var repoURL string
 		var manifestPath string
+		var setupCluster bool
+		var setupFlux bool
 		if !skipDeploy {
 			fmt.Println(stepStyle.Render("Step 5: GitOps Admission & Policy Enforcement"))
 			fmt.Println()
@@ -609,11 +630,101 @@ Examples:
 			cfg.GitOps = gitOpsTool
 			if err := huh.NewConfirm().
 				Title("Do you have a Kubernetes cluster?").
-				Description("If no: the wizard simulates the remaining cluster stages.").
+				Description("If no: the wizard can set up minikube and Flux for you.").
 				Value(&hasKubernetes).
 				Run(); err != nil {
 				return err
 			}
+			
+			// If no cluster, offer to set it up
+			if !hasKubernetes {
+				if err := huh.NewConfirm().
+					Title("Set up a local minikube cluster now?").
+					Description("This will install minikube and kubectl if needed, then start a cluster.").
+					Value(&setupCluster).
+					Run(); err != nil {
+					return err
+				}
+				
+				if setupCluster {
+					// Get cluster configuration
+					var clusterCPUs string
+					var clusterMemory string
+					if err := huh.NewInput().
+						Title("Number of CPUs for minikube:").
+						Placeholder("4").
+						Value(&clusterCPUs).
+						Run(); err != nil {
+						return err
+					}
+					if clusterCPUs == "" {
+						clusterCPUs = "4"
+					}
+					
+					if err := huh.NewInput().
+						Title("Memory for minikube (e.g., 8g):").
+						Placeholder("8g").
+						Value(&clusterMemory).
+						Run(); err != nil {
+						return err
+					}
+					if clusterMemory == "" {
+						clusterMemory = "8g"
+					}
+					
+					// Set up the cluster
+					fmt.Println()
+					fmt.Println(stepStyle.Render("Setting up minikube cluster..."))
+					fmt.Println()
+					if err := workflow.ClusterSetup(clusterCPUs, clusterMemory); err != nil {
+						return fmt.Errorf("failed to set up cluster: %v", err)
+					}
+					
+					hasKubernetes = true
+					
+					// Now offer Flux bootstrap
+					if err := huh.NewConfirm().
+						Title("Bootstrap Flux on this cluster?").
+						Description("This will install Flux and set up the GitOps pipeline.").
+						Value(&setupFlux).
+						Run(); err != nil {
+						return err
+					}
+					
+					if setupFlux {
+						// Get repo URL
+						if err := huh.NewInput().
+							Title("Git repository URL for Flux bootstrap:").
+							Placeholder("ssh://git@github.com/you/cli-prototype.git").
+							Value(&repoURL).
+							Run(); err != nil {
+							return err
+						}
+						
+						// Get manifest path
+						if err := huh.NewInput().
+							Title("Flux sync path in repo:").
+							Placeholder("./clusters/minikube").
+							Value(&manifestPath).
+							Run(); err != nil {
+							return err
+						}
+						
+						// If manifestPath is empty, use default
+						if manifestPath == "" {
+							manifestPath = "./clusters/minikube"
+						}
+						
+						fmt.Println()
+						fmt.Println(stepStyle.Render("Bootstrapping Flux..."))
+						fmt.Println()
+						if err := workflow.FluxBootstrap(repoURL, manifestPath); err != nil {
+							return fmt.Errorf("failed to bootstrap Flux: %v", err)
+						}
+					}
+				}
+			}
+			
 			if hasKubernetes {
 				if err := huh.NewInput().
 					Title("Git repository URL:").
