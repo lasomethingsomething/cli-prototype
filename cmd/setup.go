@@ -67,30 +67,54 @@ Examples:
 
 		// Install each missing tool
 		fmt.Println()
+		var failures []workflow.InstallToolResult
 		for _, tool := range missing {
 			fmt.Printf("Installing %s...\n", tool.Name())
 
-			if err := workflow.InstallTool(tool); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				fmt.Fprintf(os.Stderr, "Failed to install %s. Run: %s\n", tool.Name(), tool.InstallInstructions())
-				os.Exit(1)
+			result, err := workflow.InstallTool(tool)
+			if err != nil || result.Error != nil {
+				// Collect failure but continue
+				if result != nil {
+					failures = append(failures, *result)
+				} else {
+					failures = append(failures, workflow.InstallToolResult{
+						Tool:   tool,
+						Error:  err,
+						Stderr: "",
+					})
+				}
+				fmt.Printf("⚠ Failed to install %s\n", tool.Name())
+			} else {
+				fmt.Printf("✓ Successfully installed %s\n", tool.Name())
 			}
-
-			fmt.Printf("Successfully installed %s\n", tool.Name())
 		}
 
 		fmt.Println()
-		fmt.Println("All missing brew-installable tools have been installed.")
-		fmt.Println()
+		
+		// Print summary of failures if any
+		if len(failures) > 0 {
+			fmt.Printf("Encountered %d failure(s) during installation:\n", len(failures))
+			for _, f := range failures {
+				fmt.Printf("\n  Tool: %s\n", f.Tool.Name())
+				if f.Error != nil {
+					fmt.Printf("    Error: %v\n", f.Error)
+				}
+				if f.Stderr != "" {
+					fmt.Printf("    Details: %s\n", f.Stderr)
+				}
+				fmt.Printf("    Hint: %s\n", f.Tool.InstallInstructions())
+			}
+		}
 
 		// Print updated report
+		fmt.Println()
 		fmt.Println("Final status:")
 		fmt.Println()
 		updatedReport := workflow.CheckAll()
 		printDoctorReport(updatedReport)
 
-		// Exit with error if anything is still missing
-		if !updatedReport.AllInstalled() {
+		// Exit with error if there were failures or anything is still missing
+		if len(failures) > 0 || !updatedReport.AllInstalled() {
 			os.Exit(1)
 		}
 

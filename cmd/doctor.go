@@ -101,7 +101,8 @@ func runFix(cmd *cobra.Command, report *workflow.DoctorReport, yesFlag bool) err
 	for _, tool := range missing {
 		fmt.Printf("Installing %s...\n", tool.Name())
 		
-		if err := workflow.InstallTool(tool); err != nil {
+		_, err := workflow.InstallTool(tool)
+		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			fmt.Fprintf(os.Stderr, "Failed to install %s. Run: %s\n", tool.Name(), tool.InstallInstructions())
 			os.Exit(1)

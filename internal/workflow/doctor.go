@@ -166,36 +166,106 @@ func CheckTool(name string) (*ToolResult, error) {
 	return nil, fmt.Errorf("unknown tool: %s", name)
 }
 
-// InstallTool installs a specific tool using brew
-func InstallTool(tool Tool) error {
+// InstallToolResult contains the result of an install attempt
+type InstallToolResult struct {
+	Tool    Tool
+	Error   error
+	Stdout  string
+	Stderr  string
+}
+
+// InstallTool installs a specific tool using brew.
+// It returns the result including any error and stderr output.
+// If the tool is already installed but unlinked, it attempts to link it.
+func InstallTool(tool Tool) (*InstallToolResult, error) {
 	if tool.Category() != CategoryBrew {
-		return fmt.Errorf("tool %s is not brew-installable", tool.Name())
+		return nil, fmt.Errorf("tool %s is not brew-installable", tool.Name())
 	}
 	
 	installCmd := tool.InstallInstructions()
 	if !strings.Contains(installCmd, "brew install") {
-		return fmt.Errorf("tool %s does not have a brew install command", tool.Name())
+		return nil, fmt.Errorf("tool %s does not have a brew install command", tool.Name())
 	}
 	
 	// Extract the package name from the install command
 	parts := strings.Fields(installCmd)
 	if len(parts) < 3 {
-		return fmt.Errorf("invalid brew install command: %s", installCmd)
+		return nil, fmt.Errorf("invalid brew install command: %s", installCmd)
 	}
 	
 	packageName := strings.Join(parts[2:], " ")
+	binaryName := tool.Name()
 	
-	fmt.Printf("Installing %s via brew...\n", tool.Name())
-	cmd := exec.Command("brew", "install", packageName)
-	cmd.Stdout = nil
-	cmd.Stderr = nil
-	
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to install %s: %v. Run: %s", tool.Name(), err, installCmd)
+	// First, check if brew has the formula but it's unlinked
+	checkCmd := exec.Command("brew", "list", packageName)
+	if err := checkCmd.Run(); err == nil {
+		// Package is installed by brew, check if binary is on PATH
+		if _, err := exec.LookPath(binaryName); err != nil {
+			// Binary not on PATH, try to link it
+			fmt.Printf("Linking %s via brew...\n", binaryName)
+			linkCmd := exec.Command("brew", "link", packageName)
+			linkOutput, err := linkCmd.CombinedOutput()
+			if err != nil {
+				return &InstallToolResult{
+					Tool:   tool,
+					Error:  fmt.Errorf("failed to link %s: %v", packageName, err),
+					Stderr: string(linkOutput),
+				}, err
+			}
+			// Verify the link worked
+			if _, err := exec.LookPath(binaryName); err != nil {
+				return &InstallToolResult{
+					Tool:   tool,
+					Error:  fmt.Errorf("link succeeded but %s still not on PATH", binaryName),
+					Stderr: string(linkOutput),
+				}, fmt.Errorf("%s not on PATH after link", binaryName)
+			}
+			return &InstallToolResult{Tool: tool}, nil
+		}
+		// Binary is on PATH, already installed
+		return &InstallToolResult{Tool: tool}, nil
 	}
 	
-	fmt.Printf("Successfully installed %s\n", tool.Name())
-	return nil
+	// Package not installed, install it
+	fmt.Printf("Installing %s via brew...\n", tool.Name())
+	cmd := exec.Command("brew", "install", packageName)
+	output, err := cmd.CombinedOutput()
+	
+	if err != nil {
+		return &InstallToolResult{
+			Tool:    tool,
+			Error:   fmt.Errorf("failed to install %s: %v", tool.Name(), err),
+			Stdout:  string(output),
+			Stderr:  string(output),
+		}, err
+	}
+	
+	// Verify the binary is on PATH after install
+	if _, err := exec.LookPath(binaryName); err != nil {
+		// Try linking
+		fmt.Printf("Linking %s via brew...\n", binaryName)
+		linkCmd := exec.Command("brew", "link", packageName)
+		linkOutput, linkErr := linkCmd.CombinedOutput()
+		if linkErr != nil {
+			return &InstallToolResult{
+				Tool:   tool,
+				Error:  fmt.Errorf("installed but not on PATH, failed to link %s: %v", packageName, linkErr),
+				Stdout: string(output),
+				Stderr: string(linkOutput),
+			}, fmt.Errorf("installed but not on PATH and link failed: %v", linkErr)
+		}
+		// Verify the link worked
+		if _, err := exec.LookPath(binaryName); err != nil {
+			return &InstallToolResult{
+				Tool:   tool,
+				Error:  fmt.Errorf("installed and linked but %s still not on PATH", binaryName),
+				Stdout: string(output),
+				Stderr: string(linkOutput),
+			}, fmt.Errorf("installed and linked but not on PATH")
+		}
+	}
+	
+	return &InstallToolResult{Tool: tool}, nil
 }
 
 // EnsureToolInstalled checks if a tool is installed and optionally installs it.
@@ -233,7 +303,8 @@ func EnsureToolInstalled(toolName string, purpose string, interactive bool) (boo
 		
 		response = strings.ToLower(strings.TrimSpace(response))
 		if response == "y" || response == "" {
-			if err := InstallTool(tool); err != nil {
+			_, err := InstallTool(tool)
+			if err != nil {
 				return false, err
 			}
 			return true, nil
