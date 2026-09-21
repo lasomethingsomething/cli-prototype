@@ -59,9 +59,11 @@ The Test Drive needs the repository (sample model `models/iris`, Flux config `cl
 
 ```bash
 # In GitHub: fork lasomethingsomething/cli-prototype, then:
-git clone https://github.com/<you>/cli-prototype.git
+git clone https://github.com/your-username/cli-prototype.git
 cd cli-prototype
 ```
+
+> **Prerequisite:** An SSH key registered with GitHub is required for Flux to access your repository.
 
 model-cli is a thin orchestrator: it delegates to external tools like oras, syft, cosign, flux, podman, kubectl, minikube, and notation. These must all be installed and on your PATH before the cluster steps. Run the following to install any missing tools:
 
@@ -69,7 +71,7 @@ model-cli is a thin orchestrator: it delegates to external tools like oras, syft
 ./model-cli setup --yes
 ```
 
-> **Note:** Replace `<you>` with your GitHub username everywhere below.
+> **Note:** Replace `your-username` with your actual GitHub username in all commands below.
 
 **Your working copy must be clean before starting the wizard** (`git status` shows nothing modified). The wizard commits the manifest and pushes; uncommitted changes will make the deploy step fail.
 
@@ -78,14 +80,25 @@ model-cli is a thin orchestrator: it delegates to external tools like oras, syft
 If you want to set up the cluster manually before running the wizard, or if you're using an existing cluster:
 
 ```bash
-minikube start --cpus=4 --memory=8g
-flux bootstrap git --url=ssh://git@github.com/<you>/cli-prototype.git \
+# Start minikube with the podman driver (recommended) and at least 6GB memory
+# If you have Docker Desktop with <8GB allocated, use --memory=6g
+minikube start --driver=podman --cpus=4 --memory=6g
+
+# Bootstrap Flux using SSH transport (requires your SSH key from Step 1)
+flux bootstrap git --url=ssh://git@github.com/your-username/cli-prototype.git \
   --branch=main --path=./clusters/minikube
 ```
 
-The repository contains a bootstrapped Flux cluster configuration in `clusters/minikube/`. The bootstrap uses SSH transport which requires an SSH key registered with GitHub (checked by `model-cli doctor`).
+> **Driver notes:**
+> - On Intel Macs with podman 5.x: use `--driver=podman` (required for podman 5.x compatibility)
+> - On Apple Silicon: `podman` is the default driver and works with latest podman
+> - If using Docker Desktop with <8GB RAM allocated: use `--memory=6g` instead of `--memory=8g`
 
-> **Note:** The sample model's InferenceService manifest at `clusters/minikube/apps/demo-iris.yaml` uses a `STORAGE_URI_PLACEHOLDER`. After forking, replace this with your fork's raw GitHub URL (e.g., `https://raw.githubusercontent.com/<you>/cli-prototype/main/models/iris/model.joblib`).
+The repository contains a bootstrapped Flux cluster configuration in `clusters/minikube/`. The bootstrap uses SSH transport which requires an SSH key registered with GitHub.
+
+> **Bootstrap behavior:** `flux bootstrap git` is idempotent. If it fails partway through (e.g., network interruption), simply re-run the same command. Flux will push any missing commits to your repository, then reconcile the cluster state. You will see output like "already exists" or "already up-to-date" for resources that were successfully created on the first attempt.
+
+> **Storage URI placeholder:** The sample model's InferenceService manifest at `clusters/minikube/apps/demo-iris.yaml` uses `STORAGE_URI_PLACEHOLDER`. After forking, replace this with your fork's raw GitHub URL (e.g., `https://raw.githubusercontent.com/your-username/cli-prototype/main/models/iris/model.joblib`).
 
 Wait until everything is reconciled:
 
