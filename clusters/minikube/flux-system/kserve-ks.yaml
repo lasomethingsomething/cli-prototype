@@ -8,6 +8,8 @@ spec:
   interval: 10m
   path: ./clusters/minikube/infra/kserve
   prune: true
+  dependsOn:
+    - name: cert-manager
   sourceRef:
     kind: GitRepository
     name: flux-system

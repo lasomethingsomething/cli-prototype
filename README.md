@@ -81,6 +81,8 @@ flux bootstrap git --url=ssh://git@github.com/<you>/cli-prototype.git \
 
 The repository contains a bootstrapped Flux cluster configuration in `clusters/minikube/`.
 
+> **Note:** The sample model's InferenceService manifest at `clusters/minikube/apps/demo-iris.yaml` uses a `STORAGE_URI_PLACEHOLDER`. After forking, replace this with your fork's raw GitHub URL (e.g., `https://raw.githubusercontent.com/<you>/cli-prototype/main/models/iris/model.joblib`).
+
 (If you prefer HTTPS over SSH, use `flux bootstrap github --owner=<you> --repository=cli-prototype --path=./clusters/minikube` instead.)
 
 Wait until everything is reconciled:
