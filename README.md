@@ -43,13 +43,13 @@ No cluster? The wizard falls back to guided simulations for phases 5–7; see th
 Download the pre-built binary from [GitHub Releases](https://github.com/lasomethingsomething/cli-prototype/releases/latest):
 
 ```bash
-# macOS - use sed to map x86_64 to amd64 (Intel Macs report x86_64, but assets use amd64)
+# macOS - map architecture: x86_64→amd64 (Intel), arm64→amd64 (Apple Silicon)
 arch=$(uname -m | sed 's/x86_64/amd64/')
 curl -sL https://github.com/lasomethingsomething/cli-prototype/releases/download/v0.1.1/model-cli_0.1.1_darwin_${arch}.tar.gz | tar xz
 chmod +x model-cli
 ```
 
-> **Note:** The release tag is `v0.1.1` but the asset filenames have no `v` prefix (e.g., `model-cli_0.1.1_darwin_amd64.tar.gz`). macOS reports Intel CPUs as `x86_64` but the release assets use `amd64`, hence the `sed` substitution.
+> **Note:** The release tag is `v0.1.1` but the asset filenames have no `v` prefix (e.g., `model-cli_0.1.1_darwin_amd64.tar.gz`). On Intel Macs, `uname -m` reports `x86_64` which the `sed` command maps to `amd64`. On Apple Silicon, `uname -m` reports `arm64` which already matches the asset naming.
 
 For Linux, replace `darwin` with `linux` in the URL.
 
@@ -58,7 +58,7 @@ For Linux, replace `darwin` with `linux` in the URL.
 The Test Drive needs the repository (sample model `models/iris`, Flux config `clusters/minikube/`, a fork to push to).
 
 ```bash
-# In GitHub: fork lasomethingsomething/cli-prototype, then:
+# In GitHub: fork this repository (lasomethingsomething/cli-prototype) to your account, then:
 git clone https://github.com/your-username/cli-prototype.git
 cd cli-prototype
 ```
@@ -133,27 +133,29 @@ curl http://localhost:5000/v2/    # {} means ready
 Answers that produce a fully real deployment, using the sample model in this repo:
  | Prompt | Answer |
  |---|---|
- | Model name | `iris` |
- | Model path | `./models/iris` |
- | Artifact name | `test-model/iris` |
- | SBOM tool | `syft` |
- | MOF class | `auto` |
- | Signing tool | `cosign` (real signing and verification) |
- | Publish to registry? | Yes |
- | Registry | local Podman registry at `localhost:5000` |
- | Registry client | `oras` |
- | GitOps tool | `flux` |
+ | What's your model name? | `iris` |
+ | Where are your model files? | `./models/iris` |
+ | What should we call the artifact? | `test-model/iris` |
+ | Which tool should generate the SBOM? | `syft` |
+ | How should the Model Openness Framework class be set? | `auto (recommended)` |
+ | Which signing approach should the wizard demonstrate? | `cosign` |
+ | Publish this artifact to an OCI registry? | Yes |
+ | Where is the OCI registry? | `a local Podman registry at localhost:5000` |
+ | Which client should publish the artifact? | `oras` |
+ | How would you like to promote the artifact? | `flux` |
  | Do you have a Kubernetes cluster? | **Yes** |
- | Git repository URL | your fork's URL |
- | Branch | `main` |
+ | Git repository URL | `ssh://git@github.com/your-username/cli-prototype.git` |
  | Manifest path in repo | `clusters/minikube/apps` |
- | Serving topology | `kserve` (matches the deployed InferenceService; `vllm` targets LLM runtimes) |
+ | Which serving topology should the wizard demonstrate? | `kserve` |
 
 ### 5. Verify the deployment
 
 ```bash
 kubectl get kustomizations -n flux-system        # new revision applied
 kubectl get inferenceservice sklearn-iris -n test-model   # READY True
+
+# Forward local port 8080 to the sklearn-iris-predictor deployment
+# This allows you to send prediction requests to localhost:8080
 kubectl port-forward -n test-model deploy/sklearn-iris-predictor 8080:8080
 ```
 
@@ -208,11 +210,9 @@ podman stop model-cli-registry
 
 ## Known limitations
 
-- The GitOps step assumes a clean git working copy; generated files (SBOM, MOF) can dirty the tree between runs. Commit or clean them before re-deploying.
-- `flux reconcile` is invoked with the model name; if your Kustomization is named differently (as in the sample cluster, where it is `test-model`), immediate reconciliation falls back to Flux's periodic interval.
+- The GitOps step assumes a clean git working copy; generated files are now gitignored but SBOM and manifest metadata are not deterministic (timestamps, UUIDs), which still dirties the repo on every run. Commit or clean them before re-deploying.
 - The serving-topology recommendation does not yet account for the packaged model's runtime (a sklearn artifact is offered `vllm`).
 - The sklearn predictor serves the V1 protocol; V2-style `inputs` payloads are rejected.
-- Generated SBOM and manifest metadata are not deterministic (timestamps, UUIDs), which dirties the repo on every run.
 
 Annotation conventions and model metadata are evolving as part of the CNCF AI inner-loop initiative #1740, so the wizard inspects them without enforcing a fixed contract.
 
