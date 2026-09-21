@@ -45,12 +45,12 @@ Download the pre-built binary from [GitHub Releases](https://github.com/lasometh
 ```bash
 # macOS - use sed to map x86_64 to amd64 (Intel Macs report x86_64, but assets use amd64)
 arch=$(uname -m | sed 's/x86_64/amd64/')
-curl -sL https://github.com/lasomethingsomething/cli-prototype/releases/download/v0.1.0/model-cli_0.1.0_darwin_${arch}.tar.gz | tar xz
+curl -sL https://github.com/lasomethingsomething/cli-prototype/releases/download/v0.1.1/model-cli_v0.1.1_darwin_${arch}.tar.gz | tar xz
 chmod +x model-cli
-./model-cli setup
+./model-cli setup --yes
 ```
 
-> **Note:** The release tag is `v0.1.0` but the asset filenames have no `v` prefix (e.g., `model-cli_0.1.0_darwin_arm64.tar.gz`). macOS reports Intel CPUs as `x86_64` but the release assets use `amd64`, hence the `sed` substitution.
+> **Note:** The release tag and asset filenames both use a `v` prefix (e.g., `model-cli_v0.1.1_darwin_amd64.tar.gz`). macOS reports Intel CPUs as `x86_64` but the release assets use `amd64`, hence the `sed` substitution.
 
 For Linux, replace `darwin` with `linux` in the URL.
 
