@@ -63,7 +63,7 @@ func AllTools() []Tool {
 		&podmanTool{},
 		&kubectlTool{},
 		&minikubeTool{},
-		&notaryTool{},
+		&notationTool{},
 		
 		// Environment prerequisites
 		&xcodeCLTTool{},
@@ -318,13 +318,13 @@ func (m *minikubeTool) IsInstalled() bool          { return exec.Command("miniku
 func (m *minikubeTool) InstallInstructions() string { return "brew install minikube" }
 func (m *minikubeTool) Description() string         { return "Local Kubernetes cluster" }
 
-type notaryTool struct{}
+type notationTool struct{}
 
-func (n *notaryTool) Name() string              { return "notary" }
-func (n *notaryTool) Category() ToolCategory    { return CategoryBrew }
-func (n *notaryTool) IsInstalled() bool          { _, err := exec.LookPath("notation"); return err == nil }
-func (n *notaryTool) InstallInstructions() string { return "brew install notation" }
-func (n *notaryTool) Description() string         { return "Notary v2 container signing and verification" }
+func (n *notationTool) Name() string              { return "notation" }
+func (n *notationTool) Category() ToolCategory    { return CategoryBrew }
+func (n *notationTool) IsInstalled() bool          { _, err := exec.LookPath("notation"); return err == nil }
+func (n *notationTool) InstallInstructions() string { return "brew install notation" }
+func (n *notationTool) Description() string         { return "Notary v2 container signing and verification (notation)" }
 
 // --- Environment prerequisites ---
 

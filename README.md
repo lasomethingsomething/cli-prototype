@@ -6,7 +6,7 @@
 
 A trained ML model is a folder of files. Moving it safely from your laptop to production requires packaging, security checks, publishing, and deployment. Specialized tools in the CNCF ecosystem already handle each task.
 
-Model CLI guides you through that journey, collects the needed details, and lets you choose an appropriate tool for each task.
+Model CLI is a thin orchestrator that delegates to external tools rather than reimplementing them. It guides you through that journey, collects the needed details, and lets you choose an appropriate tool for each task.
 
 ## The workflow, in seven action-led steps
 
@@ -26,11 +26,7 @@ If terms like SBOM, MOF, or admission are new to you, see the [Concepts and Glos
 
 macOS with Homebrew, Git, and an SSH key registered with GitHub are required.
 
-The wizard installs oras/syft/cosign just-in-time, BUT the cluster setup in Steps 1–2 runs before the wizard, so those tools must be pre-installed:
-
-```bash
-brew install minikube kubectl fluxcd/tap/flux podman
-```
+`model-cli setup` installs all brew-installable tools (oras, syft, cosign, flux, podman, kubectl, minikube, notation) automatically. Run it before starting the cluster.
 
 The publish demonstration uses Podman's Linux VM and the open-source OCI Distribution Registry at `localhost:5000`. It does not require Docker Desktop.
 
@@ -51,7 +47,7 @@ Download the pre-built binary from [GitHub Releases](https://github.com/lasometh
 arch=$(uname -m | sed 's/x86_64/amd64/')
 curl -sL https://github.com/lasomethingsomething/cli-prototype/releases/download/v0.1.0/model-cli_0.1.0_darwin_${arch}.tar.gz | tar xz
 chmod +x model-cli
-./model-cli doctor
+./model-cli setup
 ```
 
 > **Note:** The release tag is `v0.1.0` but the asset filenames have no `v` prefix (e.g., `model-cli_0.1.0_darwin_arm64.tar.gz`). macOS reports Intel CPUs as `x86_64` but the release assets use `amd64`, hence the `sed` substitution.
@@ -75,6 +71,12 @@ cp ~/Downloads/model-cli .
 **Your working copy must be clean before starting the wizard** (`git status` shows nothing modified). The wizard commits the manifest and pushes; uncommitted changes will make the deploy step fail.
 
 ### 1. Start the cluster from the repo
+
+Run `./model-cli setup` to install any missing tools, then start minikube:
+
+```bash
+./model-cli setup
+```
 
 The repository contains a bootstrapped Flux cluster configuration in `clusters/minikube/`. Start minikube and connect Flux to your fork:
 
