@@ -3,6 +3,7 @@ package workflow
 import (
 	"fmt"
 	"os/exec"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -87,7 +88,9 @@ func WaitForClusterReady(timeout time.Duration) error {
 	return fmt.Errorf("timeout waiting for cluster to be ready")
 }
 
-// FluxBootstrap performs Flux bootstrap on the cluster
+// FluxBootstrap performs Flux bootstrap on the cluster using SSH transport
+// SSH transport is used because it only requires an SSH key (checked by doctor)
+// whereas HTTPS transport would require a GitHub PAT
 func FluxBootstrap(repoURL, repoPath string) error {
 	// Step 1: Ensure flux is installed
 	fluxTool, err := GetTool("flux")
@@ -103,17 +106,19 @@ func FluxBootstrap(repoURL, repoPath string) error {
 		}
 	}
 	
-	// Step 2: Run flux bootstrap
-	fmt.Println("Running flux bootstrap...")
-	
-	// Determine if it's SSH or HTTPS URL
-	var cmd *exec.Cmd
-	if strings.HasPrefix(repoURL, "ssh://") || strings.Contains(repoURL, "git@") {
-		cmd = exec.Command("flux", "bootstrap", "git", "--url", repoURL, "--branch", "main", "--path", repoPath)
-	} else {
-		// Try to parse as HTTPS
-		cmd = exec.Command("flux", "bootstrap", "github", "--owner", extractOwner(repoURL), "--repository", extractRepo(repoURL), "--path", repoPath)
+	// Step 2: Convert HTTPS URLs to SSH if needed
+	// Flux bootstrap git requires SSH transport
+	sshURL := repoURL
+	if strings.HasPrefix(repoURL, "https://github.com/") {
+		// Convert https://github.com/owner/repo to ssh://git@github.com/owner/repo.git
+		sshURL = "ssh://git@github.com/" + strings.TrimPrefix(repoURL, "https://github.com/") + ".git"
+		fmt.Printf("Note: Using SSH transport for Flux bootstrap: %s\n", sshURL)
+		fmt.Println("Ensure you have an SSH key registered with GitHub.")
 	}
+	
+	// Step 3: Run flux bootstrap with SSH
+	fmt.Println("Running flux bootstrap...")
+	cmd := exec.Command("flux", "bootstrap", "git", "--url", sshURL, "--branch", "main", "--path", repoPath)
 	
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -122,7 +127,7 @@ func FluxBootstrap(repoURL, repoPath string) error {
 	
 	fmt.Println("flux bootstrap output:", string(output))
 	
-	// Step 3: Wait for Flux to be ready
+	// Step 4: Wait for Flux to be ready
 	fmt.Println("Waiting for Flux to be ready...")
 	if err := WaitForFluxReady(300 * time.Second); err != nil {
 		return fmt.Errorf("Flux did not become ready: %v", err)
@@ -189,9 +194,14 @@ func RegistrySetup() error {
 	
 	if !podmanTool.IsInstalled() {
 		fmt.Println("Installing podman...")
+		// Check if we're on Intel Mac and provide specific guidance
+		if runtime.GOARCH == "amd64" {
+			fmt.Println("Note: On Intel Macs, use podman 5.x (latest versions don't support the Apple hypervisor)")
+			fmt.Println("Install with: brew install podman@5")
+		}
 		_, err := InstallTool(podmanTool)
 		if err != nil {
-			return fmt.Errorf("failed to install podman: %v", err)
+			return fmt.Errorf("failed to install podman: %v\n\nFor Intel Macs, ensure you're using podman 5.x: brew install podman@5", err)
 		}
 	}
 	

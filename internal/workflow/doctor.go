@@ -370,8 +370,33 @@ type podmanTool struct{}
 func (p *podmanTool) Name() string              { return "podman" }
 func (p *podmanTool) Category() ToolCategory    { return CategoryBrew }
 func (p *podmanTool) IsInstalled() bool          { _, err := exec.LookPath("podman"); return err == nil }
-func (p *podmanTool) InstallInstructions() string { return "brew install podman" }
+func (p *podmanTool) InstallInstructions() string { 
+	// Detect architecture to provide correct podman version guidance
+	arch := getSystemArch()
+	if arch == "x86_64" {
+		// Intel Mac: podman 6+ doesn't work, need 5.x
+		return "brew install podman@5 || (brew extract podman /opt/homebrew/Cellar/podman@5 5.1.2 && brew link podman@5)"
+	}
+	// Apple Silicon: latest podman works
+	return "brew install podman"
+}
 func (p *podmanTool) Description() string         { return "Container engine (Docker alternative)" }
+
+// getSystemArch returns the system architecture
+func getSystemArch() string {
+	// Try uname -m
+	cmd := exec.Command("uname", "-m")
+	output, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	arch := strings.TrimSpace(string(output))
+	// Map x86_64 to amd64 for consistency
+	if arch == "x86_64" {
+		return "amd64"
+	}
+	return arch
+}
 
 type kubectlTool struct{}
 

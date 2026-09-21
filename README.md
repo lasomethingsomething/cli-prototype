@@ -26,6 +26,8 @@ If terms like SBOM, MOF, or admission are new to you, see the [Concepts and Glos
 
 macOS with Homebrew, Git, and an SSH key registered with GitHub are required.
 
+Podman is required for the publish demonstration and local registry. On Apple Silicon (arm64), use the latest version: `brew install podman`. On Intel Macs (x86_64), Podman 6+ does not support the Apple hypervisor; install version 5.x instead: `brew install podman@5` or run `brew extract podman /opt/homebrew/Cellar/podman@5 5.1.2` to pin to a working version.
+
 The publish demonstration uses Podman's Linux VM and the open-source OCI Distribution Registry at `localhost:5000`. It does not require Docker Desktop.
 
 > **Note on the registry vs. the deployment:** the local registry at `localhost:5000` is only used for the publish and verification phases (Steps 3–4). The deployed KServe InferenceService fetches the model file directly from the raw GitHub URL in your repository, so no networking between minikube and the local registry is required.
@@ -81,11 +83,9 @@ flux bootstrap git --url=ssh://git@github.com/<you>/cli-prototype.git \
   --branch=main --path=./clusters/minikube
 ```
 
-The repository contains a bootstrapped Flux cluster configuration in `clusters/minikube/`.
+The repository contains a bootstrapped Flux cluster configuration in `clusters/minikube/`. The bootstrap uses SSH transport which requires an SSH key registered with GitHub (checked by `model-cli doctor`).
 
 > **Note:** The sample model's InferenceService manifest at `clusters/minikube/apps/demo-iris.yaml` uses a `STORAGE_URI_PLACEHOLDER`. After forking, replace this with your fork's raw GitHub URL (e.g., `https://raw.githubusercontent.com/<you>/cli-prototype/main/models/iris/model.joblib`).
-
-(If you prefer HTTPS over SSH, use `flux bootstrap github --owner=<you> --repository=cli-prototype --path=./clusters/minikube` instead.)
 
 Wait until everything is reconciled:
 
