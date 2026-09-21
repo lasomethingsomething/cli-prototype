@@ -6,7 +6,7 @@
 
 A trained ML model is a folder of files. Moving it safely from your laptop to production requires packaging, security checks, publishing, and deployment. Specialized tools in the CNCF ecosystem already handle each task.
 
-Model CLI is a thin orchestrator that delegates to external tools rather than reimplementing them. It guides you through that journey, collects the needed details, and lets you choose an appropriate tool for each task.
+model-cli is a thin orchestrator: it calls oras, syft, cosign, etc. via your PATH and does not bundle them. Model CLI guides you through that journey, collects the needed details, and lets you choose an appropriate tool for each task.
 
 ## The workflow, in seven action-led steps
 
@@ -72,19 +72,14 @@ cp ~/Downloads/model-cli .
 
 ### 1. Start the cluster from the repo
 
-Run `./model-cli setup` to install any missing tools, then start minikube:
-
 ```bash
 ./model-cli setup
-```
-
-The repository contains a bootstrapped Flux cluster configuration in `clusters/minikube/`. Start minikube and connect Flux to your fork:
-
-```bash
 minikube start --cpus=4 --memory=8g
 flux bootstrap git --url=ssh://git@github.com/<you>/cli-prototype.git \
   --branch=main --path=./clusters/minikube
 ```
+
+The repository contains a bootstrapped Flux cluster configuration in `clusters/minikube/`.
 
 (If you prefer HTTPS over SSH, use `flux bootstrap github --owner=<you> --repository=cli-prototype --path=./clusters/minikube` instead.)
 
