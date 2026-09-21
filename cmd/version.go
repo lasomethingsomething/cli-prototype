@@ -8,7 +8,7 @@ import (
 )
 
 // Version is the current version of Model CLI.
-const Version = "0.1.0"
+const Version = "0.1.1"
 
 // Commit is the git commit hash, injected at build time via
 // -ldflags "-X github.com/lasomethingsomething/cli-prototype/cmd.Commit=...".
