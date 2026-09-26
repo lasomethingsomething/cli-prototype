@@ -77,6 +77,28 @@ func (f *FluxProvider) Deploy(modelName, repoURL, path, modelPath string) error 
 		}
 	}
 
+	// Pre-flight: verify the git remote and working tree state
+	// Get current branch for pre-flight checks
+	branch, err := GetCurrentGitBranch()
+	if err != nil {
+		branch = "main"
+	}
+
+	// Check 1: Verify user can push to origin with dry-run
+	if err := verifyGitPushable(remoteURL, branch); err != nil {
+		return err
+	}
+
+	// Check 2: Verify working tree is clean
+	if err := verifyGitWorkingTreeClean(); err != nil {
+		return err
+	}
+
+	// Check 3: Verify local branch is not behind origin
+	if err := verifyGitNotBehindOrigin(remoteURL, branch); err != nil {
+		return err
+	}
+
 	// Check cluster reachability (Flux needs a working cluster to reconcile)
 	// Use kubectl as a simple reachability probe
 	kubectlCmd := exec.Command("kubectl", "get", "nodes", "-o", "name")
@@ -85,12 +107,7 @@ func (f *FluxProvider) Deploy(modelName, repoURL, path, modelPath string) error 
 	}
 
 	// 2. Generate and write the InferenceService manifest
-	// Get current branch
-	branch, err := GetCurrentGitBranch()
-	if err != nil {
-		fmt.Printf("Warning: could not determine git branch: %v, defaulting to 'main'\n", err)
-		branch = "main"
-	}
+	// branch was already retrieved in pre-flight checks
 
 	// Create inference service config and generate manifest
 	inferenceConfig, err := CreateInferenceServiceConfig(
@@ -297,4 +314,117 @@ func DetectIngredients() []Ingredient {
 	
 	ings = append(ings, Ingredient{Name: "flux", Description: "GitOps agent", Present: fluxPresent})
 	return ings
+}
+
+// verifyGitPushable performs a dry-run push to verify the user can push to the remote
+func verifyGitPushable(remoteURL, branch string) error {
+	// Normalize the remote URL for display
+	displayURL := remoteURL
+	if strings.HasPrefix(displayURL, "git@") {
+		displayURL = strings.Replace(displayURL, "git@", "ssh://git@", 1)
+	}
+
+	// Try dry-run push to check permissions
+	dryRunCmd := exec.Command("git", "push", "--dry-run", "origin", branch)
+	output, err := dryRunCmd.CombinedOutput()
+	if err != nil {
+		outputStr := string(output)
+		// Check for common error messages
+		if strings.Contains(outputStr, "permission denied") ||
+			strings.Contains(outputStr, "authentication failed") ||
+			strings.Contains(outputStr, "no push access") {
+			// Check if this is the upstream repo (not a fork)
+			// For GitHub, we can detect if the remote is the canonical repo
+			if isUpstreamRepo(remoteURL) {
+				return fmt.Errorf("cannot push to upstream repository %s. Fork it first: gh repo fork --remote, or manually fork and add your fork as 'origin'. See README for fork instructions", displayURL)
+			}
+			return fmt.Errorf("no push permission to %s. Check SSH keys with: model-cli doctor. Git error: %s", displayURL, outputStr)
+		}
+		return fmt.Errorf("git push dry-run failed for %s: %s", displayURL, outputStr)
+	}
+	return nil
+}
+
+// isUpstreamRepo checks if the remote URL points to the canonical upstream repo
+func isUpstreamRepo(remoteURL string) bool {
+	// Normalize the URL
+	normalized := normalizeGitURL(remoteURL)
+	// For this repo, the upstream is lasomethingsomething/cli-prototype
+	return strings.Contains(normalized, "lasomethingsomething/cli-prototype")
+}
+
+// verifyGitWorkingTreeClean checks if the working tree is clean
+func verifyGitWorkingTreeClean() error {
+	// Check for uncommitted changes
+	statusCmd := exec.Command("git", "status", "--porcelain")
+	output, err := statusCmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to check git status: %v", err)
+	}
+	
+	// If there's any output, the working tree is not clean
+	if len(output) > 0 {
+		// Parse the output to get file names
+		lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+		var dirtyFiles []string
+		for _, line := range lines {
+			if len(line) > 0 {
+				dirtyFiles = append(dirtyFiles, line)
+			}
+		}
+		if len(dirtyFiles) > 0 {
+			return fmt.Errorf("working tree is not clean. Commit or stash changes first:\n  %s", strings.Join(dirtyFiles, "\n  "))
+		}
+	}
+	return nil
+}
+
+// verifyGitNotBehindOrigin checks if the local branch is behind origin
+func verifyGitNotBehindOrigin(remoteURL, branch string) error {
+	// Fetch from origin first
+	fetchCmd := exec.Command("git", "fetch", "origin")
+	if err := fetchCmd.Run(); err != nil {
+		return fmt.Errorf("failed to fetch from origin: %v", err)
+	}
+	
+	// Check if local branch is behind origin
+	// git rev-list HEAD..origin/branch --count will return >0 if behind
+	localBranch := branch
+	if localBranch == "" {
+		localBranch = "HEAD"
+	}
+	
+	// Use merge-base to check if we're behind
+	mergeBaseCmd := exec.Command("git", "merge-base", localBranch, "origin/"+branch)
+	mergeBaseOut, err := mergeBaseCmd.Output()
+	if err != nil {
+		// If origin/branch doesn't exist, try without origin/
+		mergeBaseCmd = exec.Command("git", "merge-base", localBranch, branch)
+		mergeBaseOut, err = mergeBaseCmd.Output()
+		if err != nil {
+			return fmt.Errorf("failed to determine branch relationship: %v", err)
+		}
+	}
+	
+	// Check if HEAD is an ancestor of origin/branch (meaning we're behind)
+	// git rev-list mergeBase..origin/branch --count
+	originRef := "origin/" + branch
+	revListCmd := exec.Command("git", "rev-list", string(mergeBaseOut)+".."+originRef, "--count")
+	countOut, err := revListCmd.Output()
+	if err != nil {
+		// Try without origin/ prefix
+		revListCmd = exec.Command("git", "rev-list", string(mergeBaseOut)+".."+branch, "--count")
+		countOut, err = revListCmd.Output()
+		if err != nil {
+			// If we can't determine, assume it's ok (might be first push)
+			return nil
+		}
+	}
+	
+	count := strings.TrimSpace(string(countOut))
+	if count != "0" {
+		return fmt.Errorf("local branch is behind origin/%s. Run 'git pull' first to fast-forward", branch)
+	}
+	
+	return nil
 }

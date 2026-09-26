@@ -148,23 +148,23 @@ Answers that produce a fully real deployment, using the sample model in this rep
 
 ```bash
 kubectl get kustomizations -n flux-system        # new revision applied
-kubectl get inferenceservice sklearn-iris -n models   # READY True
+kubectl get inferenceservice iris -n models   # READY True
 
-# Forward local port 8080 to the sklearn-iris-predictor deployment
+# Forward local port 8080 to the iris-predictor deployment
 # This allows you to send prediction requests to localhost:8080
 # Port 8080 on your machine may already be taken (check `lsof -i :8080`).
-# If so, forward to a different local port: kubectl port-forward -n models deploy/sklearn-iris-predictor 9090:8080
-kubectl port-forward -n models deploy/sklearn-iris-predictor 8080:8080
+# If so, forward to a different local port: kubectl port-forward -n models deploy/iris-predictor 9090:8080
+kubectl port-forward -n models deploy/iris-predictor 8080:8080
 ```
 
-The predictor Service (ClusterIP) listens on port 80, not 8080 — the 8080 you use locally is the pod port via port-forward. In-cluster, curl http://sklearn-iris-predictor.models.svc.cluster.local/v1/models/sklearn-iris:predict (note: no port suffix).
+The predictor Service (ClusterIP) listens on port 80, not 8080 — the 8080 you use locally is the pod port via port-forward. In-cluster, curl http://iris-predictor.models.svc.cluster.local/v1/models/iris:predict (note: no port suffix).
 
 A freshly started predictor takes ~2 minutes to bind its port. Wait for the pod to be Ready (kubectl get pods -n models) before sending requests — otherwise you'll see connection refused.
 
 Then in another terminal, send a prediction. Note: the sklearn predictor speaks the **V1 protocol** — use `instances`, not the V2-style `inputs` payload:
 
 ```bash
-curl -s http://localhost:8080/v1/models/sklearn-iris\:predict \
+curl -s http://localhost:8080/v1/models/iris\:predict \
   -H "Content-Type: application/json" \
   -d '{"instances": [[5.1, 3.5, 1.4, 0.2]]}'
 # -> {"predictions":[0]}   (setosa)

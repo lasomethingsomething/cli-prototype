@@ -69,6 +69,7 @@ func AllTools() []Tool {
 		// Environment prerequisites
 		&xcodeCLTTool{},
 		&sshKeyTool{},
+		&gitRemoteTool{},
 		
 		// Cluster-side tools (verify only)
 		&kserveTool{},
@@ -122,6 +123,24 @@ func checkToolStatus(tool Tool) *ToolResult {
 				hint = "podman machine start"
 			} else {
 				status = StatusReady
+			}
+		}
+	} else if tool.Name() == "git-remote" {
+		// git-remote: check origin and pushability
+		remoteURL, isUpstream, pushable, err := GetOriginInfo()
+		if err != nil {
+			status = StatusMissing
+			hint = "Initialize a git repo with: git init && git remote add origin <repo-url>"
+			installed = false
+		} else {
+			status = StatusReady
+			installed = true
+			if isUpstream {
+				hint = fmt.Sprintf("origin: %s (fork needed - cannot push to upstream)", remoteURL)
+			} else if pushable {
+				hint = fmt.Sprintf("origin: %s (pushable ✓)", remoteURL)
+			} else {
+				hint = fmt.Sprintf("origin: %s (not pushable - check SSH keys)", remoteURL)
 			}
 		}
 	} else if tool.Name() == "minikube" {
@@ -517,6 +536,44 @@ func (s *sshKeyTool) InstallInstructions() string {
 	return "ssh-keygen -t ed25519 -C \"your_email@example.com\"" 
 }
 func (s *sshKeyTool) Description() string { return "SSH key for GitHub/GitLab access" }
+
+// gitRemoteTool checks the git origin remote and its pushability
+type gitRemoteTool struct{}
+
+func (g *gitRemoteTool) Name() string { return "git-remote" }
+func (g *gitRemoteTool) Category() ToolCategory { return CategoryEnvironment }
+func (g *gitRemoteTool) IsInstalled() bool {
+	// Always "installed" since we're checking git which is required
+	return true
+}
+func (g *gitRemoteTool) InstallInstructions() string {
+	return ""
+}
+func (g *gitRemoteTool) Description() string { return "Git remote origin" }
+
+// GetOriginInfo returns the origin URL and pushability status
+func GetOriginInfo() (remoteURL string, isUpstream bool, pushable bool, err error) {
+	// Get the origin URL
+	remote, err := exec.Command("git", "remote", "get-url", "origin").Output()
+	if err != nil {
+		return "", false, false, fmt.Errorf("not in a git repo: %v", err)
+	}
+	remoteURL = strings.TrimSpace(string(remote))
+	
+	// Normalize the URL and check if it's the upstream repo
+	// Use the isUpstreamRepo function from this package
+	isUpstream = isUpstreamRepo(remoteURL)
+	
+	// Check if we can push (dry-run)
+	dryRunCmd := exec.Command("git", "push", "--dry-run", "origin", "HEAD")
+	if err := dryRunCmd.Run(); err != nil {
+		pushable = false
+	} else {
+		pushable = true
+	}
+	
+	return remoteURL, isUpstream, pushable, nil
+}
 
 // --- Cluster-side tools (verify only) ---
 
