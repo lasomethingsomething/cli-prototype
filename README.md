@@ -157,7 +157,7 @@ kubectl get inferenceservice sklearn-iris -n models   # READY True
 kubectl port-forward -n models deploy/sklearn-iris-predictor 8080:8080
 ```
 
-The predictor Service (ClusterIP) listens on port 80, not 8080 — the 8080 you use locally is the pod port via port-forward. In-cluster, curl http://iris-predictor.models.svc.cluster.local/v1/models/sklearn-iris:predict (note: no port suffix).
+The predictor Service (ClusterIP) listens on port 80, not 8080 — the 8080 you use locally is the pod port via port-forward. In-cluster, curl http://sklearn-iris-predictor.models.svc.cluster.local/v1/models/sklearn-iris:predict (note: no port suffix).
 
 A freshly started predictor takes ~2 minutes to bind its port. Wait for the pod to be Ready (kubectl get pods -n models) before sending requests — otherwise you'll see connection refused.
 

@@ -98,41 +98,79 @@ func (w *CheckWorkflow) Run() error {
 	return w.workflowErr
 }
 
-// checkAnnotations checks for required annotations
+// checkAnnotations checks for required annotations in the OCI manifest
 func (w *CheckWorkflow) checkAnnotations() {
-	// Required annotations based on CNCF AI Interoperability Profile
-	_ = []string{
-		"org.cncf.ai.artifact.type",
-		"org.cncf.ai.artifact.runtime",
-		"org.cncf.ai.artifact.accelerator",
+	// Determine which path to check - prefer artifactPath if provided, otherwise modelPath
+	checkPath := w.artifactPath
+	if checkPath == "" {
+		checkPath = w.modelPath
 	}
-
-	// For now, we'll check if the artifact directory exists and has annotations
-	// In a real implementation, we would parse the OCI manifest
-	if w.artifactPath == "" {
-		w.missing = append(w.missing, "artifact path not specified")
+	if checkPath == "" {
+		w.missing = append(w.missing, "model/artifact path not specified")
 		return
 	}
 
-	// Check if artifact directory exists
-	if _, err := os.Stat(w.artifactPath); os.IsNotExist(err) {
-		w.missing = append(w.missing, "artifact directory not found")
+	// Check if the path exists
+	if _, err := os.Stat(checkPath); os.IsNotExist(err) {
+		w.missing = append(w.missing, fmt.Sprintf("path not found: %s", checkPath))
 		return
 	}
 
-	// In a real implementation, we would:
-	// 1. Parse the OCI manifest
-	// 2. Check for required annotations
-	// 3. Report which are missing
+	// Try to read manifest.json from the path
+	manifestPath := filepath.Join(checkPath, "manifest.json")
+	manifest, err := ReadUnifiedOCIManifest(manifestPath)
+	if err != nil {
+		// If manifest.json doesn't exist, this might be an unpackaged directory
+		// For now, we'll check if it's a valid model/artifact directory
+		w.missing = append(w.missing, "OCI manifest.json not found")
+		fmt.Println("  ✗ Required annotations check: manifest.json not found")
+		return
+	}
 
-	// For now, we'll simulate the check
-	fmt.Println("  ✓ Required annotations check (simulated)")
-	w.annotationsCheck = append(w.annotationsCheck, AnnotationCheckResult{
-		Name:     "org.cncf.ai.artifact.type",
-		Expected: "model",
-		Actual:   "model",
-		Passed:   true,
-	})
+	// Required annotations based on what the package step actually writes
+	// Source of truth: the annotations in annotations.go that package uses
+	requiredAnnotations := []string{
+		AnnotationProfileVersion,
+		AnnotationArtifactType,
+		AnnotationRuntime,
+		AnnotationAccelerator,
+		AnnotationPackagingFormat,
+		AnnotationSBOMFormat,
+		AnnotationSigningFramework,
+		AnnotationProvenanceType,
+		AnnotationMOFClass,
+		AnnotationMOFVersion,
+		AnnotationMOFComponents,
+	}
+
+	// Check each required annotation
+	allPassed := true
+	for _, requiredKey := range requiredAnnotations {
+		actualValue, ok := manifest.Annotations[requiredKey]
+		if !ok || actualValue == "" {
+			w.missing = append(w.missing, requiredKey)
+			w.annotationsCheck = append(w.annotationsCheck, AnnotationCheckResult{
+				Name:     requiredKey,
+				Expected: "(any)",
+				Actual:   "",
+				Passed:   false,
+			})
+			allPassed = false
+			fmt.Printf("  ✗ Missing required annotation: %s\n", requiredKey)
+		} else {
+			w.annotationsCheck = append(w.annotationsCheck, AnnotationCheckResult{
+				Name:     requiredKey,
+				Expected: "(any)",
+				Actual:   actualValue,
+				Passed:   true,
+			})
+			fmt.Printf("  ✓ %s: %s\n", requiredKey, actualValue)
+		}
+	}
+
+	if allPassed && len(w.missing) == 0 {
+		fmt.Println("  ✓ Required annotations check")
+	}
 }
 
 // checkSBOM checks for SBOM presence
