@@ -150,18 +150,39 @@ func checkToolStatus(tool Tool) *ToolResult {
 	} else if tool.Category() == CategoryCluster {
 		// Cluster tools: check kubectl reachability, then deployment presence
 		cmd := exec.Command("kubectl", "get", "deployments", "-A", "-o", "name")
-		if err := cmd.Run(); err != nil {
+		out, err := cmd.CombinedOutput()
+		if err != nil {
 			// kubectl cannot reach cluster
 			status = StatusMissing
 			hint = "minikube start / see README bootstrap"
 		} else {
 			// kubectl works, check if the specific deployment exists
-			if installed {
-				status = StatusReady
+			// Capture the deployments listing and match real names
+			text := strings.ToLower(string(out))
+			
+			// Map tool names to their deployment names
+			deploymentNames := map[string]string{
+				"kserve":        "kserve-controller-manager",
+				"cert-manager":  "cert-manager",
+				"metrics-server": "metrics-server",
+			}
+			
+			if deplName, ok := deploymentNames[tool.Name()]; ok {
+				if strings.Contains(text, strings.ToLower(deplName)) {
+					status = StatusReady
+				} else {
+					// Cluster is reachable but deployment not yet created (e.g., Flux still reconciling)
+					status = StatusNotDeployed
+					hint = "Wait for Flux reconciliation or check Flux logs with 'flux get kustomizations -A'"
+				}
 			} else {
-				// Cluster is reachable but deployment not yet created (e.g., Flux still reconciling)
-				status = StatusNotDeployed
-				hint = "Wait for Flux reconciliation or check Flux logs with 'flux get kustomizations -A'"
+				// Unknown cluster tool, use the old behavior
+				if installed {
+					status = StatusReady
+				} else {
+					status = StatusNotDeployed
+					hint = "Wait for Flux reconciliation or check Flux logs with 'flux get kustomizations -A'"
+				}
 			}
 		}
 	} else {
