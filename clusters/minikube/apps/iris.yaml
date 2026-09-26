@@ -11,7 +11,7 @@ spec:
       modelFormat:
         name: sklearn
       runtime: kserve-sklearnserver
-      storageUri: "https://raw.githubusercontent.com/github.com/lasomethingsomething/cli-prototype/main/model.joblib"
+      storageUri: "https://raw.githubusercontent.com/lasomethingsomething/cli-prototype/main/models/iris/model.joblib"
       resources:
         requests:
           cpu: 100m
