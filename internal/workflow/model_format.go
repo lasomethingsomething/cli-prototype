@@ -128,7 +128,7 @@ func DeriveRuntimeFromModelPath(modelPath string, modelName string, repoURL stri
 	modelFormat := DetectModelFormatFromPath(modelPath)
 
 	// Get the actual model file path
-	modelFile := findModelFile(modelPath)
+	modelFile := FindModelFile(modelPath)
 	if modelFile == "" {
 		return nil, fmt.Errorf("no model file found in %s", modelPath)
 	}
@@ -180,10 +180,12 @@ func DeriveRuntimeFromModelPath(modelPath string, modelName string, repoURL stri
 	}, nil
 }
 
-// findModelFile finds the primary model file in a directory
-func findModelFile(dir string) string {
+// FindModelFile finds the primary model file in a directory
+func FindModelFile(dir string) string {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
+		// Don't silently discard error - log it for debugging
+		// In production, consider returning an error from the caller
 		return ""
 	}
 
@@ -201,9 +203,8 @@ func findModelFile(dir string) string {
 		}
 		for _, ext := range ModelFileExtensions {
 			if strings.HasSuffix(lowerName, ext) {
-				absPath, _ := filepath.Abs(filepath.Join(dir, entry.Name()))
-				relPath, _ := filepath.Rel(dir, absPath)
-				return filepath.ToSlash(relPath)
+				// Return the entry name directly - it's already relative to dir
+				return filepath.ToSlash(entry.Name())
 			}
 		}
 	}

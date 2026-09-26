@@ -115,7 +115,7 @@ func CreateInferenceServiceConfig(
 	rawBaseURL := fmt.Sprintf("https://raw.githubusercontent.com/%s/%s", normalizedRepo, branch)
 
 	// Get the model file relative path from the model directory
-	modelFile := findModelFile(modelPath)
+	modelFile := FindModelFile(modelPath)
 	if modelFile == "" {
 		return nil, fmt.Errorf("no model file found in %s", modelPath)
 	}

@@ -183,6 +183,7 @@ Examples:
 			Run(); err != nil {
 			return err
 		}
+		modelName = strings.TrimSpace(modelName)
 
 		var modelPath string
 		if err := huh.NewInput().
@@ -192,6 +193,7 @@ Examples:
 			Run(); err != nil {
 			return err
 		}
+		modelPath = strings.TrimSpace(modelPath)
 		expandedModelPath, err := expandHomePath(modelPath)
 		if err != nil {
 			return err
@@ -206,6 +208,7 @@ Examples:
 			Run(); err != nil {
 			return err
 		}
+		artifactName = strings.TrimSpace(artifactName)
 
 		var includeRAG bool
 		if err := huh.NewConfirm().
@@ -224,6 +227,7 @@ Examples:
 				Run(); err != nil {
 				return err
 			}
+			ragPath = strings.TrimSpace(ragPath)
 			expandedRAGPath, err := expandHomePath(ragPath)
 			if err != nil {
 				return err
@@ -729,6 +733,7 @@ Examples:
 							Run(); err != nil {
 							return err
 						}
+						repoURL = strings.TrimSpace(repoURL)
 						
 						// Get manifest path
 						if err := huh.NewInput().
@@ -738,6 +743,7 @@ Examples:
 							Run(); err != nil {
 							return err
 						}
+						manifestPath = strings.TrimSpace(manifestPath)
 						
 						// If manifestPath is empty, use default
 						if manifestPath == "" {
@@ -762,6 +768,7 @@ Examples:
 					Run(); err != nil {
 					return err
 				}
+				repoURL = strings.TrimSpace(repoURL)
 				if err := huh.NewInput().
 					Title("Manifest path in repo:").
 					Placeholder("./manifests").
@@ -769,6 +776,7 @@ Examples:
 					Run(); err != nil {
 					return err
 				}
+				manifestPath = strings.TrimSpace(manifestPath)
 			}
 			fmt.Println()
 		}
