@@ -100,7 +100,7 @@ Wait until everything is reconciled:
 
 ```bash
 kubectl get kustomizations -n flux-system
-# cert-manager, flux-system, kserve, metrics-server, test-model — all True
+# cert-manager, flux-system, kserve, metrics-server, models — all True
 ```
 
 Flux installs KServe (model serving), cert-manager, and metrics-server, and keeps them synced to the repo.
@@ -148,11 +148,11 @@ Answers that produce a fully real deployment, using the sample model in this rep
 
 ```bash
 kubectl get kustomizations -n flux-system        # new revision applied
-kubectl get inferenceservice sklearn-iris -n test-model   # READY True
+kubectl get inferenceservice sklearn-iris -n models   # READY True
 
 # Forward local port 8080 to the sklearn-iris-predictor deployment
 # This allows you to send prediction requests to localhost:8080
-kubectl port-forward -n test-model deploy/sklearn-iris-predictor 8080:8080
+kubectl port-forward -n models deploy/sklearn-iris-predictor 8080:8080
 ```
 
 Then in another terminal, send a prediction. Note: the sklearn predictor speaks the **V1 protocol** — use `instances`, not the V2-style `inputs` payload:

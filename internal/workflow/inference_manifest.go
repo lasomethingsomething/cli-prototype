@@ -126,7 +126,8 @@ func CreateInferenceServiceConfig(
 	storageUri := fmt.Sprintf("%s/%s/%s", rawBaseURL, modelDir, modelFile)
 
 	// Determine namespace from config or use default
-	namespace := "test-model"
+	// All InferenceServices use the 'models' namespace for consistency
+	namespace := "models"
 
 	// Map model format to KServe model format name
 	modelFormat := strings.ToLower(string(runtimeInfo.ModelFormat))
