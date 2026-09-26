@@ -70,19 +70,22 @@ func (w *DeployWorkflow) Run() error {
 
 	// Deploy using GitOps provider
 	// For Story #63: Pass artifact reference so GitOps tools can access Trust Profile annotations
-	if w.repoURL != "" {
-		artifactToDeploy := w.modelName
-		if w.artifactRef != "" {
-			artifactToDeploy = w.artifactRef
-		}
-		fmt.Printf("Deploying artifact '%s' from repository '%s' with %s...\n",
-			artifactToDeploy, w.repoURL, w.gitOps)
-		fmt.Printf("  Trust Profile annotations will be available to GitOps admission policies\n")
-		if err := w.gitOpsProvider.Deploy(artifactToDeploy, w.repoURL, w.manifestPath, w.modelPath); err != nil {
-			return err
-		}
-	} else {
-		fmt.Printf("Running %s deployment...\n", w.gitOps)
+	if w.repoURL == "" {
+		return fmt.Errorf("repository URL is required for GitOps deployment")
+	}
+	if w.manifestPath == "" {
+		return fmt.Errorf("manifest path is required for GitOps deployment")
+	}
+	
+	artifactToDeploy := w.modelName
+	if w.artifactRef != "" {
+		artifactToDeploy = w.artifactRef
+	}
+	fmt.Printf("Deploying artifact '%s' from repository '%s' with %s...\n",
+		artifactToDeploy, w.repoURL, w.gitOps)
+	fmt.Printf("  Trust Profile annotations will be available to GitOps admission policies\n")
+	if err := w.gitOpsProvider.Deploy(artifactToDeploy, w.repoURL, w.manifestPath, w.modelPath); err != nil {
+		return err
 	}
 
 	// Use registry provider

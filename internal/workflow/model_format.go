@@ -143,7 +143,9 @@ func DeriveRuntimeFromModelPath(modelPath string, modelName string, repoURL stri
 		if branch == "" {
 			branch = "main"
 		}
-		storageUri = fmt.Sprintf("https://raw.githubusercontent.com/%s/%s/%s", normalizedRepo, branch, modelFile)
+		// Get the model directory path (relative, without leading "./")
+		modelDir := strings.TrimPrefix(modelPath, "./")
+		storageUri = fmt.Sprintf("https://raw.githubusercontent.com/%s/%s/%s/%s", normalizedRepo, branch, modelDir, modelFile)
 	}
 
 	// Derive runtime based on model format
