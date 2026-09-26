@@ -51,7 +51,8 @@ func (f *FluxProvider) Name() string {
 }
 
 func (f *FluxProvider) IsInstalled() bool {
-	return exec.Command("flux", "version").Run() == nil
+	_, err := exec.LookPath("flux")
+	return err == nil
 }
 
 func (f *FluxProvider) InstallInstructions() string {
@@ -74,6 +75,13 @@ func (f *FluxProvider) Deploy(modelName, repoURL, path, modelPath string) error 
 		if !URLsAreEqual(remoteURL, repoURL) {
 			return fmt.Errorf("current repo origin (%s) does not match target (%s)", remoteURL, repoURL)
 		}
+	}
+
+	// Check cluster reachability (Flux needs a working cluster to reconcile)
+	// Use kubectl as a simple reachability probe
+	kubectlCmd := exec.Command("kubectl", "get", "nodes", "-o", "name")
+	if err := kubectlCmd.Run(); err != nil {
+		return fmt.Errorf("cluster unreachable — is minikube running? (flux installed, cluster unreachable)")
 	}
 
 	// 2. Generate and write the InferenceService manifest
@@ -264,17 +272,28 @@ func DetectIngredients() []Ingredient {
 		})
 	}
 
-	// Flux itself: parse 'flux get kustomization' rows and require Ready=True.
-	fluxOut, ferr := exec.Command("flux", "get", "kustomization", "--all-namespaces").CombinedOutput()
+	// Flux itself: first check if binary is installed (on PATH)
+	// This distinguishes between "flux not installed" vs "flux installed but cluster unreachable"
+	_, fluxBinaryErr := exec.LookPath("flux")
 	fluxPresent := false
-	if ferr == nil {
-		for _, line := range strings.Split(string(fluxOut), "\n") {
-			fields := strings.Fields(line)
-			if len(fields) >= 5 && fields[1] == "flux-system" && fields[4] == "True" {
-				fluxPresent = true
+	
+	// If flux binary is not installed, don't try to query the cluster
+	if fluxBinaryErr == nil {
+		// Flux binary is installed, now check if it's actually running in the cluster
+		fluxOut, ferr := exec.Command("flux", "get", "kustomization", "--all-namespaces").CombinedOutput()
+		if ferr == nil {
+			for _, line := range strings.Split(string(fluxOut), "\n") {
+				fields := strings.Fields(line)
+				if len(fields) >= 5 && fields[1] == "flux-system" && fields[4] == "True" {
+					fluxPresent = true
+				}
 			}
 		}
+		// If flux binary is installed but cluster query failed, flux is "installed but cluster unreachable"
+		// We still mark it as not Present in the cluster, but the binary is on PATH
 	}
+	// If flux binary is not on PATH, fluxPresent remains false
+	
 	ings = append(ings, Ingredient{Name: "flux", Description: "GitOps agent", Present: fluxPresent})
 	return ings
 }
