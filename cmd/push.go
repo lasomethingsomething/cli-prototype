@@ -138,32 +138,6 @@ Examples:
 		}
 		fmt.Println("✓ Unified OCI manifest created and validated")
 
-		// Write manifest to file if requested (for debugging)
-		if manifestOutputFlag != "" {
-			if err := workflow.WriteUnifiedOCIManifest(unifiedManifest, manifestOutputFlag); err != nil {
-				return fmt.Errorf("failed to write unified OCI manifest: %v", err)
-			}
-			fmt.Printf("✓ Unified OCI manifest written to: %s\n", manifestOutputFlag)
-		}
-
-		// Serialize manifest to JSON for pushing
-		manifestJSON, err := json.MarshalIndent(unifiedManifest, "", "  ")
-		if err != nil {
-			return fmt.Errorf("failed to marshal unified OCI manifest: %v", err)
-		}
-
-		// Create a temporary directory for the manifest
-		tmpDir := "tmp-oci-manifest"
-		if err := os.MkdirAll(tmpDir, 0755); err != nil {
-			return fmt.Errorf("failed to create temp directory: %v", err)
-		}
-		defer os.RemoveAll(tmpDir)
-
-		manifestFilePath := filepath.Join(tmpDir, "manifest.json")
-		if err := os.WriteFile(manifestFilePath, manifestJSON, 0644); err != nil {
-			return fmt.Errorf("failed to write manifest file: %v", err)
-		}
-
 		// Get registry provider
 		provider, err := workflow.GetRegistryProvider(registry)
 		if err != nil {
@@ -175,24 +149,63 @@ Examples:
 			return fmt.Errorf("%s not installed. Install with: %s", provider.Name(), provider.InstallInstructions())
 		}
 
-		// If a manifest produced by `model-cli package` was given, read its
-		// CNCF AI annotations so they're attached to the manifest on push.
-		var existingAnnotations map[string]string
+		// If a manifest produced by `model-cli package` was given, use it as the
+		// source of truth instead of regenerating annotations with placeholders.
+		// This ensures the pushed manifest is byte-identical to the local one
+		// (modulo registry/digest fields).
+		var mergedAnnotations map[string]string
+		var manifestToPush *workflow.UnifiedOCIManifest
+		
 		if manifestFlag != "" {
+			// Read the existing manifest and use it as the base
 			existingManifest, err := workflow.ReadUnifiedOCIManifest(manifestFlag)
 			if err != nil {
 				return err
 			}
-			existingAnnotations = existingManifest.Annotations
+			
+			// Use the existing manifest's annotations as the primary source
+			mergedAnnotations = make(map[string]string)
+			// Copy all annotations from the existing manifest
+			for k, v := range existingManifest.Annotations {
+				mergedAnnotations[k] = v
+			}
+			
+			// Use the existing manifest's config and layers
+			manifestToPush = existingManifest
+			// Update the artifact name annotation in the manifest
+			manifestToPush.Annotations["org.opencontainers.image.title"] = artifact
+		} else {
+			// No existing manifest, use the generated one
+			mergedAnnotations = unifiedManifest.Annotations
+			manifestToPush = unifiedManifest
 		}
 
-		mergedAnnotations := mergeManifestAnnotations(existingAnnotations, unifiedManifest.Annotations)
+		// Write manifest to file if requested (for debugging)
+		if manifestOutputFlag != "" {
+			if err := workflow.WriteUnifiedOCIManifest(manifestToPush, manifestOutputFlag); err != nil {
+				return fmt.Errorf("failed to write unified OCI manifest: %v", err)
+			}
+			fmt.Printf("✓ Unified OCI manifest written to: %s\n", manifestOutputFlag)
+		}
 
 		fmt.Printf("\nPushing '%s' to '%s' using %s...\n", artifact, destination, registry)
 
 		fullArtifact := destination + "/" + artifact
 
-		// Push the artifact with unified OCI manifest annotations
+		// Write the manifest to the model path so ORAS can find it
+		// This ensures the pushed manifest matches the local one
+		manifestJSON, err := json.MarshalIndent(manifestToPush, "", "  ")
+		if err != nil {
+			return fmt.Errorf("failed to marshal manifest for pushing: %v", err)
+		}
+
+		manifestFilePath := filepath.Join(modelPath, "manifest.json")
+		if err := os.WriteFile(manifestFilePath, manifestJSON, 0644); err != nil {
+			return fmt.Errorf("failed to write manifest file: %v", err)
+		}
+		// Note: if we read from --manifest, we're overwriting it with the updated artifact name
+
+		// Push the artifact from the model path which now contains the manifest
 		pushedDigest, err := provider.Push(artifact, destination, modelPath, mergedAnnotations)
 		if err != nil {
 			return err
