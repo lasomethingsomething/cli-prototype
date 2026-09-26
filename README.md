@@ -26,6 +26,8 @@ If terms like SBOM, MOF, or admission are new to you, see the [Concepts and Glos
 
 macOS + Homebrew; run `model-cli doctor`
 
+> **Note:** The wizard pushes to your current Git repository. Ensure you own the repo or are working in a fork.
+
 ## Test Drive (about 20 minutes, fully real)
 
 This is the recommended path: a real Flux-managed cluster in minikube, a real local registry, real signing and publishing, and a real KServe deployment serving predictions. Every phase executes against live infrastructure.
