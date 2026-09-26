@@ -71,7 +71,7 @@ func (s *SigstoreProvider) GetSignaturePath(artifact string) string {
 type NotaryV2Provider struct{}
 
 func (n *NotaryV2Provider) Name() string {
-	return "notary"
+	return "notation"
 }
 
 func (n *NotaryV2Provider) IsInstalled() bool {

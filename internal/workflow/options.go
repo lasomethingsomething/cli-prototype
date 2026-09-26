@@ -83,7 +83,7 @@ func RegistryOptions() ToolOptions {
 func SignerOptions() ToolOptions {
 	return ToolOptions{
 		{Name: "cosign", Description: "Sigstore", Recommended: true},
-		{Name: "notary", Description: "Notary v2 (notation)"},
+		{Name: "notation", Description: "Notary v2 (notation)"},
 	}
 }
 

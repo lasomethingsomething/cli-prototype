@@ -172,7 +172,7 @@ func TestProviderNames(t *testing.T) {
 		{"ORAS", func() (interface{}, error) { return GetRegistryProvider("oras") }, "oras"},
 		{"ModelPack", func() (interface{}, error) { return GetRegistryProvider("modelpack") }, "modelpack"},
 		{"Sigstore", func() (interface{}, error) { return GetSigningProvider("sigstore") }, "cosign"},
-		{"Notary", func() (interface{}, error) { return GetSigningProvider("notary") }, "notary"},
+		{"Notary", func() (interface{}, error) { return GetSigningProvider("notary") }, "notation"},
 		{"vLLM", func() (interface{}, error) { return GetRuntimeProvider("vllm") }, "vllm"},
 		{"KServe", func() (interface{}, error) { return GetRuntimeProvider("kserve") }, "kserve"},
 	}
@@ -306,7 +306,7 @@ func TestProviderNameConsistency(t *testing.T) {
 		{"Registry", "oras", func() (interface{}, error) { return GetRegistryProvider("oras") }, "oras"},
 		{"Registry", "modelpack", func() (interface{}, error) { return GetRegistryProvider("modelpack") }, "modelpack"},
 		{"Signing", "sigstore", func() (interface{}, error) { return GetSigningProvider("sigstore") }, "cosign"},
-		{"Signing", "notary", func() (interface{}, error) { return GetSigningProvider("notary") }, "notary"},
+		{"Signing", "notary", func() (interface{}, error) { return GetSigningProvider("notary") }, "notation"},
 		{"Runtime", "vllm", func() (interface{}, error) { return GetRuntimeProvider("vllm") }, "vllm"},
 		{"Runtime", "kserve", func() (interface{}, error) { return GetRuntimeProvider("kserve") }, "kserve"},
 	}

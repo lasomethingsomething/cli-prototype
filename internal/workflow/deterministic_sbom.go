@@ -54,6 +54,7 @@ func removeNonDeterministicFields(data map[string]interface{}) {
 		"generatedAt",
 		"buildTimestamp",
 		"date",
+		"documentNamespace",
 	}
 
 	for key := range data {

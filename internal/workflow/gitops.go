@@ -136,37 +136,46 @@ func (f *FluxProvider) Deploy(modelName, repoURL, path, modelPath string) error 
 	if err != nil {
 		return fmt.Errorf("git push failed: %s", pushOut)
 	}
-	fmt.Printf("✓ Pushed to git repository\n")
+	if hasNewCommit {
+		fmt.Printf("✓ Pushed to git repository\n")
+	} else {
+		fmt.Printf("⚠ Already up to date, nothing to push\n")
+	}
 
 	// 5. Verify push was successful by checking exit code (already done above)
 	// We already checked push exit code - if we're here, push succeeded
 
 	// 6. Trigger Flux reconciliation
-	// First, reconcile the source
-	reconcileSource := exec.Command("flux", "reconcile", "source", "flux-system")
-	reconcileOut, err := reconcileSource.CombinedOutput()
-	if err != nil {
-		fmt.Printf("Warning: failed to reconcile Flux source: %v\n%s\n", err, reconcileOut)
-		// Continue - Flux will still pick up changes on its next interval
-	} else {
-		fmt.Printf("✓ Flux source reconciled\n")
-		// Check for "applied revision" in output
-		if strings.Contains(string(reconcileOut), "applied revision") {
-			fmt.Printf("  ✓ New revision applied\n")
+	// Only reconcile if there was a new commit
+	if hasNewCommit {
+		// First, reconcile the source
+		reconcileSource := exec.Command("flux", "reconcile", "source", "flux-system")
+		reconcileOut, err := reconcileSource.CombinedOutput()
+		if err != nil {
+			fmt.Printf("Warning: failed to reconcile Flux source: %v\n%s\n", err, reconcileOut)
+			// Continue - Flux will still pick up changes on its next interval
+		} else {
+			fmt.Printf("✓ Flux source reconciled\n")
+			// Check for "applied revision" in output
+			if strings.Contains(string(reconcileOut), "applied revision") {
+				fmt.Printf("  ✓ New revision applied\n")
+			}
 		}
-	}
 
-	// 7. Reconcile the kustomization for test-model namespace
-	reconcileKustomization := exec.Command("flux", "reconcile", "kustomization", "test-model", "--with-source")
-	kustOut, err := reconcileKustomization.CombinedOutput()
-	if err != nil {
-		fmt.Printf("Warning: failed to reconcile kustomization: %v\n%s\n", err, kustOut)
-		// Continue - Flux will still reconcile on its next interval
-	} else {
-		fmt.Printf("✓ Flux kustomization reconciled\n")
-		if strings.Contains(string(kustOut), "applied revision") {
-			fmt.Printf("  ✓ New revision applied to kustomization\n")
+		// 7. Reconcile the kustomization for test-model namespace
+		reconcileKustomization := exec.Command("flux", "reconcile", "kustomization", "test-model", "--with-source")
+		kustOut, err := reconcileKustomization.CombinedOutput()
+		if err != nil {
+			fmt.Printf("Warning: failed to reconcile kustomization: %v\n%s\n", err, kustOut)
+			// Continue - Flux will still reconcile on its next interval
+		} else {
+			fmt.Printf("✓ Flux kustomization reconciled\n")
+			if strings.Contains(string(kustOut), "applied revision") {
+				fmt.Printf("  ✓ New revision applied to kustomization\n")
+			}
 		}
+	} else {
+		fmt.Printf("⚠ Skipping Flux reconciliation (no new commit to deploy)\n")
 	}
 
 	// 8. Poll for InferenceService to reach READY=True

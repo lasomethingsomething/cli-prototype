@@ -22,7 +22,9 @@ type wizardResult struct {
 	packageSucceeded   bool
 	checkSucceeded     bool
 	signSucceeded      bool
+	signSimulated      bool // True if signing was simulated
 	verifySucceeded    bool
+	verifySimulated    bool // True if verification was simulated
 	publishSucceeded   bool
 	publishDestination string
 	deploySucceeded    bool
@@ -53,13 +55,21 @@ func buildSummaryLines(r wizardResult) []string {
 	if r.skipSigning {
 		lines = append(lines, "⚠ Skipped signing")
 	} else if r.signSucceeded {
-		lines = append(lines, fmt.Sprintf("✓ Signed with %s", r.signer))
+		if r.signSimulated {
+			lines = append(lines, fmt.Sprintf("⚠ Signed with %s (simulated)", r.signer))
+		} else {
+			lines = append(lines, fmt.Sprintf("✓ Signed with %s", r.signer))
+		}
 	} else {
 		lines = append(lines, "⚠ Signing tool not installed")
 	}
 	if !r.skipSigning {
 		if r.verifySucceeded {
-			lines = append(lines, "✓ Verified signature")
+			if r.verifySimulated {
+				lines = append(lines, "⚠ Verified signature (simulated)")
+			} else {
+				lines = append(lines, "✓ Verified signature")
+			}
 		} else if !r.signSucceeded {
 			lines = append(lines, "⚠ Verification tool not installed")
 		}
@@ -256,7 +266,9 @@ Examples:
 		packageSucceeded := false
 		hardenSucceeded := false
 		signSucceeded := false
+		signSimulated := false
 		verifySucceeded := false
+		verifySimulated := false
 		deploySucceeded := false
 		
 		// Just-in-time tool check for registry provider
@@ -278,12 +290,38 @@ Examples:
 			fmt.Println(warningStyle.Render("Warning: Registry tool not installed"))
 			fmt.Printf("   Install with: %s\n\n", registryProvider.InstallInstructions())
 		} else {
+			// Derive runtime from model format before packaging
+			packageAnnotations := workflow.NewAnnotationSet()
+			modelFormat := workflow.DetectModelFormatFromPath(modelPath)
+			if modelFormat == workflow.ModelFormatSklearn {
+				packageAnnotations.Runtime = "kserve-sklearnserver"
+				packageAnnotations.Accelerator = "cpu"
+				packageAnnotations.CUDAMin = ""
+				packageAnnotations.MemoryMin = "256MiB"
+			} else if modelFormat == workflow.ModelFormatPyTorch {
+				packageAnnotations.Runtime = "pytorch"
+			} else if modelFormat == workflow.ModelFormatTensorFlow {
+				packageAnnotations.Runtime = "tensorflow"
+			} else if modelFormat == workflow.ModelFormatONNX {
+				packageAnnotations.Runtime = "onnx"
+			} else {
+				// Keep defaults for unknown formats
+				if strings.Contains(strings.ToLower(modelName), "sklearn") ||
+					strings.Contains(strings.ToLower(modelPath), "sklearn") {
+					packageAnnotations.Runtime = "kserve-sklearnserver"
+					packageAnnotations.Accelerator = "cpu"
+					packageAnnotations.CUDAMin = ""
+					packageAnnotations.MemoryMin = "256MiB"
+				}
+			}
+
 			pf, err := workflow.NewPackageWorkflow(localRegistryTool)
 			if err != nil {
 				return err
 			}
 			pf.SetShowNextSteps(false)
 			pf.SetPackageInfo(modelName, modelPath, artifactName, "", includeRAG, ragPath)
+			pf.SetAnnotations(packageAnnotations)
 
 			if err := pf.Run(); err != nil {
 				return err
@@ -492,6 +530,7 @@ Examples:
 				fmt.Printf("Simulating signing %s with %s...\n", fullArtifact, cfg.Signer)
 				fmt.Println(successStyle.Render("✓ Signing path demonstrated"))
 				signSucceeded = true
+				signSimulated = true
 			}
 			fmt.Println()
 		}
@@ -526,6 +565,7 @@ Examples:
 				fmt.Printf("Simulating signature verification for %s...\n", fullArtifact)
 				fmt.Println(successStyle.Render("✓ Verification path demonstrated"))
 				verifySucceeded = true
+				verifySimulated = true
 			}
 			fmt.Println()
 		}
@@ -886,7 +926,9 @@ Examples:
 			packageSucceeded:   packageSucceeded,
 			checkSucceeded:     checkSucceeded,
 			signSucceeded:      signSucceeded,
+			signSimulated:      signSimulated,
 			verifySucceeded:    verifySucceeded,
+			verifySimulated:    verifySimulated,
 			publishSucceeded:   publishDestination != "",
 			publishDestination: publishDestination,
 			deploySucceeded:    deploySucceeded,

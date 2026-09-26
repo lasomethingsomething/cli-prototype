@@ -124,6 +124,29 @@ func checkToolStatus(tool Tool) *ToolResult {
 				status = StatusReady
 			}
 		}
+	} else if tool.Name() == "minikube" {
+		// minikube: check binary first, then cluster state
+		_, err := exec.LookPath("minikube")
+		if err != nil {
+			status = StatusMissing
+			hint = "brew install minikube"
+		} else {
+			// Binary installed, check if cluster is running
+			cmd := exec.Command("minikube", "status", "-o", "json")
+			if err := cmd.Run(); err != nil {
+				// Check if cluster is reachable via kubectl instead
+				kubectlCmd := exec.Command("kubectl", "get", "nodes", "-o", "name")
+				if kubectlErr := kubectlCmd.Run(); kubectlErr != nil {
+					status = StatusInstalledNotRunning
+					hint = "minikube start"
+				} else {
+					// Cluster is reachable, minikube is working
+					status = StatusReady
+				}
+			} else {
+				status = StatusReady
+			}
+		}
 	} else if tool.Category() == CategoryCluster {
 		// Cluster tools: check kubectl reachability, then deployment presence
 		cmd := exec.Command("kubectl", "get", "deployments", "-A", "-o", "name")
