@@ -1,0 +1,21 @@
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: iris
+  namespace: test-model
+  annotations:
+    serving.kserve.io/deploymentMode: RawDeployment
+spec:
+  predictor:
+    model:
+      modelFormat:
+        name: sklearn
+      runtime: kserve-sklearnserver
+      storageUri: "https://raw.githubusercontent.com/github.com/lasomethingsomething/cli-prototype/main/model.joblib"
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          cpu: 500m
+          memory: 512Mi
