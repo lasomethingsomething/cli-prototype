@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 )
 
 // MOFMetadata represents the structured MOF/MOT-compliant metadata configuration
@@ -24,8 +23,8 @@ type MOFMetadata struct {
 	Components []ComponentMetadata `json:"components" yaml:"components"`
 
 	// Generation metadata
-	GeneratedAt time.Time `json:"generated_at" yaml:"generated_at"`
-	Generator   string    `json:"generator" yaml:"generator"`
+	GeneratedAt string `json:"generated_at,omitempty" yaml:"generated_at,omitempty"`
+	Generator   string   `json:"generator" yaml:"generator"`
 }
 
 // ReleaseMetadata contains release information
@@ -129,7 +128,7 @@ func (g *MOFMetadataGenerator) Generate() *MOFMetadata {
 
 	metadata := &MOFMetadata{
 		MOFVersion:  "1.0",
-		GeneratedAt: time.Now().UTC(),
+		GeneratedAt: "", // Omit timestamp for determinism
 		Generator:   "model-cli",
 		Release: ReleaseMetadata{
 			Name:    g.releaseName,
@@ -155,7 +154,7 @@ func (g *MOFMetadataGenerator) Generate() *MOFMetadata {
 		metadata.Release.Version = "1.0.0"
 	}
 	if metadata.Release.Date == "" {
-		metadata.Release.Date = time.Now().UTC().Format("2006-01-02")
+		metadata.Release.Date = "" // Omit date for determinism
 	}
 
 	return metadata

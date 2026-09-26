@@ -26,6 +26,7 @@ type wizardResult struct {
 	publishSucceeded   bool
 	publishDestination string
 	deploySucceeded    bool
+	deployVerified     bool // True if InferenceService reached Ready
 	modelName          string
 	artifactName       string
 	signer             string
@@ -70,17 +71,24 @@ func buildSummaryLines(r wizardResult) []string {
 	}
 	if r.skipDeploy {
 		lines = append(lines, "⚠ Skipped deployment")
+	} else if r.deployVerified {
+		lines = append(lines, fmt.Sprintf("✓ Deployed to Kubernetes with %s (InferenceService verified Ready)", r.gitOps))
 	} else if r.deploySucceeded {
-		lines = append(lines, fmt.Sprintf("✓ Deployed to Kubernetes with %s", r.gitOps))
+		lines = append(lines, fmt.Sprintf("✓ Deployed to Kubernetes with %s (GitOps commit successful, Flux reconciliation initiated)", r.gitOps))
 	} else {
-		lines = append(lines, "⚠ Skipped deployment")
+		lines = append(lines, "⚠ Deployment not completed")
 	}
+	// Always label Steps 6-7 as simulated
+	lines = append(lines, "⚠ Steps 6-7 (Infrastructure & Resource Orchestration, Runtime Execution) - simulated")
 	return lines
 }
 
 func wizardCompletionMessage(r wizardResult) string {
+	if r.deployVerified {
+		return "Your model is deployed and the InferenceService reached Ready state."
+	}
 	if r.deploySucceeded {
-		return "Your model is deployed and ready for production."
+		return "Your model deployment was initiated via GitOps. Check Flux reconciliation and InferenceService status."
 	}
 	if r.publishSucceeded {
 		return "Your artifact is published and ready for signing or deployment."
@@ -325,6 +333,26 @@ Examples:
 			}
 
 			annotations := workflow.NewAnnotationSet()
+			
+			// Derive runtime from model format (e.g., sklearn -> sklearn/MLServer, not vllm)
+			// Use the model classification to detect format
+			modelFormat := workflow.DetectModelFormatFromPath(modelPath)
+			if modelFormat == workflow.ModelFormatSklearn {
+				annotations.Runtime = "sklearn"
+			} else if modelFormat == workflow.ModelFormatPyTorch {
+				annotations.Runtime = "pytorch"
+			} else if modelFormat == workflow.ModelFormatTensorFlow {
+				annotations.Runtime = "tensorflow"
+			} else if modelFormat == workflow.ModelFormatONNX {
+				annotations.Runtime = "onnx"
+			} else {
+				// Keep default vllm for unknown formats (but sklearn should NEVER be vllm)
+				if strings.Contains(strings.ToLower(modelName), "sklearn") ||
+					strings.Contains(strings.ToLower(modelPath), "sklearn") {
+					annotations.Runtime = "sklearn"
+				}
+			}
+			
 			if err := huh.NewSelect[string]().
 				Title("How should the Model Openness Framework class be set?").
 				Description("Auto detects the classification from the model files.").
@@ -338,6 +366,7 @@ Examples:
 				Run(); err != nil {
 				return err
 			}
+			fmt.Printf("  Runtime set to: %s (derived from model format: %s)\n", annotations.Runtime, modelFormat)
 
 			hardenWorkflow := workflow.NewHardenWorkflow("")
 			hardenWorkflow.SetHardenInfo(modelName, modelPath, artifactName)
@@ -853,6 +882,7 @@ Examples:
 			publishSucceeded:   publishDestination != "",
 			publishDestination: publishDestination,
 			deploySucceeded:    deploySucceeded,
+			deployVerified:     deploySucceeded, // True only if all deployment steps including Ready verification passed
 			modelName:          modelName,
 			artifactName:       artifactName,
 			signer:             cfg.Signer,

@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
+	"time"
 )
 
 // GitOpsProvider defines the interface for GitOps tools like ArgoCD and Flux
@@ -66,12 +68,41 @@ func (f *FluxProvider) Deploy(modelName, repoURL, path string) error {
 		return fmt.Errorf("not in a git repo: %v", err)
 	}
 	remoteURL := strings.TrimSpace(string(remote))
-	if repoURL != "" && !strings.Contains(remoteURL, strings.TrimSuffix(repoURL, ".git")) &&
-		!strings.Contains(repoURL, strings.TrimSuffix(remoteURL, ".git")) {
-		return fmt.Errorf("current repo origin (%s) does not match target (%s)", remoteURL, repoURL)
+	
+	// Normalize URLs for comparison
+	if repoURL != "" {
+		if !URLsAreEqual(remoteURL, repoURL) {
+			return fmt.Errorf("current repo origin (%s) does not match target (%s)", remoteURL, repoURL)
+		}
 	}
 
-	// 2. Commit the manifest path
+	// 2. Generate and write the InferenceService manifest
+	// Get current branch
+	branch, err := GetCurrentGitBranch()
+	if err != nil {
+		fmt.Printf("Warning: could not determine git branch: %v, defaulting to 'main'\n", err)
+		branch = "main"
+	}
+
+	// Create inference service config and generate manifest
+	inferenceConfig, err := CreateInferenceServiceConfig(
+		modelName,
+		"", // modelPath - not needed here as we have repoURL
+		repoURL,
+		branch,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create inference service config: %v", err)
+	}
+
+	// Write manifest to the specified path
+	manifestPath := filepath.Join(path, modelName+".yaml")
+	if err := WriteInferenceServiceManifest(inferenceConfig, manifestPath); err != nil {
+		return fmt.Errorf("failed to write inference service manifest: %v", err)
+	}
+	fmt.Printf("✓ InferenceService manifest generated: %s\n", manifestPath)
+
+	// 3. Commit the manifest path
 	if path == "" {
 		return fmt.Errorf("manifest path is empty; nothing to commit")
 	}
@@ -80,30 +111,102 @@ func (f *FluxProvider) Deploy(modelName, repoURL, path string) error {
 	}
 	commit := exec.Command("git", "commit", "-m", "Deploy model "+modelName+" via wizard")
 	commit.Env = append(os.Environ(), "GIT_EDITOR=true")
-	if out, err := commit.CombinedOutput(); err != nil {
+	commitOut, err := commit.CombinedOutput()
+	if err != nil {
 		// "nothing to commit" is fine - manifest already committed
-		if !strings.Contains(string(out), "nothing to commit") &&
-			!strings.Contains(string(out), "no changes added") {
-			return fmt.Errorf("git commit failed: %s", out)
+		outStr := string(commitOut)
+		if !strings.Contains(outStr, "nothing to commit") &&
+			!strings.Contains(outStr, "no changes added") {
+			return fmt.Errorf("git commit failed: %s", outStr)
 		}
 	}
-	if out, err := exec.Command("git", "pull", "--rebase", "--autostash").CombinedOutput(); err != nil {
-		return fmt.Errorf("git pull --rebase failed: %s", out)
-	}
-	if out, err := exec.Command("git", "push").CombinedOutput(); err != nil {
-		return fmt.Errorf("git push failed: %s", out)
+	
+	// Check if commit actually created a new commit
+	hasNewCommit := !strings.Contains(string(commitOut), "nothing to commit") &&
+		!strings.Contains(string(commitOut), "no changes added")
+	
+	if hasNewCommit {
+		fmt.Printf("✓ Committed manifest to git\n")
+	} else {
+		fmt.Printf("⚠ Manifest already committed (no new commit)\n")
 	}
 
-	// 3. Ask Flux to pick it up now (optional; interval would do it anyway)
-	// Reconcile the source which will trigger dependent Kustomizations automatically
-	reconcile := exec.Command("flux", "reconcile", "source", "flux-system")
-	if err := reconcile.Run(); err != nil {
-		// If source reconcile fails, Flux will still pick up changes on its next interval
-		fmt.Printf("Pushed to Git. Flux will reconcile on its next interval (couldn't trigger immediately: %v)\n", err)
-	} else {
-		fmt.Printf("Pushed to Git and reconciled Flux source. Kustomizations will update automatically.\n")
+	// 4. Push to remote
+	pushOut, err := exec.Command("git", "push").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("git push failed: %s", pushOut)
 	}
+	fmt.Printf("✓ Pushed to git repository\n")
+
+	// 5. Verify push was successful by checking exit code (already done above)
+	// We already checked push exit code - if we're here, push succeeded
+
+	// 6. Trigger Flux reconciliation
+	// First, reconcile the source
+	reconcileSource := exec.Command("flux", "reconcile", "source", "flux-system")
+	reconcileOut, err := reconcileSource.CombinedOutput()
+	if err != nil {
+		fmt.Printf("Warning: failed to reconcile Flux source: %v\n%s\n", err, reconcileOut)
+		// Continue - Flux will still pick up changes on its next interval
+	} else {
+		fmt.Printf("✓ Flux source reconciled\n")
+		// Check for "applied revision" in output
+		if strings.Contains(string(reconcileOut), "applied revision") {
+			fmt.Printf("  ✓ New revision applied\n")
+		}
+	}
+
+	// 7. Reconcile the kustomization for test-model namespace
+	reconcileKustomization := exec.Command("flux", "reconcile", "kustomization", "test-model", "--with-source")
+	kustOut, err := reconcileKustomization.CombinedOutput()
+	if err != nil {
+		fmt.Printf("Warning: failed to reconcile kustomization: %v\n%s\n", err, kustOut)
+		// Continue - Flux will still reconcile on its next interval
+	} else {
+		fmt.Printf("✓ Flux kustomization reconciled\n")
+		if strings.Contains(string(kustOut), "applied revision") {
+			fmt.Printf("  ✓ New revision applied to kustomization\n")
+		}
+	}
+
+	// 8. Poll for InferenceService to reach READY=True
+	fmt.Printf("Waiting for InferenceService to become ready...\n")
+	if err := WaitForInferenceServiceReady(modelName, inferenceConfig.Namespace); err != nil {
+		// Return error with details
+		return fmt.Errorf("InferenceService did not reach Ready state: %v", err)
+	}
+	fmt.Printf("✓ InferenceService '%s' in namespace '%s' is Ready\n", modelName, inferenceConfig.Namespace)
+
 	return nil
+}
+
+// WaitForInferenceServiceReady polls kubectl until the InferenceService is ready or timeout
+func WaitForInferenceServiceReady(name, namespace string) error {
+	const maxAttempts = 30
+	const waitInterval = 5 * time.Second
+	
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		cmd := exec.Command("kubectl", "get", "inferenceservice", name, "-n", namespace, "-o", "jsonpath={.status.conditions[?(@.type==\"Ready\")].status}")
+		output, err := cmd.Output()
+		if err != nil {
+			// Check if it's just not found yet
+			// If error is exit code 1, it might just not be created yet
+			fmt.Printf("  Attempt %d/%d: InferenceService not found yet...\n", attempt, maxAttempts)
+		} else {
+			status := strings.TrimSpace(string(output))
+			if status == "True" {
+				return nil
+			}
+			fmt.Printf("  Attempt %d/%d: InferenceService status: %s\n", attempt, maxAttempts, status)
+		}
+		
+		// Wait before next attempt
+		if attempt < maxAttempts {
+			time.Sleep(waitInterval)
+		}
+	}
+	
+	return fmt.Errorf("timeout waiting for InferenceService '%s' in namespace '%s' to reach Ready", name, namespace)
 }
 
 // Ingredient describes a cluster component that the Git repo provides.

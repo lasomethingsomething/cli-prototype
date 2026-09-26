@@ -3,7 +3,7 @@
   "release": {
     "name": "iris",
     "version": "1.0.0",
-    "date": "2026-09-20",
+    "date": "2026-09-26",
     "type": "model",
     "license": "CC-BY-4.0"
   },
@@ -45,6 +45,6 @@
       "present": false
     }
   ],
-  "generated_at": "2026-09-20T17:19:15.933508Z",
+  "generated_at": "2026-09-26T09:06:34.476653Z",
   "generator": "model-cli"
 }

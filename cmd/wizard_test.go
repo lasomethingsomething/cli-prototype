@@ -126,8 +126,13 @@ func TestWizardCompletionMessage(t *testing.T) {
 	if got := wizardCompletionMessage(wizardResult{}); !strings.Contains(got, "local artifact") {
 		t.Errorf("local completion message = %q", got)
 	}
-	if got := wizardCompletionMessage(wizardResult{deploySucceeded: true}); !strings.Contains(got, "ready for production") {
-		t.Errorf("deployed completion message = %q", got)
+	// deploySucceeded alone now gives a more honest message (not claiming "ready for production")
+	if got := wizardCompletionMessage(wizardResult{deploySucceeded: true}); !strings.Contains(got, "GitOps") {
+		t.Errorf("deployed completion message = %q, expected to mention GitOps", got)
+	}
+	// deployVerified gives the full "ready" message
+	if got := wizardCompletionMessage(wizardResult{deployVerified: true}); !strings.Contains(got, "Ready") {
+		t.Errorf("verified deployed completion message = %q, expected to mention Ready", got)
 	}
 	if got := wizardCompletionMessage(wizardResult{publishSucceeded: true}); !strings.Contains(got, "published") {
 		t.Errorf("published completion message = %q", got)

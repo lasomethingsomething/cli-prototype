@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 )
 
 func TestNewMOFMetadataGenerator(t *testing.T) {
@@ -165,8 +164,9 @@ func TestMOFMetadataGeneratorGenerateWithDefaults(t *testing.T) {
 		t.Errorf("Expected Release.Version to default to '1.0.0', got '%s'", metadata.Release.Version)
 	}
 
-	if metadata.Release.Date == "" {
-		t.Error("Expected Release.Date to have a default value")
+	// Release.Date is now omitted for determinism (empty string)
+	if metadata.Release.Date != "" {
+		t.Errorf("Expected Release.Date to be empty for determinism, got '%s'", metadata.Release.Date)
 	}
 
 	if metadata.Model.Class != "III" {
@@ -380,10 +380,11 @@ func TestMOFMetadataJSONStructure(t *testing.T) {
 	jsonStr := string(jsonData)
 
 	// These fields should be in the JSON output
+	// Note: generated_at is omitted for determinism (omitempty + empty value)
 	requiredFields := []string{
 		`"mof_version"`,
 		`"generator"`,
-		`"generated_at"`,
+		// `"generated_at"` is omitted for determinism
 		`"release"`,
 		`"model"`,
 		`"components"`,
@@ -402,17 +403,16 @@ func containsString(s, substr string) bool {
 
 // Simpler contains for strings
 func TestMOFMetadataTimestamp(t *testing.T) {
-	before := time.Now()
+	// Since we made GeneratedAt deterministic by omitting it (empty string),
+	// this test verifies that GeneratedAt is now an empty string for determinism
 	gen := NewMOFMetadataGenerator()
 	gen.SetModelInfo("test", "/path", "artifact")
 	gen.SetMOFClassification("I", []string{"weights"}, "Full")
 
 	metadata := gen.Generate()
 
-	after := time.Now()
-
-	// GeneratedAt should be between before and after
-	if metadata.GeneratedAt.Before(before) || metadata.GeneratedAt.After(after) {
-		t.Errorf("GeneratedAt timestamp is not in expected range: %v", metadata.GeneratedAt)
+	// GeneratedAt should be empty for determinism
+	if metadata.GeneratedAt != "" {
+		t.Errorf("GeneratedAt should be empty for determinism, got: %v", metadata.GeneratedAt)
 	}
 }

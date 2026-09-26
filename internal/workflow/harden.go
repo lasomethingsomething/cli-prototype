@@ -130,9 +130,16 @@ func (w *HardenWorkflow) Run() error {
 		if err := sbomGen.Generate(w.modelPath, sbomPath, w.sbomFormat); err != nil {
 			return fmt.Errorf("SBOM generation failed: %v. SBOM is a required prerequisite for Phase 1 Step 2", err)
 		}
+		
+		// Make SBOM deterministic (remove timestamps, UUIDs, etc.)
+		if err := EnsureDeterministicSBOM(sbomPath); err != nil {
+			return fmt.Errorf("failed to make SBOM deterministic: %v. SBOM is a required prerequisite for Phase 1 Step 2", err)
+		}
+		
 		w.sbomPath = sbomPath
 		w.annotations.SBOMFormat = string(w.sbomFormat)
 		fmt.Printf("  ✓ SBOM generated: %s\n", w.sbomPath)
+		fmt.Printf("  ✓ SBOM made deterministic (no timestamps/UUIDs)\n")
 		// Attach SBOM as OCI layer (simulated - in real implementation would use OCI tools)
 		fmt.Printf("  ✓ SBOM attached as OCI layer with format: %s\n", w.sbomFormat)
 		fmt.Println()
