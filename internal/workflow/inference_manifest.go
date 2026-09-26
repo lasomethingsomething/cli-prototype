@@ -114,14 +114,16 @@ func CreateInferenceServiceConfig(
 
 	rawBaseURL := fmt.Sprintf("https://raw.githubusercontent.com/%s/%s", normalizedRepo, branch)
 
-	// Get the model file relative path from the model directory
+	// Get the model file from the model directory
 	modelFile := FindModelFile(modelPath)
 	if modelFile == "" {
 		return nil, fmt.Errorf("no model file found in %s", modelPath)
 	}
 
-	// Build storage URI - point to the actual model file
-	storageUri := fmt.Sprintf("%s/%s", rawBaseURL, modelFile)
+	// Build storage URI - include the model directory path
+	// Strip leading "./" from modelPath for the URL
+	modelDir := strings.TrimPrefix(modelPath, "./")
+	storageUri := fmt.Sprintf("%s/%s/%s", rawBaseURL, modelDir, modelFile)
 
 	// Determine namespace from config or use default
 	namespace := "test-model"

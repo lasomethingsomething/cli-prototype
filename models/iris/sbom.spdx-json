@@ -8,7 +8,7 @@
     "licenseListVersion": "3.28"
   },
   "dataLicense": "CC0-1.0",
-  "documentNamespace": "https://anchore.com/syft/dir/models/iris-9b6635b4-1ab3-432c-85ee-a3aa61f057fd",
+  "documentNamespace": "https://anchore.com/syft/dir/models/iris-ea262f63-1a3f-4033-bf23-e47c89377079",
   "name": "./models/iris",
   "packages": [
     {

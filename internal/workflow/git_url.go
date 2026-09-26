@@ -8,7 +8,7 @@ import (
 
 // normalizeGitURL normalizes git remote URLs to a standard form for comparison
 // Treats SCP-style git@github.com:o/r.git as equal to ssh://git@github.com/o/r.git
-// Returns host/path without .git suffix
+// Returns owner/repo path without host and without .git suffix
 func normalizeGitURL(url string) string {
 	// Remove any trailing whitespace
 	url = strings.TrimSpace(url)
@@ -17,40 +17,40 @@ func normalizeGitURL(url string) string {
 	// Match: git@host:owner/repo.git or git@host:owner/repo
 	scpRegex := regexp.MustCompile(`^git@([^:]+):(.+?)(?:\.git)?$`)
 	if matches := scpRegex.FindStringSubmatch(url); matches != nil {
-		host := matches[1]
+		// matches[1] = host (e.g., "github.com"), matches[2] = path (e.g., "owner/repo")
 		path := matches[2]
 		// Remove .git if present
 		path = strings.TrimSuffix(path, ".git")
-		return fmt.Sprintf("%s/%s", host, path)
+		return path
 	}
 
 	// Handle SSH-style URLs: ssh://git@github.com/owner/repo.git
 	// Match: ssh://git@host/owner/repo.git or ssh://git@host/owner/repo
 	sshRegex := regexp.MustCompile(`^ssh://git@([^/]+)/(.+?)(?:\.git)?$`)
 	if matches := sshRegex.FindStringSubmatch(url); matches != nil {
-		host := matches[1]
+		// matches[1] = host (e.g., "github.com"), matches[2] = path (e.g., "owner/repo")
 		path := matches[2]
 		path = strings.TrimSuffix(path, ".git")
-		return fmt.Sprintf("%s/%s", host, path)
+		return path
 	}
 
 	// Handle HTTPS URLs: https://github.com/owner/repo.git
 	// Match: https://host/owner/repo.git or https://host/owner/repo
 	httpsRegex := regexp.MustCompile(`^https?://([^/]+)/(.+?)(?:\.git)?$`)
 	if matches := httpsRegex.FindStringSubmatch(url); matches != nil {
-		host := matches[1]
+		// matches[1] = host (e.g., "github.com"), matches[2] = path (e.g., "owner/repo")
 		path := matches[2]
 		path = strings.TrimSuffix(path, ".git")
-		return fmt.Sprintf("%s/%s", host, path)
+		return path
 	}
 
 	// Handle Git protocol URLs: git://github.com/owner/repo.git
 	gitRegex := regexp.MustCompile(`^git://([^/]+)/(.+?)(?:\.git)?$`)
 	if matches := gitRegex.FindStringSubmatch(url); matches != nil {
-		host := matches[1]
+		// matches[1] = host (e.g., "github.com"), matches[2] = path (e.g., "owner/repo")
 		path := matches[2]
 		path = strings.TrimSuffix(path, ".git")
-		return fmt.Sprintf("%s/%s", host, path)
+		return path
 	}
 
 	// If no match, return as-is (trimmed)
