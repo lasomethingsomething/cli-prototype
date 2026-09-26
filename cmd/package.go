@@ -89,20 +89,21 @@ Examples:
 		// Collect CNCF AI Interoperability Profile annotations
 		annotations := workflow.NewAnnotationSet()
 
-		// Runtime annotations
-		if err := askString(cmd, "runtime", &annotations.Runtime, "Runtime:", "Serving runtime (e.g., vllm, kserve)"); err != nil {
+		// Runtime annotations - only prompt if not provided via flags
+		// In non-interactive mode, these will be derived from the model format by the workflow
+		if err := askStringIfEmpty(cmd, "runtime", &annotations.Runtime, "Runtime:", "Serving runtime (e.g., vllm, kserve)"); err != nil {
 			return err
 		}
 
-		if err := askSelect(cmd, "accelerator", &annotations.Accelerator, "Accelerator:", "Hardware accelerator requirement", []string{"nvidia-gpu", "amd-gpu", "intel-gpu", "cpu", "none"}); err != nil {
+		if err := askSelectIfEmpty(cmd, "accelerator", &annotations.Accelerator, "Accelerator:", "Hardware accelerator requirement", []string{"nvidia-gpu", "amd-gpu", "intel-gpu", "cpu", "none"}); err != nil {
 			return err
 		}
 
-		if err := askCUDAMin(cmd, annotations); err != nil {
+		if err := askCUDAMinIfEmpty(cmd, annotations); err != nil {
 			return err
 		}
 
-		if err := askString(cmd, "memory-min", &annotations.MemoryMin, "Minimum memory:", "Minimum memory required (e.g., 24GiB)"); err != nil {
+		if err := askStringIfEmpty(cmd, "memory-min", &annotations.MemoryMin, "Minimum memory:", "Minimum memory required (e.g., 24GiB)"); err != nil {
 			return err
 		}
 
@@ -179,6 +180,21 @@ func askCUDAMin(cmd *cobra.Command, annotations *workflow.AnnotationSet) error {
 		return nil
 	}
 	return askString(cmd, "cuda-min", &annotations.CUDAMin, "Minimum CUDA version:", "Minimum CUDA version required (e.g., 12.1, leave empty if not applicable)")
+}
+
+// askCUDAMinIfEmpty is like askCUDAMin but only prompts if the value is empty.
+// In non-interactive mode, it returns nil if the flag was not changed.
+func askCUDAMinIfEmpty(cmd *cobra.Command, annotations *workflow.AnnotationSet) error {
+	if !cmd.Flags().Changed("cuda-min") {
+		if annotations.CUDAMin != "" {
+			return nil
+		}
+		// In non-interactive mode, allow empty values to be set by the workflow later
+		if !interactive() {
+			return nil
+		}
+	}
+	return askCUDAMin(cmd, annotations)
 }
 
 func init() {

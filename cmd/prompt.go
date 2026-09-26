@@ -40,6 +40,21 @@ func askString(cmd *cobra.Command, flag string, dest *string, title, description
 	return in.Run()
 }
 
+// askStringIfEmpty is like askString but only prompts if the value is empty.
+// In non-interactive mode, it returns nil if the flag was not changed.
+func askStringIfEmpty(cmd *cobra.Command, flag string, dest *string, title, description string) error {
+	if !cmd.Flags().Changed(flag) {
+		if *dest != "" {
+			return nil
+		}
+		// In non-interactive mode, allow empty values to be set by the workflow later
+		if !interactive() {
+			return nil
+		}
+	}
+	return askString(cmd, flag, dest, title, description)
+}
+
 // askSelect sets *dest from the flag if it was given, otherwise prompts the
 // user to pick one of options.
 func askSelect(cmd *cobra.Command, flag string, dest *string, title, description string, options []string) error {
@@ -76,10 +91,17 @@ func askSelectLabeled(cmd *cobra.Command, flag string, dest *string, title, desc
 
 // askSelectIfEmpty is askSelect for values that may already be known, e.g.
 // from the saved config: the flag wins, then an existing non-empty *dest is
-// kept, and only then is the user prompted.
+// kept, and only then is the user prompted. In non-interactive mode, it returns
+// nil if the flag was not changed (allowing workflows to derive values later).
 func askSelectIfEmpty(cmd *cobra.Command, flag string, dest *string, title, description string, options []string) error {
-	if !cmd.Flags().Changed(flag) && *dest != "" {
-		return nil
+	if !cmd.Flags().Changed(flag) {
+		if *dest != "" {
+			return nil
+		}
+		// In non-interactive mode, allow empty values to be set by the workflow later
+		if !interactive() {
+			return nil
+		}
 	}
 	return askSelect(cmd, flag, dest, title, description, options)
 }

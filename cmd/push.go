@@ -174,6 +174,32 @@ Examples:
 			manifestToPush = existingManifest
 			// Update the artifact name annotation in the manifest
 			manifestToPush.Annotations["org.opencontainers.image.title"] = artifact
+		} else if modelPath != "" {
+			// Check if there's a manifest.json in the model path
+			manifestPath := filepath.Join(modelPath, "manifest.json")
+			if _, err := os.Stat(manifestPath); err == nil {
+				// Read the existing manifest from model path
+				existingManifest, err := workflow.ReadUnifiedOCIManifest(manifestPath)
+				if err != nil {
+					return err
+				}
+				
+				// Use the existing manifest's annotations as the primary source
+				mergedAnnotations = make(map[string]string)
+				// Copy all annotations from the existing manifest
+				for k, v := range existingManifest.Annotations {
+					mergedAnnotations[k] = v
+				}
+				
+				// Use the existing manifest's config and layers
+				manifestToPush = existingManifest
+				// Update the artifact name annotation in the manifest
+				manifestToPush.Annotations["org.opencontainers.image.title"] = artifact
+			} else {
+				// No existing manifest, use the generated one
+				mergedAnnotations = unifiedManifest.Annotations
+				manifestToPush = unifiedManifest
+			}
 		} else {
 			// No existing manifest, use the generated one
 			mergedAnnotations = unifiedManifest.Annotations

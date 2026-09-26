@@ -156,6 +156,9 @@ type AnnotationSet struct {
 }
 
 // NewAnnotationSet creates a new annotation set with sensible defaults
+// Note: Runtime, Accelerator, CUDAMin, and MemoryMin are intentionally empty now.
+// They must be explicitly set based on the model format to prevent silently
+// defaulting to vllm/nvidia-gpu for models like sklearn that require CPU.
 func NewAnnotationSet() *AnnotationSet {
 	return &AnnotationSet{
 		ProfileVersion:   "1.0.0",
@@ -164,10 +167,10 @@ func NewAnnotationSet() *AnnotationSet {
 		SigningFramework: "", // Will be set based on signer choice
 		SBOMFormat:       "spdx-json",
 		ProvenanceType:   "slsa-v1.0",
-		Runtime:          "vllm",
-		Accelerator:      "nvidia-gpu",
-		CUDAMin:          "12.1",
-		MemoryMin:        "24GiB",
+		Runtime:          "",
+		Accelerator:      "",
+		CUDAMin:          "",
+		MemoryMin:        "",
 	}
 }
 
