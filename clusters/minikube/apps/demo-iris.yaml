@@ -12,7 +12,7 @@ spec:
         name: sklearn
       runtime: kserve-sklearnserver
       # Replace the placeholder below with your fork's raw GitHub URL
-      storageUri: "STORAGE_URI_PLACEHOLDER"
+      storageUri: "https://raw.githubusercontent.com/lasomethingsomething/cli-prototype/main/models/iris/model.joblib"
       resources:
         requests:
           cpu: 100m
