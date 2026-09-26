@@ -2,6 +2,7 @@ package workflow
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 )
 
@@ -134,6 +135,12 @@ func (w *PackageWorkflow) Run() error {
 	if err := w.generateMetadataContract(); err != nil {
 		// Don't fail packaging if contract generation fails, but warn
 		fmt.Printf("  ⚠ Warning: failed to generate metadata contract: %v\n", err)
+	}
+
+	// Derive runtime from model format if not explicitly set
+	// This ensures sklearn models don't get vllm/GPU defaults
+	if err := w.deriveRuntimeFromModel(); err != nil {
+		return err
 	}
 
 	// Display annotations that will be included
@@ -307,4 +314,76 @@ func mapModelFormatToContract(format ModelFormat) (string, string) {
 	default:
 		return "classification", "unknown"
 	}
+}
+
+// mapModelFormatToRuntime maps a ModelFormat to serving runtime, accelerator, and resource requirements
+func mapModelFormatToRuntime(format ModelFormat) (runtime, accelerator, memory string) {
+	switch format {
+	case ModelFormatSklearn:
+		return "kserve-sklearnserver", "cpu", "256MiB"
+	case ModelFormatPyTorch:
+		return "vllm", "nvidia-gpu", "24GiB"
+	case ModelFormatTensorFlow:
+		return "tensorrt-llm", "nvidia-gpu", "24GiB"
+	case ModelFormatONNX:
+		return "onnxruntime", "cpu", "1GiB"
+	case ModelFormatHuggingFace:
+		return "vllm", "nvidia-gpu", "24GiB"
+	default:
+		return "", "", ""
+	}
+}
+
+// deriveRuntimeFromModel detects the model format and derives appropriate
+// runtime, accelerator, and memory annotations. Errors out if model format
+// can't be detected, rather than silently using vllm/GPU defaults.
+func (w *PackageWorkflow) deriveRuntimeFromModel() error {
+	if w.modelPath == "" {
+		return fmt.Errorf("model path not specified, cannot derive runtime")
+	}
+
+	modelFormat := DetectModelFormatFromPath(w.modelPath)
+	if modelFormat == ModelFormatUnknown {
+		if hasAnyModelFiles(w.modelPath) {
+			return fmt.Errorf("cannot determine model format from files in %s. Found files but none match known model extensions: %v",
+				w.modelPath, ModelFileExtensions)
+		} else {
+			return fmt.Errorf("no model files found in %s. Expected files with extensions: %v",
+				w.modelPath, ModelFileExtensions)
+		}
+	}
+
+	runtime, accelerator, memory := mapModelFormatToRuntime(modelFormat)
+	if runtime == "" {
+		return fmt.Errorf("no runtime mapping for model format: %s. Please specify runtime explicitly", modelFormat)
+	}
+
+	w.annotations.Runtime = runtime
+	w.annotations.Accelerator = accelerator
+	w.annotations.MemoryMin = memory
+	if accelerator == "cpu" {
+		w.annotations.CUDAMin = ""
+	}
+
+	fmt.Printf("  ✓ Derived runtime: %s, accelerator: %s, memory: %s\n", runtime, accelerator, memory)
+	return nil
+}
+
+// hasAnyModelFiles checks if there are any files with model file extensions in the directory
+func hasAnyModelFiles(dir string) bool {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			ext := filepath.Ext(entry.Name())
+			for _, modelExt := range ModelFileExtensions {
+				if ext == modelExt {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }

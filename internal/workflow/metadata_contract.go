@@ -178,9 +178,10 @@ func validateModelContract(contract *MetadataContract, result *ContractValidatio
 	}
 
 	// Validate framework values
-	validFrameworks := map[string]bool{"pytorch": true, "tensorflow": true, "onnx": true, "jax": true, "safetensors": true}
+	validFrameworks := map[string]bool{"pytorch": true, "tensorflow": true, "onnx": true, "jax": true, "safetensors": true, "sklearn": true}
 	if model.Framework != "" && !validFrameworks[model.Framework] {
-		result.Warnings = append(result.Warnings, fmt.Sprintf("unknown framework: %s", model.Framework))
+		result.Errors = append(result.Errors, fmt.Sprintf("unknown framework: %s", model.Framework))
+		result.Valid = false
 	}
 
 	// Validate relationships if present
@@ -473,7 +474,77 @@ func ValidateManifestMetadata(annotations map[string]string, artifactType Artifa
 		}
 	}
 
-	return ValidateContract(contract, artifactType)
+	contractResult := ValidateContract(contract, artifactType)
+	if !contractResult.Valid {
+		return contractResult
+	}
+
+	runtimeResult := validateRuntimeFrameworkConsistency(annotations, contract)
+	if !runtimeResult.Valid {
+		contractResult.Valid = false
+		contractResult.Errors = append(contractResult.Errors, runtimeResult.Errors...)
+		contractResult.MissingFields = append(contractResult.MissingFields, runtimeResult.MissingFields...)
+	}
+
+	return contractResult
+}
+
+// validateRuntimeFrameworkConsistency checks runtime/accelerator vs framework consistency
+func validateRuntimeFrameworkConsistency(annotations map[string]string, contract *MetadataContract) *ContractValidationResult {
+	result := &ContractValidationResult{
+		Valid:   true,
+		Errors:  []string{},
+		Warnings: []string{},
+	}
+
+	if contract == nil || contract.Assets.Model == nil {
+		return result
+	}
+
+	framework := contract.Assets.Model.Framework
+	runtime := annotations[AnnotationRuntime]
+	accelerator := annotations[AnnotationAccelerator]
+
+	validCombinations := map[string]map[string]bool{
+		"sklearn": {
+			"kserve-sklearnserver": true,
+			"sklearnserver":          true,
+		},
+		"pytorch": {
+			"vllm":    true,
+			"pytorch": true,
+		},
+		"tensorflow": {
+			"tensorrt-llm": true,
+			"tensorflow":  true,
+		},
+		"onnx": {
+			"onnxruntime": true,
+		},
+	}
+
+	if runtime != "" && framework != "" {
+		if validRuntimes, ok := validCombinations[framework]; ok {
+			if !validRuntimes[runtime] {
+				result.Valid = false
+				result.Errors = append(result.Errors,
+					fmt.Sprintf("runtime/framework mismatch: framework %s with runtime %s is invalid", framework, runtime))
+			}
+		}
+	}
+
+	if accelerator != "" && framework != "" {
+		switch framework {
+		case "sklearn", "onnx":
+			if accelerator != "cpu" && accelerator != "" {
+				result.Valid = false
+				result.Errors = append(result.Errors,
+					fmt.Sprintf("accelerator/framework mismatch: framework %s should use CPU accelerator, not %s", framework, accelerator))
+			}
+		}
+	}
+
+	return result
 }
 
 // GenerateMetadataContractAnnotation generates the annotation value for the metadata contract
