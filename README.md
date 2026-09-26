@@ -94,7 +94,7 @@ The repository contains a bootstrapped Flux cluster configuration in `clusters/m
 
 > **Bootstrap behavior:** `flux bootstrap git` is idempotent. If it fails partway through (e.g., network interruption), simply re-run the same command. Flux will push any missing commits to your repository, then reconcile the cluster state. You will see output like "already exists" or "already up-to-date" for resources that were successfully created on the first attempt.
 
-> **Storage URI placeholder:** The sample model's InferenceService manifest at `clusters/minikube/apps/demo-iris.yaml` uses `STORAGE_URI_PLACEHOLDER`. After forking, replace this with your fork's raw GitHub URL (e.g., `https://raw.githubusercontent.com/your-username/cli-prototype/main/models/iris/model.joblib`).
+> **Note:** The wizard automatically generates the InferenceService manifest at `clusters/minikube/apps/iris.yaml` with the correct storageUri pointing to your fork.
 
 Wait until everything is reconciled:
 
