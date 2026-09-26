@@ -510,6 +510,33 @@ Examples:
 			}
 
 			signSucceeded = false
+			signSimulated = true
+			
+			// Map the signer choice to canonical annotation value
+			signingFramework := cfg.Signer
+			if cfg.Signer == "cosign" || cfg.Signer == "sigstore" {
+				signingFramework = "sigstore-cosign"
+			} else if cfg.Signer == "notation" || cfg.Signer == "notary" || cfg.Signer == "notaryv2" {
+				signingFramework = "notation"
+			}
+			
+			// Always update manifest with the chosen signing framework
+			manifestPath := filepath.Join(modelPath, "manifest.json")
+			manifest, err := workflow.ReadUnifiedOCIManifest(manifestPath)
+			if err != nil {
+				fmt.Printf("⚠ Warning: failed to update signing framework in manifest: %v\n", err)
+			} else {
+				if manifest.Annotations == nil {
+					manifest.Annotations = make(map[string]string)
+				}
+				manifest.Annotations[workflow.AnnotationSigningFramework] = signingFramework
+				if err := workflow.WriteUnifiedOCIManifest(manifest, manifestPath); err != nil {
+					fmt.Printf("⚠ Warning: failed to write updated manifest: %v\n", err)
+				} else {
+					fmt.Printf("✓ Signing framework annotation updated: %s\n", signingFramework)
+				}
+			}
+
 			if !sp.IsInstalled() {
 				// Just-in-time check with option to install
 				installed, err := workflow.EnsureToolInstalled(cfg.Signer, "signing", interactive())
@@ -518,7 +545,7 @@ Examples:
 				}
 				if !installed {
 					fmt.Println(warningStyle.Render("⚠ Signing tool not installed"))
-					fmt.Printf("   Install with: %s\n\n", sp.InstallInstructions())
+					fmt.Printf("   Install with: %s\n", sp.InstallInstructions())
 				} else {
 					// Tool was just installed, re-check
 					sp, err = workflow.GetSigningProvider(cfg.Signer)
@@ -526,12 +553,13 @@ Examples:
 						return err
 					}
 				}
-			} else {
-				fmt.Printf("Simulating signing %s with %s...\n", fullArtifact, cfg.Signer)
-				fmt.Println(successStyle.Render("✓ Signing path demonstrated"))
-				signSucceeded = true
-				signSimulated = true
 			}
+			
+			// Demonstrate signing simulation (always happens, tool installed or not)
+			fmt.Printf("Simulating signing %s with %s...\n", fullArtifact, cfg.Signer)
+			fmt.Println(successStyle.Render("✓ Signing path demonstrated"))
+			signSucceeded = true
+			
 			fmt.Println()
 		}
 
@@ -545,6 +573,8 @@ Examples:
 			}
 
 			verifySucceeded = false
+			verifySimulated = true
+			
 			if !sp.IsInstalled() {
 				// Just-in-time check with option to install
 				installed, err := workflow.EnsureToolInstalled(cfg.Signer, "signature verification", interactive())
@@ -553,7 +583,7 @@ Examples:
 				}
 				if !installed {
 					fmt.Println(warningStyle.Render("⚠ Signing tool not installed"))
-					fmt.Printf("   Install with: %s\n\n", sp.InstallInstructions())
+					fmt.Printf("   Install with: %s\n", sp.InstallInstructions())
 				} else {
 					// Tool was just installed, re-check
 					sp, err = workflow.GetSigningProvider(cfg.Signer)
@@ -561,12 +591,13 @@ Examples:
 						return err
 					}
 				}
-			} else {
-				fmt.Printf("Simulating signature verification for %s...\n", fullArtifact)
-				fmt.Println(successStyle.Render("✓ Verification path demonstrated"))
-				verifySucceeded = true
-				verifySimulated = true
 			}
+			
+			// Demonstrate verification simulation (always happens, tool installed or not)
+			fmt.Printf("Simulating signature verification for %s...\n", fullArtifact)
+			fmt.Println(successStyle.Render("✓ Verification path demonstrated"))
+			verifySucceeded = true
+			
 			fmt.Println()
 		}
 

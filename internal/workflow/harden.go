@@ -174,7 +174,6 @@ func (w *HardenWorkflow) Run() error {
 
 	// Step 3: Apply security annotations
 	fmt.Println("→ Applying security annotations...")
-	w.annotations.SigningFramework = "sigstore-cosign"
 	w.annotations.ProvenanceType = "slsa-v1.0"
 	fmt.Println("  ✓ Security annotations applied")
 	fmt.Println()

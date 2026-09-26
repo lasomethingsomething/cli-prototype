@@ -161,7 +161,7 @@ func NewAnnotationSet() *AnnotationSet {
 		ProfileVersion:   "1.0.0",
 		ArtifactType:     "model",
 		MOFVersion:       "1.0",
-		SigningFramework: "sigstore-cosign",
+		SigningFramework: "", // Will be set based on signer choice
 		SBOMFormat:       "spdx-json",
 		ProvenanceType:   "slsa-v1.0",
 		Runtime:          "vllm",

@@ -188,6 +188,47 @@ Examples:
 			fmt.Printf("✓ Unified OCI manifest written to: %s\n", manifestOutputFlag)
 		}
 
+		// Determine signer to use for the signing framework annotation
+		signerToUse := signerFlag
+		if signerToUse == "" {
+			signerToUse = cfg.Signer
+		}
+		if signerToUse == "" {
+			signerToUse = workflow.SignerOptions().Recommended()
+		}
+		
+		// Validate the signer is supported
+		if _, err := workflow.GetSigningProvider(signerToUse); err != nil {
+			return fmt.Errorf("invalid signer: %v (supported: %s)", err, workflow.SignerOptions().Summary())
+		}
+		
+		// Map the signer name to the canonical annotation value
+		signingFramework := signerToUse
+		if signerToUse == "cosign" || signerToUse == "sigstore" {
+			signingFramework = "sigstore-cosign"
+		} else if signerToUse == "notation" || signerToUse == "notary" || signerToUse == "notaryv2" {
+			signingFramework = "notation"
+		}
+		
+		// Update the merged annotations with the signing framework
+		// Only set if not already present in manifest (preserves wizard's choice)
+		// or if --signer flag was explicitly provided
+		if mergedAnnotations == nil {
+			mergedAnnotations = make(map[string]string)
+		}
+		// If --signer flag was explicitly provided, or no existing manifest, use the determined signer
+		if signerFlag != "" || mergedAnnotations[workflow.AnnotationSigningFramework] == "" {
+			mergedAnnotations[workflow.AnnotationSigningFramework] = signingFramework
+		}
+		
+		// Also update the manifestToPush annotations so the written file is correct
+		if manifestToPush.Annotations == nil {
+			manifestToPush.Annotations = make(map[string]string)
+		}
+		if signerFlag != "" || manifestToPush.Annotations[workflow.AnnotationSigningFramework] == "" {
+			manifestToPush.Annotations[workflow.AnnotationSigningFramework] = signingFramework
+		}
+
 		fmt.Printf("\nPushing '%s' to '%s' using %s...\n", artifact, destination, registry)
 
 		fullArtifact := destination + "/" + artifact
@@ -221,13 +262,16 @@ Examples:
 			fmt.Printf("✓ %d manifest-level annotations available for validation\n", len(mergedAnnotations))
 		}
 
-		// Determine signer to use for provenance
-		signerToUse := signerFlag
+		// Determine signer to use for provenance (already determined above for annotations)
+		// Re-use the same determination logic for consistency
 		if signerToUse == "" {
-			signerToUse = cfg.Signer
-		}
-		if signerToUse == "" {
-			signerToUse = workflow.SignerOptions().Recommended()
+			signerToUse = signerFlag
+			if signerToUse == "" {
+				signerToUse = cfg.Signer
+			}
+			if signerToUse == "" {
+				signerToUse = workflow.SignerOptions().Recommended()
+			}
 		}
 
 		// Generate provenance attestation if requested (default: true)
@@ -463,7 +507,7 @@ func createUnifiedOCIManifest(artifactType workflow.ArtifactType, artifactName, 
 	// Add Trust Profile annotations for GitOps admission (Story #63)
 	// These annotations allow GitOps tools (Argo CD, Flux) + policy engines
 	// (Sigstore Policy Controller, OPA/Gatekeeper) to evaluate artifact trust
-	manifest.Annotations[workflow.AnnotationSigningFramework] = "sigstore-cosign"
+	// Note: SigningFramework is set in the push command based on the signer flag/config
 	manifest.Annotations[workflow.AnnotationSBOMFormat] = "spdx-json"
 	manifest.Annotations[workflow.AnnotationProvenanceType] = "slsa-v1.0"
 
