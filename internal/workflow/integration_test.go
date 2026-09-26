@@ -52,7 +52,7 @@ func TestFullWorkflowIntegration(t *testing.T) {
 		t.Fatalf("Failed to create deploy workflow: %v", err)
 	}
 
-	wf.SetModelInfo("phi-4-mini", "https://github.com/me/manifests", "/manifests")
+	wf.SetModelInfo("phi-4-mini", "/models/phi-4-mini", "https://github.com/me/manifests", "/manifests")
 
 	if wf.modelName != "phi-4-mini" {
 		t.Errorf("Deploy workflow modelName = %q, want %q", wf.modelName, "phi-4-mini")

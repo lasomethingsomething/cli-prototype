@@ -16,7 +16,7 @@ type fakeGitOpsProvider struct {
 func (f *fakeGitOpsProvider) Name() string                { return f.name }
 func (f *fakeGitOpsProvider) IsInstalled() bool           { return f.installed }
 func (f *fakeGitOpsProvider) InstallInstructions() string { return "brew install " + f.name }
-func (f *fakeGitOpsProvider) Deploy(modelName, repoURL, path string) error {
+func (f *fakeGitOpsProvider) Deploy(modelName, repoURL, path, modelPath string) error {
 	return nil
 }
 
@@ -75,10 +75,13 @@ func TestSetModelInfo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewDeployWorkflow error = %v", err)
 	}
-	wf.SetModelInfo("test-model", "https://github.com/test/repo", "./manifests")
+	wf.SetModelInfo("test-model", "./models/test", "https://github.com/test/repo", "./manifests")
 
 	if wf.modelName != "test-model" {
 		t.Errorf("modelName = %q, want %q", wf.modelName, "test-model")
+	}
+	if wf.modelPath != "./models/test" {
+		t.Errorf("modelPath = %q, want %q", wf.modelPath, "./models/test")
 	}
 	if wf.repoURL != "https://github.com/test/repo" {
 		t.Errorf("repoURL = %q, want %q", wf.repoURL, "https://github.com/test/repo")
@@ -97,7 +100,7 @@ func TestDeployWorkflowMissingTools(t *testing.T) {
 	}
 	wf.gitOpsProvider = &fakeGitOpsProvider{name: "flux", installed: false}
 	wf.registryProvider = &fakeDeployRegistry{installed: true}
-	wf.SetModelInfo("test-model", "https://github.com/test/repo", "./manifests")
+	wf.SetModelInfo("test-model", "./models/test", "https://github.com/test/repo", "./manifests")
 
 	err = wf.Run()
 	if err == nil || !strings.Contains(err.Error(), "flux not installed") {
@@ -111,7 +114,7 @@ func TestDeployWorkflowMissingTools(t *testing.T) {
 	}
 	wf2.gitOpsProvider = &fakeGitOpsProvider{name: "flux", installed: true}
 	wf2.registryProvider = &fakeDeployRegistry{installed: false}
-	wf2.SetModelInfo("test-model", "https://github.com/test/repo", "./manifests")
+	wf2.SetModelInfo("test-model", "./models/test", "https://github.com/test/repo", "./manifests")
 
 	err = wf2.Run()
 	if err == nil || !strings.Contains(err.Error(), "fake-registry not installed") {
@@ -127,10 +130,13 @@ func TestDeployWorkflowWithModelInfo(t *testing.T) {
 	}
 	wf.gitOpsProvider = &fakeGitOpsProvider{name: "flux", installed: false}
 	wf.registryProvider = &fakeDeployRegistry{installed: true}
-	wf.SetModelInfo("test-model", "https://github.com/test/repo", "./manifests")
+	wf.SetModelInfo("test-model", "./models/test", "https://github.com/test/repo", "./manifests")
 
 	if wf.modelName != "test-model" {
 		t.Errorf("modelName = %q, want %q", wf.modelName, "test-model")
+	}
+	if wf.modelPath != "./models/test" {
+		t.Errorf("modelPath = %q, want %q", wf.modelPath, "./models/test")
 	}
 	if wf.repoURL != "https://github.com/test/repo" {
 		t.Errorf("repoURL = %q, want %q", wf.repoURL, "https://github.com/test/repo")

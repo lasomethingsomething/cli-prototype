@@ -14,7 +14,7 @@ type GitOpsProvider interface {
 	Name() string
 	IsInstalled() bool
 	InstallInstructions() string
-	Deploy(modelName, repoURL, path string) error
+	Deploy(modelName, repoURL, path, modelPath string) error
 }
 
 // --- ArgoCD Provider ---
@@ -33,7 +33,7 @@ func (a *ArgoCDProvider) InstallInstructions() string {
 	return "brew install argoproj/tap/argocd"
 }
 
-func (a *ArgoCDProvider) Deploy(modelName, repoURL, path string) error {
+func (a *ArgoCDProvider) Deploy(modelName, repoURL, path, modelPath string) error {
 	cmd := exec.Command("argocd", "app", "create", modelName, "--repo", repoURL, "--path", path, "--dest-namespace", "default")
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to create ArgoCD application: %v", err)
@@ -58,7 +58,7 @@ func (f *FluxProvider) InstallInstructions() string {
 	return "brew install fluxcd/tap/flux"
 }
 
-func (f *FluxProvider) Deploy(modelName, repoURL, path string) error {
+func (f *FluxProvider) Deploy(modelName, repoURL, path, modelPath string) error {
 	// GitOps: the CLI never touches the cluster directly.
 	// It commits the manifest into the Git repo and lets Flux reconcile.
 
@@ -87,7 +87,7 @@ func (f *FluxProvider) Deploy(modelName, repoURL, path string) error {
 	// Create inference service config and generate manifest
 	inferenceConfig, err := CreateInferenceServiceConfig(
 		modelName,
-		"", // modelPath - not needed here as we have repoURL
+		modelPath,
 		repoURL,
 		branch,
 	)

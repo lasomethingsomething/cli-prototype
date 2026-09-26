@@ -823,7 +823,7 @@ Examples:
 				if err != nil {
 					return err
 				}
-				wf.SetModelInfo(modelName, repoURL, manifestPath)
+				wf.SetModelInfo(modelName, modelPath, repoURL, manifestPath)
 
 				if err := wf.Run(); err != nil {
 					return err

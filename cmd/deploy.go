@@ -44,11 +44,16 @@ Examples:
 
 		// Tour guide: Get model information interactively or via flags
 		var modelName string
+		var modelPath string
 		var hasKubernetes bool
 		var repoURL string
 		var manifestPath string
 
 		if err := askString(cmd, "model", &modelName, "Model name:", "What would you like to name your model deployment?"); err != nil {
+			return err
+		}
+
+		if err := askString(cmd, "model-path", &modelPath, "Model path:", "Where are your model files? (e.g., ./models/iris)"); err != nil {
 			return err
 		}
 
@@ -85,7 +90,7 @@ Examples:
 		}
 
 		if hasKubernetes && repoURL != "" {
-			wf.SetModelInfo(modelName, repoURL, manifestPath)
+			wf.SetModelInfo(modelName, modelPath, repoURL, manifestPath)
 
 			// Set artifact reference if provided (contains Trust Profile annotations)
 			// This allows GitOps tools to access the annotations for admission (Story #63)
@@ -106,6 +111,7 @@ func init() {
 	deployCmd.Flags().String("gitops", "", "GitOps tool: "+workflow.GitOpsOptions().Summary())
 	deployCmd.Flags().String("registry", "", "Registry tool: "+workflow.RegistryOptions().Summary())
 	deployCmd.Flags().String("model", "", "Model name for deployment")
+	deployCmd.Flags().String("model-path", "", "Local path to model files (e.g., ./models/iris)")
 	deployCmd.Flags().String("artifact", "", "Full artifact reference (e.g., ghcr.io/my-org/my-model:v1) with Trust Profile annotations")
 	deployCmd.Flags().String("repo", "", "Git repository URL for Kubernetes manifests")
 	deployCmd.Flags().String("path", "", "Path to Kubernetes manifests in repo")

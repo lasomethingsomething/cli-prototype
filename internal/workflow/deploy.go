@@ -11,6 +11,7 @@ type DeployWorkflow struct {
 	gitOpsProvider   GitOpsProvider
 	registryProvider RegistryProvider
 	modelName        string
+	modelPath        string // Local path to the model files
 	artifactRef      string // Full artifact reference with annotations (Story #63)
 	repoURL          string
 	manifestPath     string
@@ -37,8 +38,9 @@ func NewDeployWorkflow(gitOps, registry string) (*DeployWorkflow, error) {
 }
 
 // SetModelInfo sets the model deployment details
-func (w *DeployWorkflow) SetModelInfo(modelName, repoURL, manifestPath string) {
+func (w *DeployWorkflow) SetModelInfo(modelName, modelPath, repoURL, manifestPath string) {
 	w.modelName = modelName
+	w.modelPath = modelPath
 	w.repoURL = repoURL
 	w.manifestPath = manifestPath
 }
@@ -76,7 +78,7 @@ func (w *DeployWorkflow) Run() error {
 		fmt.Printf("Deploying artifact '%s' from repository '%s' with %s...\n",
 			artifactToDeploy, w.repoURL, w.gitOps)
 		fmt.Printf("  Trust Profile annotations will be available to GitOps admission policies\n")
-		if err := w.gitOpsProvider.Deploy(artifactToDeploy, w.repoURL, w.manifestPath); err != nil {
+		if err := w.gitOpsProvider.Deploy(artifactToDeploy, w.repoURL, w.manifestPath, w.modelPath); err != nil {
 			return err
 		}
 	} else {
