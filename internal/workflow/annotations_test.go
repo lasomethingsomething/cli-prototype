@@ -18,9 +18,9 @@ func TestNewAnnotationSet(t *testing.T) {
 	if annotations.MOFVersion != "1.0" {
 		t.Errorf("MOFVersion = %q, want %q", annotations.MOFVersion, "1.0")
 	}
-	// SigningFramework is now empty by default and set based on signer choice
-	if annotations.SigningFramework != "" {
-		t.Errorf("SigningFramework = %q, want empty (will be set based on signer choice)", annotations.SigningFramework)
+	// SigningFramework defaults to sigstore-cosign
+	if annotations.SigningFramework != "sigstore-cosign" {
+		t.Errorf("SigningFramework = %q, want %q", annotations.SigningFramework, "sigstore-cosign")
 	}
 	if annotations.SBOMFormat != "spdx-json" {
 		t.Errorf("SBOMFormat = %q, want %q", annotations.SBOMFormat, "spdx-json")
