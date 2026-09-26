@@ -333,25 +333,19 @@ func verifyGitPushable(remoteURL, branch string) error {
 		if strings.Contains(outputStr, "permission denied") ||
 			strings.Contains(outputStr, "authentication failed") ||
 			strings.Contains(outputStr, "no push access") {
-			// Check if this is the upstream repo (not a fork)
-			// For GitHub, we can detect if the remote is the canonical repo
-			if isUpstreamRepo(remoteURL) {
-				return fmt.Errorf("cannot push to upstream repository %s. Fork it first: gh repo fork --remote, or manually fork and add your fork as 'origin'. See README for fork instructions", displayURL)
+			// Provide actionable hints based on the error
+			// If it looks like an auth issue, point to SSH key check
+			if strings.Contains(outputStr, "authentication failed") || strings.Contains(outputStr, "Permission denied (publickey)") {
+				return fmt.Errorf("no push permission to %s. Check SSH keys with: model-cli doctor. Git error: %s", displayURL, outputStr)
 			}
-			return fmt.Errorf("no push permission to %s. Check SSH keys with: model-cli doctor. Git error: %s", displayURL, outputStr)
+			// For permission denied, suggest it might be an upstream repo that needs forking
+			return fmt.Errorf("cannot push to %s. If this is an upstream repository, fork it first: gh repo fork --remote, or manually fork and add your fork as 'origin'. Check SSH keys with: model-cli doctor. Git error: %s", displayURL, outputStr)
 		}
 		return fmt.Errorf("git push dry-run failed for %s: %s", displayURL, outputStr)
 	}
 	return nil
 }
 
-// isUpstreamRepo checks if the remote URL points to the canonical upstream repo
-func isUpstreamRepo(remoteURL string) bool {
-	// Normalize the URL
-	normalized := normalizeGitURL(remoteURL)
-	// For this repo, the upstream is lasomethingsomething/cli-prototype
-	return strings.Contains(normalized, "lasomethingsomething/cli-prototype")
-}
 
 // verifyGitWorkingTreeClean checks if the working tree is clean
 func verifyGitWorkingTreeClean() error {

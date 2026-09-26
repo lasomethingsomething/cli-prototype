@@ -135,10 +135,10 @@ func checkToolStatus(tool Tool) *ToolResult {
 		} else {
 			status = StatusReady
 			installed = true
-			if isUpstream {
-				hint = fmt.Sprintf("origin: %s (fork needed - cannot push to upstream)", remoteURL)
-			} else if pushable {
+			if pushable {
 				hint = fmt.Sprintf("origin: %s (pushable ✓)", remoteURL)
+			} else if isUpstream {
+				hint = fmt.Sprintf("origin: %s (fork needed - cannot push to upstream)", remoteURL)
 			} else {
 				hint = fmt.Sprintf("origin: %s (not pushable - check SSH keys)", remoteURL)
 			}
@@ -551,7 +551,10 @@ func (g *gitRemoteTool) InstallInstructions() string {
 }
 func (g *gitRemoteTool) Description() string { return "Git remote origin" }
 
-// GetOriginInfo returns the origin URL and pushability status
+// GetOriginInfo returns the origin URL, whether it looks like an upstream
+// (based on URL pattern matching), and pushability status.
+// Note: isUpstream is only a hint based on URL pattern; pushable (from dry-run)
+// is the source of truth for whether the user can actually push.
 func GetOriginInfo() (remoteURL string, isUpstream bool, pushable bool, err error) {
 	// Get the origin URL
 	remote, err := exec.Command("git", "remote", "get-url", "origin").Output()
@@ -560,11 +563,14 @@ func GetOriginInfo() (remoteURL string, isUpstream bool, pushable bool, err erro
 	}
 	remoteURL = strings.TrimSpace(string(remote))
 	
-	// Normalize the URL and check if it's the upstream repo
-	// Use the isUpstreamRepo function from this package
-	isUpstream = isUpstreamRepo(remoteURL)
+	// Normalize the URL and check if it looks like an upstream repo
+	// This is only used for hint text, not for gating operations
+	normalized := normalizeGitURL(remoteURL)
+	// Check for common GitHub URL patterns that suggest this might be upstream
+	// rather than a fork (contains "/cli-prototype" in the path)
+	isUpstream = strings.Contains(normalized, "/cli-prototype")
 	
-	// Check if we can push (dry-run)
+	// Check if we can push (dry-run) - this is the source of truth
 	dryRunCmd := exec.Command("git", "push", "--dry-run", "origin", "HEAD")
 	if err := dryRunCmd.Run(); err != nil {
 		pushable = false
