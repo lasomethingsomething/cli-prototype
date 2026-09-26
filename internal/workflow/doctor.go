@@ -155,6 +155,8 @@ func checkToolStatus(tool Tool) *ToolResult {
 			// kubectl cannot reach cluster
 			status = StatusMissing
 			hint = "minikube start / see README bootstrap"
+			// Cluster not reachable, so not installed
+			installed = false
 		} else {
 			// kubectl works, check if the specific deployment exists
 			// Capture the deployments listing and match real names
@@ -170,18 +172,24 @@ func checkToolStatus(tool Tool) *ToolResult {
 			if deplName, ok := deploymentNames[tool.Name()]; ok {
 				if strings.Contains(text, strings.ToLower(deplName)) {
 					status = StatusReady
+					// Deployment exists, so mark as installed
+					installed = true
 				} else {
 					// Cluster is reachable but deployment not yet created (e.g., Flux still reconciling)
 					status = StatusNotDeployed
 					hint = "Wait for Flux reconciliation or check Flux logs with 'flux get kustomizations -A'"
+					// Deployment missing, so not installed
+					installed = false
 				}
 			} else {
 				// Unknown cluster tool, use the old behavior
 				if installed {
 					status = StatusReady
+					installed = true
 				} else {
 					status = StatusNotDeployed
 					hint = "Wait for Flux reconciliation or check Flux logs with 'flux get kustomizations -A'"
+					installed = false
 				}
 			}
 		}
