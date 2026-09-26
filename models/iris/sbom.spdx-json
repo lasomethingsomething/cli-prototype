@@ -1,1 +1,34 @@
-{"spdxVersion":"SPDX-2.3","dataLicense":"CC0-1.0","SPDXID":"SPDXRef-DOCUMENT","name":"./models/iris","documentNamespace":"https://anchore.com/syft/dir/models/iris-904996c5-110f-4b96-a5e9-f01b9f98898a","creationInfo":{"licenseListVersion":"3.28","creators":["Organization: Anchore, Inc","Tool: syft-1.52.0"],"created":"2026-09-26T09:06:34Z"},"packages":[{"name":"./models/iris","SPDXID":"SPDXRef-DocumentRoot-Directory-.-models-iris","supplier":"NOASSERTION","downloadLocation":"NOASSERTION","filesAnalyzed":false,"licenseConcluded":"NOASSERTION","licenseDeclared":"NOASSERTION","copyrightText":"NOASSERTION","primaryPackagePurpose":"FILE"}],"relationships":[{"spdxElementId":"SPDXRef-DOCUMENT","relatedSpdxElement":"SPDXRef-DocumentRoot-Directory-.-models-iris","relationshipType":"DESCRIBES"}]}
+{
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "creationInfo": {
+    "creators": [
+      "Organization: Anchore, Inc",
+      "Tool: syft-1.52.0"
+    ],
+    "licenseListVersion": "3.28"
+  },
+  "dataLicense": "CC0-1.0",
+  "documentNamespace": "https://anchore.com/syft/dir/models/iris-94ee4b62-c2cb-4be0-94e7-483ea09bd732",
+  "name": "./models/iris",
+  "packages": [
+    {
+      "SPDXID": "SPDXRef-DocumentRoot-Directory-.-models-iris",
+      "copyrightText": "NOASSERTION",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "NOASSERTION",
+      "name": "./models/iris",
+      "primaryPackagePurpose": "FILE",
+      "supplier": "NOASSERTION"
+    }
+  ],
+  "relationships": [
+    {
+      "relatedSpdxElement": "SPDXRef-DocumentRoot-Directory-.-models-iris",
+      "relationshipType": "DESCRIBES",
+      "spdxElementId": "SPDXRef-DOCUMENT"
+    }
+  ],
+  "spdxVersion": "SPDX-2.3"
+}

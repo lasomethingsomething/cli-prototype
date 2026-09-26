@@ -204,10 +204,12 @@ func (m *MOFClassifierImpl) generateExplanation(result *ClassificationResult) st
 
 // isWeightFile checks if a filename is a model weight file
 func isWeightFile(filename string) bool {
+	// Use the canonical model file extensions as a base
 	weightExtensions := []string{
 		".bin", ".pt", ".pth", ".ckpt", ".safetensors", ".gguf",
 		".h5", ".hdf5", ".pkl", ".pickle", ".npz", ".npy",
-		".tflite", ".pb", ".onnx", ".meta", ".params",
+		".tflite", ".pb", ".onnx", ".joblib",  // .joblib added for consistency
+		".meta", ".params",
 	}
 	if hasAnySuffix(filename, weightExtensions) {
 		return true

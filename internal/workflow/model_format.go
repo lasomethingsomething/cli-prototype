@@ -19,6 +19,19 @@ const (
 	ModelFormatUnknown    ModelFormat = "unknown"
 )
 
+// ModelFileExtensions is the canonical list of model file extensions
+// Used consistently across all model file detection logic
+// Excludes .json to avoid matching config.json, mof.json, etc.
+var ModelFileExtensions = []string{
+	".joblib", ".pkl", ".pickle",
+	".pt", ".pth",
+	".pb", ".h5", ".hdf5",
+	".onnx",
+	".bin",
+	".safetensors",
+	".tflite",
+}
+
 // RuntimeInfo contains runtime information for deploying a model
 type RuntimeInfo struct {
 	// ModelFormat is the detected format of the model
@@ -32,7 +45,7 @@ type RuntimeInfo struct {
 // DetectModelFormatFromPath detects the model format based on file extensions
 func DetectModelFormatFromPath(modelPath string) ModelFormat {
 	// Check for sklearn models
-	if hasFileWithExtensions(modelPath, ".joblib", ".pkl") {
+	if hasFileWithExtensions(modelPath, ".joblib", ".pkl", ".pickle") {
 		return ModelFormatSklearn
 	}
 
@@ -42,7 +55,7 @@ func DetectModelFormatFromPath(modelPath string) ModelFormat {
 	}
 
 	// Check for TensorFlow models
-	if hasFileWithExtensions(modelPath, ".pb", ".h5") {
+	if hasFileWithExtensions(modelPath, ".pb", ".h5", ".hdf5", ".tflite") {
 		return ModelFormatTensorFlow
 	}
 
@@ -169,15 +182,12 @@ func DeriveRuntimeFromModelPath(modelPath string, modelName string, repoURL stri
 
 // findModelFile finds the primary model file in a directory
 func findModelFile(dir string) string {
-	// Common model file extensions in priority order
-	modelExtensions := []string{".joblib", ".pkl", ".pt", ".pth", ".pb", ".h5", ".onnx", ".bin", ".safetensors", ".json"}
-
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return ""
 	}
 
-	// First, check for common known model files
+	// First, check for common known model files using the canonical extension list
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
@@ -189,7 +199,7 @@ func findModelFile(dir string) string {
 			strings.HasPrefix(lowerName, "sbom.") {
 			continue
 		}
-		for _, ext := range modelExtensions {
+		for _, ext := range ModelFileExtensions {
 			if strings.HasSuffix(lowerName, ext) {
 				absPath, _ := filepath.Abs(filepath.Join(dir, entry.Name()))
 				relPath, _ := filepath.Rel(dir, absPath)

@@ -106,7 +106,8 @@ func CreateInferenceServiceConfig(
 	}
 	
 	// Derive runtime from model path
-	runtimeInfo, err := DeriveRuntimeFromModelPath(modelName, modelPath, repoURL, branch)
+	// Function signature: DeriveRuntimeFromModelPath(modelPath, modelName, repoURL, currentBranch)
+	runtimeInfo, err := DeriveRuntimeFromModelPath(modelPath, modelName, repoURL, branch)
 	if err != nil {
 		return nil, fmt.Errorf("failed to derive runtime: %w", err)
 	}
