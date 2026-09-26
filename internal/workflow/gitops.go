@@ -171,7 +171,8 @@ func (f *FluxProvider) Deploy(modelName, repoURL, path, modelPath string) error 
 		}
 
 		// 7. Reconcile the kustomization for test-model namespace
-		reconcileKustomization := exec.Command("flux", "reconcile", "kustomization", "test-model", "--with-source")
+		// The kustomization "test-model" is in the flux-system namespace and watches clusters/minikube/apps/
+		reconcileKustomization := exec.Command("flux", "reconcile", "kustomization", "test-model", "-n", "flux-system", "--with-source")
 		kustOut, err := reconcileKustomization.CombinedOutput()
 		if err != nil {
 			fmt.Printf("Warning: failed to reconcile kustomization: %v\n%s\n", err, kustOut)
