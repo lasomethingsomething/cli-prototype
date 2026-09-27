@@ -501,33 +501,33 @@ func isInsideModelPath(statusLine, modelPath string) bool {
 	if modelPath == "" {
 		return false
 	}
-	
+
 	// Use Fields to split by whitespace - porcelain format is: <status1><status2> <path>
 	// Fields splits on any whitespace, so the path is everything after the first whitespace
 	fields := strings.Fields(statusLine)
 	if len(fields) < 2 {
 		return false
 	}
-	
+
 	// The path is the second field and everything after (rejoin in case path has spaces)
 	pathFromGit := strings.Join(fields[1:], " ")
 	if pathFromGit == "" {
 		return false
 	}
-	
+
 	// Normalize both paths: Clean handles ./ prefix and trailing slashes
 	cleanPath := filepath.Clean(pathFromGit)
 	cleanModelPath := filepath.Clean(modelPath)
-	
+
 	// Ensure model path ends with separator for prefix matching
 	// filepath.Clean removes trailing slashes, so we need to add it back
 	if !strings.HasSuffix(cleanModelPath, string(filepath.Separator)) {
 		cleanModelPath += string(filepath.Separator)
 	}
-	
+
 	// Check if cleanPath starts with cleanModelPath (which now has trailing separator)
 	// or if it exactly matches the model path (without trailing separator)
-	return strings.HasPrefix(cleanPath, cleanModelPath) || 
+	return strings.HasPrefix(cleanPath, cleanModelPath) ||
 		cleanPath == strings.TrimSuffix(cleanModelPath, string(filepath.Separator))
 }
 

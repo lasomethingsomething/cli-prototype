@@ -492,8 +492,8 @@ func ValidateManifestMetadata(annotations map[string]string, artifactType Artifa
 // validateRuntimeFrameworkConsistency checks runtime/accelerator vs framework consistency
 func validateRuntimeFrameworkConsistency(annotations map[string]string, contract *MetadataContract) *ContractValidationResult {
 	result := &ContractValidationResult{
-		Valid:   true,
-		Errors:  []string{},
+		Valid:    true,
+		Errors:   []string{},
 		Warnings: []string{},
 	}
 
@@ -508,7 +508,7 @@ func validateRuntimeFrameworkConsistency(annotations map[string]string, contract
 	validCombinations := map[string]map[string]bool{
 		"sklearn": {
 			"kserve-sklearnserver": true,
-			"sklearnserver":          true,
+			"sklearnserver":        true,
 		},
 		"pytorch": {
 			"vllm":    true,
@@ -516,7 +516,7 @@ func validateRuntimeFrameworkConsistency(annotations map[string]string, contract
 		},
 		"tensorflow": {
 			"tensorrt-llm": true,
-			"tensorflow":  true,
+			"tensorflow":   true,
 		},
 		"onnx": {
 			"onnxruntime": true,

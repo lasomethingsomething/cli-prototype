@@ -98,13 +98,13 @@ func CreateInferenceServiceConfig(
 ) (*InferenceServiceConfig, error) {
 	// Normalize the repo URL
 	normalizedRepo := normalizeGitURL(repoURL)
-	
+
 	// If modelPath is empty, we need to derive it from the repo structure
 	// For now, we'll use the provided modelPath or derive from modelName
 	if modelPath == "" {
 		modelPath = fmt.Sprintf("models/%s", modelName)
 	}
-	
+
 	// Derive runtime from model path
 	// Function signature: DeriveRuntimeFromModelPath(modelPath, modelName, repoURL, currentBranch)
 	runtimeInfo, err := DeriveRuntimeFromModelPath(modelPath, modelName, repoURL, branch)
@@ -133,10 +133,10 @@ func CreateInferenceServiceConfig(
 	modelFormat := strings.ToLower(string(runtimeInfo.ModelFormat))
 	// Validate and set model format for KServe
 	validFormats := map[string]string{
-		"sklearn":    "sklearn",
-		"pytorch":    "pytorch",
-		"tensorflow": "tensorflow",
-		"onnx":       "onnx",
+		"sklearn":     "sklearn",
+		"pytorch":     "pytorch",
+		"tensorflow":  "tensorflow",
+		"onnx":        "onnx",
 		"huggingface": "huggingface",
 	}
 	if validFormat, ok := validFormats[modelFormat]; ok {
@@ -147,12 +147,12 @@ func CreateInferenceServiceConfig(
 
 	return &InferenceServiceConfig{
 		ModelName:   modelName,
-		Namespace:  namespace,
-		ModelPath:  modelPath,
-		RepoURL:    repoURL,
-		Branch:    branch,
-		Runtime:   runtimeInfo.Runtime,
-		StorageUri: storageUri,
+		Namespace:   namespace,
+		ModelPath:   modelPath,
+		RepoURL:     repoURL,
+		Branch:      branch,
+		Runtime:     runtimeInfo.Runtime,
+		StorageUri:  storageUri,
 		ModelFormat: modelFormat,
 	}, nil
 }

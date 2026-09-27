@@ -208,7 +208,7 @@ func isWeightFile(filename string) bool {
 	weightExtensions := []string{
 		".bin", ".pt", ".pth", ".ckpt", ".safetensors", ".gguf",
 		".h5", ".hdf5", ".pkl", ".pickle", ".npz", ".npy",
-		".tflite", ".pb", ".onnx", ".joblib",  // .joblib added for consistency
+		".tflite", ".pb", ".onnx", ".joblib", // .joblib added for consistency
 		".meta", ".params",
 	}
 	if hasAnySuffix(filename, weightExtensions) {

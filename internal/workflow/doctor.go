@@ -33,10 +33,10 @@ type Tool interface {
 type ToolStatus string
 
 const (
-	StatusMissing          ToolStatus = "missing"
+	StatusMissing             ToolStatus = "missing"
 	StatusInstalledNotRunning ToolStatus = "installed-not-running"
-	StatusNotDeployed      ToolStatus = "not-deployed"
-	StatusReady            ToolStatus = "ready"
+	StatusNotDeployed         ToolStatus = "not-deployed"
+	StatusReady               ToolStatus = "ready"
 )
 
 // ToolResult represents the check result for a single tool
@@ -65,17 +65,17 @@ func AllTools() []Tool {
 		&kubectlTool{},
 		&minikubeTool{},
 		&notationTool{},
-		
+
 		// Environment prerequisites
 		&xcodeCLTTool{},
 		&sshKeyTool{},
 		&gitRemoteTool{},
-		
+
 		// Cluster-side tools (verify only)
 		&kserveTool{},
 		&certManagerTool{},
 		&metricsServerTool{},
-		
+
 		// Cluster setup status (detects if setup is complete)
 		&clusterSetupTool{},
 	}
@@ -97,12 +97,12 @@ func CheckAll() *DoctorReport {
 	report := &DoctorReport{
 		Results: make([]ToolResult, 0, len(AllTools())),
 	}
-	
+
 	for _, tool := range AllTools() {
 		result := checkToolStatus(tool)
 		report.Results = append(report.Results, *result)
 	}
-	
+
 	return report
 }
 
@@ -111,7 +111,7 @@ func checkToolStatus(tool Tool) *ToolResult {
 	status := StatusMissing
 	hint := ""
 	installed := tool.IsInstalled()
-	
+
 	// Special handling for tools with running state beyond just being installed
 	if tool.Name() == "podman" {
 		// podman: check binary first, then machine state
@@ -183,14 +183,14 @@ func checkToolStatus(tool Tool) *ToolResult {
 			// kubectl works, check if the specific deployment exists
 			// Capture the deployments listing and match real names
 			text := strings.ToLower(string(out))
-			
+
 			// Map tool names to their deployment names
 			deploymentNames := map[string]string{
-				"kserve":        "kserve-controller-manager",
-				"cert-manager":  "cert-manager",
+				"kserve":         "kserve-controller-manager",
+				"cert-manager":   "cert-manager",
 				"metrics-server": "metrics-server",
 			}
-			
+
 			if deplName, ok := deploymentNames[tool.Name()]; ok {
 				if strings.Contains(text, strings.ToLower(deplName)) {
 					status = StatusReady
@@ -223,7 +223,7 @@ func checkToolStatus(tool Tool) *ToolResult {
 			status = StatusMissing
 		}
 	}
-	
+
 	return &ToolResult{
 		Tool:      tool,
 		Installed: installed,
@@ -245,10 +245,10 @@ func CheckTool(name string) (*ToolResult, error) {
 
 // InstallToolResult contains the result of an install attempt
 type InstallToolResult struct {
-	Tool    Tool
-	Error   error
-	Stdout  string
-	Stderr  string
+	Tool   Tool
+	Error  error
+	Stdout string
+	Stderr string
 }
 
 // InstallTool installs a specific tool using brew.
@@ -258,21 +258,21 @@ func InstallTool(tool Tool) (*InstallToolResult, error) {
 	if tool.Category() != CategoryBrew {
 		return nil, fmt.Errorf("tool %s is not brew-installable", tool.Name())
 	}
-	
+
 	installCmd := tool.InstallInstructions()
 	if !strings.Contains(installCmd, "brew install") {
 		return nil, fmt.Errorf("tool %s does not have a brew install command", tool.Name())
 	}
-	
+
 	// Extract the package name from the install command
 	parts := strings.Fields(installCmd)
 	if len(parts) < 3 {
 		return nil, fmt.Errorf("invalid brew install command: %s", installCmd)
 	}
-	
+
 	packageName := strings.Join(parts[2:], " ")
 	binaryName := tool.Name()
-	
+
 	// First, check if brew has the formula but it's unlinked
 	checkCmd := exec.Command("brew", "list", packageName)
 	if err := checkCmd.Run(); err == nil {
@@ -302,21 +302,21 @@ func InstallTool(tool Tool) (*InstallToolResult, error) {
 		// Binary is on PATH, already installed
 		return &InstallToolResult{Tool: tool}, nil
 	}
-	
+
 	// Package not installed, install it
 	fmt.Printf("Installing %s via brew...\n", tool.Name())
 	cmd := exec.Command("brew", "install", packageName)
 	output, err := cmd.CombinedOutput()
-	
+
 	if err != nil {
 		return &InstallToolResult{
-			Tool:    tool,
-			Error:   fmt.Errorf("failed to install %s: %v", tool.Name(), err),
-			Stdout:  string(output),
-			Stderr:  string(output),
+			Tool:   tool,
+			Error:  fmt.Errorf("failed to install %s: %v", tool.Name(), err),
+			Stdout: string(output),
+			Stderr: string(output),
 		}, err
 	}
-	
+
 	// Verify the binary is on PATH after install
 	if _, err := exec.LookPath(binaryName); err != nil {
 		// Try linking
@@ -341,7 +341,7 @@ func InstallTool(tool Tool) (*InstallToolResult, error) {
 			}, fmt.Errorf("installed and linked but not on PATH")
 		}
 	}
-	
+
 	return &InstallToolResult{Tool: tool}, nil
 }
 
@@ -356,20 +356,20 @@ func EnsureToolInstalled(toolName string, purpose string, interactive bool) (boo
 	if err != nil {
 		return false, fmt.Errorf("unknown tool: %s", toolName)
 	}
-	
+
 	if tool.IsInstalled() {
 		return true, nil
 	}
-	
+
 	// Tool is not installed
 	if !interactive {
 		return false, nil
 	}
-	
+
 	// Check if it's brew-installable
 	if tool.Category() == CategoryBrew {
 		fmt.Printf("%s is not installed — needed for %s. Install now? [Y/n] ", tool.Name(), purpose)
-		
+
 		// Read user input
 		var response string
 		_, err := fmt.Scanln(&response)
@@ -377,7 +377,7 @@ func EnsureToolInstalled(toolName string, purpose string, interactive bool) (boo
 			// If there's an error reading input (e.g., non-interactive), treat as no
 			return false, nil
 		}
-		
+
 		response = strings.ToLower(strings.TrimSpace(response))
 		if response == "y" || response == "" {
 			_, err := InstallTool(tool)
@@ -388,7 +388,7 @@ func EnsureToolInstalled(toolName string, purpose string, interactive bool) (boo
 		}
 		return false, nil
 	}
-	
+
 	// For non-brew tools, just explain
 	fmt.Printf("%s is not installed — needed for %s.\n", tool.Name(), purpose)
 	fmt.Printf("Install it with: %s\n", tool.InstallInstructions())
@@ -412,42 +412,42 @@ func ToolInfo(name string) (Tool, bool, error) {
 
 type orasTool struct{}
 
-func (o *orasTool) Name() string              { return "oras" }
-func (o *orasTool) Category() ToolCategory    { return CategoryBrew }
-func (o *orasTool) IsInstalled() bool          { return exec.Command("oras", "version").Run() == nil }
+func (o *orasTool) Name() string                { return "oras" }
+func (o *orasTool) Category() ToolCategory      { return CategoryBrew }
+func (o *orasTool) IsInstalled() bool           { return exec.Command("oras", "version").Run() == nil }
 func (o *orasTool) InstallInstructions() string { return "brew install oras" }
 func (o *orasTool) Description() string         { return "OCI artifact registry client" }
 
 type syftTool struct{}
 
-func (s *syftTool) Name() string              { return "syft" }
-func (s *syftTool) Category() ToolCategory    { return CategoryBrew }
-func (s *syftTool) IsInstalled() bool          { return exec.Command("syft", "version").Run() == nil }
+func (s *syftTool) Name() string                { return "syft" }
+func (s *syftTool) Category() ToolCategory      { return CategoryBrew }
+func (s *syftTool) IsInstalled() bool           { return exec.Command("syft", "version").Run() == nil }
 func (s *syftTool) InstallInstructions() string { return "brew install anchore/syft/syft" }
 func (s *syftTool) Description() string         { return "SBOM generation tool" }
 
 type cosignTool struct{}
 
-func (c *cosignTool) Name() string              { return "cosign" }
-func (c *cosignTool) Category() ToolCategory    { return CategoryBrew }
-func (c *cosignTool) IsInstalled() bool          { _, err := exec.LookPath("cosign"); return err == nil }
+func (c *cosignTool) Name() string                { return "cosign" }
+func (c *cosignTool) Category() ToolCategory      { return CategoryBrew }
+func (c *cosignTool) IsInstalled() bool           { _, err := exec.LookPath("cosign"); return err == nil }
 func (c *cosignTool) InstallInstructions() string { return "brew install sigstore/tap/cosign" }
 func (c *cosignTool) Description() string         { return "Sigstore container signing and verification" }
 
 type fluxTool struct{}
 
-func (f *fluxTool) Name() string              { return "flux" }
-func (f *fluxTool) Category() ToolCategory    { return CategoryBrew }
-func (f *fluxTool) IsInstalled() bool          { _, err := exec.LookPath("flux"); return err == nil }
+func (f *fluxTool) Name() string                { return "flux" }
+func (f *fluxTool) Category() ToolCategory      { return CategoryBrew }
+func (f *fluxTool) IsInstalled() bool           { _, err := exec.LookPath("flux"); return err == nil }
 func (f *fluxTool) InstallInstructions() string { return "brew install fluxcd/tap/flux" }
 func (f *fluxTool) Description() string         { return "GitOps continuous delivery tool" }
 
 type podmanTool struct{}
 
-func (p *podmanTool) Name() string              { return "podman" }
-func (p *podmanTool) Category() ToolCategory    { return CategoryBrew }
-func (p *podmanTool) IsInstalled() bool          { _, err := exec.LookPath("podman"); return err == nil }
-func (p *podmanTool) InstallInstructions() string { 
+func (p *podmanTool) Name() string           { return "podman" }
+func (p *podmanTool) Category() ToolCategory { return CategoryBrew }
+func (p *podmanTool) IsInstalled() bool      { _, err := exec.LookPath("podman"); return err == nil }
+func (p *podmanTool) InstallInstructions() string {
 	// Detect architecture to provide correct podman version guidance
 	arch := getSystemArch()
 	if arch == "x86_64" {
@@ -457,7 +457,7 @@ func (p *podmanTool) InstallInstructions() string {
 	// Apple Silicon: latest podman works
 	return "brew install podman"
 }
-func (p *podmanTool) Description() string         { return "Container engine (Docker alternative)" }
+func (p *podmanTool) Description() string { return "Container engine (Docker alternative)" }
 
 // getSystemArch returns the system architecture
 func getSystemArch() string {
@@ -477,27 +477,31 @@ func getSystemArch() string {
 
 type kubectlTool struct{}
 
-func (k *kubectlTool) Name() string              { return "kubectl" }
-func (k *kubectlTool) Category() ToolCategory    { return CategoryBrew }
-func (k *kubectlTool) IsInstalled() bool          { return exec.Command("kubectl", "version", "--client").Run() == nil }
+func (k *kubectlTool) Name() string           { return "kubectl" }
+func (k *kubectlTool) Category() ToolCategory { return CategoryBrew }
+func (k *kubectlTool) IsInstalled() bool {
+	return exec.Command("kubectl", "version", "--client").Run() == nil
+}
 func (k *kubectlTool) InstallInstructions() string { return "brew install kubectl" }
 func (k *kubectlTool) Description() string         { return "Kubernetes command-line tool" }
 
 type minikubeTool struct{}
 
-func (m *minikubeTool) Name() string              { return "minikube" }
-func (m *minikubeTool) Category() ToolCategory    { return CategoryBrew }
-func (m *minikubeTool) IsInstalled() bool          { return exec.Command("minikube", "version").Run() == nil }
+func (m *minikubeTool) Name() string                { return "minikube" }
+func (m *minikubeTool) Category() ToolCategory      { return CategoryBrew }
+func (m *minikubeTool) IsInstalled() bool           { return exec.Command("minikube", "version").Run() == nil }
 func (m *minikubeTool) InstallInstructions() string { return "brew install minikube" }
 func (m *minikubeTool) Description() string         { return "Local Kubernetes cluster" }
 
 type notationTool struct{}
 
-func (n *notationTool) Name() string              { return "notation" }
-func (n *notationTool) Category() ToolCategory    { return CategoryBrew }
-func (n *notationTool) IsInstalled() bool          { _, err := exec.LookPath("notation"); return err == nil }
+func (n *notationTool) Name() string                { return "notation" }
+func (n *notationTool) Category() ToolCategory      { return CategoryBrew }
+func (n *notationTool) IsInstalled() bool           { _, err := exec.LookPath("notation"); return err == nil }
 func (n *notationTool) InstallInstructions() string { return "brew install notation" }
-func (n *notationTool) Description() string         { return "Notary v2 container signing and verification (notation)" }
+func (n *notationTool) Description() string {
+	return "Notary v2 container signing and verification (notation)"
+}
 
 // --- Environment prerequisites ---
 
@@ -535,15 +539,15 @@ func (s *sshKeyTool) IsInstalled() bool {
 	}
 	return false
 }
-func (s *sshKeyTool) InstallInstructions() string { 
-	return "ssh-keygen -t ed25519 -C \"your_email@example.com\"" 
+func (s *sshKeyTool) InstallInstructions() string {
+	return "ssh-keygen -t ed25519 -C \"your_email@example.com\""
 }
 func (s *sshKeyTool) Description() string { return "SSH key for GitHub/GitLab access" }
 
 // gitRemoteTool checks the git origin remote and its pushability
 type gitRemoteTool struct{}
 
-func (g *gitRemoteTool) Name() string { return "git-remote" }
+func (g *gitRemoteTool) Name() string           { return "git-remote" }
 func (g *gitRemoteTool) Category() ToolCategory { return CategoryEnvironment }
 func (g *gitRemoteTool) IsInstalled() bool {
 	// Always "installed" since we're checking git which is required
@@ -565,14 +569,14 @@ func GetOriginInfo() (remoteURL string, isUpstream bool, pushable bool, err erro
 		return "", false, false, fmt.Errorf("not in a git repo: %v", err)
 	}
 	remoteURL = strings.TrimSpace(string(remote))
-	
+
 	// Normalize the URL and check if it looks like an upstream repo
 	// This is only used for hint text, not for gating operations
 	normalized := normalizeGitURL(remoteURL)
 	// Check for common GitHub URL patterns that suggest this might be upstream
 	// rather than a fork (contains "/cli-prototype" in the path)
 	isUpstream = strings.Contains(normalized, "/cli-prototype")
-	
+
 	// Check if we can push (dry-run) - this is the source of truth
 	dryRunCmd := exec.Command("git", "push", "--dry-run", "origin", "HEAD")
 	if err := dryRunCmd.Run(); err != nil {
@@ -580,7 +584,7 @@ func GetOriginInfo() (remoteURL string, isUpstream bool, pushable bool, err erro
 	} else {
 		pushable = true
 	}
-	
+
 	return remoteURL, isUpstream, pushable, nil
 }
 
@@ -588,9 +592,9 @@ func GetOriginInfo() (remoteURL string, isUpstream bool, pushable bool, err erro
 
 type kserveTool struct{}
 
-func (k *kserveTool) Name() string              { return "kserve" }
-func (k *kserveTool) Category() ToolCategory    { return CategoryCluster }
-func (k *kserveTool) IsInstalled() bool          {
+func (k *kserveTool) Name() string           { return "kserve" }
+func (k *kserveTool) Category() ToolCategory { return CategoryCluster }
+func (k *kserveTool) IsInstalled() bool {
 	// Check if kserve is running in the cluster
 	cmd := exec.Command("kubectl", "get", "deployments", "-A", "-o", "name")
 	if cmd.Run() != nil {
@@ -602,16 +606,16 @@ func (k *kserveTool) IsInstalled() bool          {
 	}
 	return strings.Contains(string(out), "kserve-controller-manager")
 }
-func (k *kserveTool) InstallInstructions() string { 
-	return "See README for cluster bootstrap instructions (Flux installation)" 
+func (k *kserveTool) InstallInstructions() string {
+	return "See README for cluster bootstrap instructions (Flux installation)"
 }
 func (k *kserveTool) Description() string { return "Model serving operator for Kubernetes" }
 
 type certManagerTool struct{}
 
-func (c *certManagerTool) Name() string              { return "cert-manager" }
-func (c *certManagerTool) Category() ToolCategory    { return CategoryCluster }
-func (c *certManagerTool) IsInstalled() bool          {
+func (c *certManagerTool) Name() string           { return "cert-manager" }
+func (c *certManagerTool) Category() ToolCategory { return CategoryCluster }
+func (c *certManagerTool) IsInstalled() bool {
 	cmd := exec.Command("kubectl", "get", "deployments", "-A", "-o", "name")
 	if cmd.Run() != nil {
 		return false
@@ -622,16 +626,16 @@ func (c *certManagerTool) IsInstalled() bool          {
 	}
 	return strings.Contains(string(out), "cert-manager")
 }
-func (c *certManagerTool) InstallInstructions() string { 
-	return "See README for cluster bootstrap instructions (Flux installation)" 
+func (c *certManagerTool) InstallInstructions() string {
+	return "See README for cluster bootstrap instructions (Flux installation)"
 }
 func (c *certManagerTool) Description() string { return "TLS certificates manager for Kubernetes" }
 
 type metricsServerTool struct{}
 
-func (m *metricsServerTool) Name() string              { return "metrics-server" }
-func (m *metricsServerTool) Category() ToolCategory    { return CategoryCluster }
-func (m *metricsServerTool) IsInstalled() bool          {
+func (m *metricsServerTool) Name() string           { return "metrics-server" }
+func (m *metricsServerTool) Category() ToolCategory { return CategoryCluster }
+func (m *metricsServerTool) IsInstalled() bool {
 	cmd := exec.Command("kubectl", "get", "deployments", "-A", "-o", "name")
 	if cmd.Run() != nil {
 		return false
@@ -642,8 +646,8 @@ func (m *metricsServerTool) IsInstalled() bool          {
 	}
 	return strings.Contains(string(out), "metrics-server")
 }
-func (m *metricsServerTool) InstallInstructions() string { 
-	return "See README for cluster bootstrap instructions (Flux installation)" 
+func (m *metricsServerTool) InstallInstructions() string {
+	return "See README for cluster bootstrap instructions (Flux installation)"
 }
 func (m *metricsServerTool) Description() string { return "Resource metrics server for HPA" }
 
@@ -662,7 +666,7 @@ func (r *DoctorReport) DoctorSummary() (int, int, int) {
 	brewMissing := 0
 	brewTotal := 0
 	otherMissing := 0
-	
+
 	for _, result := range r.Results {
 		if result.Tool.Category() == CategoryBrew {
 			brewTotal++
@@ -673,7 +677,7 @@ func (r *DoctorReport) DoctorSummary() (int, int, int) {
 			otherMissing++
 		}
 	}
-	
+
 	return brewMissing, brewTotal, otherMissing
 }
 
@@ -716,8 +720,8 @@ func (r *DoctorReport) MissingBrewTools() []Tool {
 // clusterSetupTool checks if the cluster is set up and ready
 type clusterSetupTool struct{}
 
-func (c *clusterSetupTool) Name() string              { return "cluster-setup" }
-func (c *clusterSetupTool) Category() ToolCategory    { return CategoryCluster }
+func (c *clusterSetupTool) Name() string           { return "cluster-setup" }
+func (c *clusterSetupTool) Category() ToolCategory { return CategoryCluster }
 func (c *clusterSetupTool) IsInstalled() bool {
 	// Check if flux-system namespace exists (indicates Flux is bootstrapped)
 	cmd := exec.Command("kubectl", "get", "ns", "flux-system")
@@ -726,4 +730,6 @@ func (c *clusterSetupTool) IsInstalled() bool {
 func (c *clusterSetupTool) InstallInstructions() string {
 	return "Run: model-cli setup"
 }
-func (c *clusterSetupTool) Description() string { return "Cluster setup status (Flux bootstrapped with kustomizations ready)" }
+func (c *clusterSetupTool) Description() string {
+	return "Cluster setup status (Flux bootstrapped with kustomizations ready)"
+}

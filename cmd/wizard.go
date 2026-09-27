@@ -532,17 +532,17 @@ Examples:
 			if err := checkWorkflow.Run(); err != nil {
 				fmt.Println(warningStyle.Render("⚠ Compliance check failed"))
 				fmt.Printf("   %v\n\n", err)
+				return err
+			}
+			checkSucceeded = checkWorkflow.Passed()
+			if checkSucceeded {
+				fmt.Println(successStyle.Render("✓ Compliance check passed"))
 			} else {
-				checkSucceeded = checkWorkflow.Passed()
-				if checkSucceeded {
-					fmt.Println(successStyle.Render("✓ Compliance check passed"))
-				} else {
-					fmt.Println(warningStyle.Render("⚠ Compliance check failed - missing required items"))
-					for _, item := range checkWorkflow.Missing() {
-						fmt.Printf("   ✗ %s\n", item)
-					}
-					fmt.Println()
+				fmt.Println(warningStyle.Render("⚠ Compliance check failed - missing required items"))
+				for _, item := range checkWorkflow.Missing() {
+					fmt.Printf("   ✗ %s\n", item)
 				}
+				fmt.Println()
 			}
 		} else if skipCheck {
 			fmt.Println(infoStyle.Render("⚠ Skipping compliance check (--skip-check flag set)"))

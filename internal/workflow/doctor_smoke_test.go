@@ -13,7 +13,7 @@ func TestDoctorReportShowsThreeStates(t *testing.T) {
 	// Build the model-cli binary from repo root using an absolute temp path
 	tmpDir := t.TempDir()
 	binaryPath := tmpDir + "/model-cli_test"
-	
+
 	build := exec.Command("go", "build", "-o", binaryPath)
 	build.Dir = "../.." // repo root
 	if err := build.Run(); err != nil {

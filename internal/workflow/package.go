@@ -137,7 +137,7 @@ func (w *PackageWorkflow) Run() error {
 		fmt.Printf("  ⚠ Warning: failed to generate metadata contract: %v\n", err)
 	}
 
-		// Derive runtime from model format if not explicitly set
+	// Derive runtime from model format if not explicitly set
 	// This ensures sklearn models don't get vllm/GPU defaults
 	if err := w.deriveRuntimeFromModel(); err != nil {
 		return err
@@ -342,7 +342,7 @@ func (w *PackageWorkflow) deriveRuntimeFromModel() error {
 	if w.annotations.Runtime != "" && w.annotations.Accelerator != "" && w.annotations.MemoryMin != "" {
 		return nil
 	}
-	
+
 	if w.modelPath == "" {
 		return fmt.Errorf("model path not specified, cannot derive runtime")
 	}

@@ -79,7 +79,7 @@ func GetGitHubRawURL(normalized string) string {
 // Returns: https://github.com/o/r
 func NormalizeGitURLForHTTPS(url string) string {
 	url = strings.TrimSpace(url)
-	
+
 	// Handle SCP-style URLs: git@github.com:owner/repo.git
 	scpRegex := regexp.MustCompile(`^git@([^:]+):(.+?)(?:\.git)?$`)
 	if matches := scpRegex.FindStringSubmatch(url); matches != nil {
@@ -87,7 +87,7 @@ func NormalizeGitURLForHTTPS(url string) string {
 		path := strings.TrimSuffix(matches[2], ".git")
 		return fmt.Sprintf("https://%s/%s", host, path)
 	}
-	
+
 	// Handle SSH-style URLs: ssh://git@github.com/owner/repo.git
 	sshRegex := regexp.MustCompile(`^ssh://git@([^/]+)/(.+?)(?:\.git)?$`)
 	if matches := sshRegex.FindStringSubmatch(url); matches != nil {
@@ -95,7 +95,7 @@ func NormalizeGitURLForHTTPS(url string) string {
 		path := strings.TrimSuffix(matches[2], ".git")
 		return fmt.Sprintf("https://%s/%s", host, path)
 	}
-	
+
 	// Handle HTTPS URLs: https://github.com/owner/repo.git
 	httpsRegex := regexp.MustCompile(`^https?://([^/]+)/(.+?)(?:\.git)?$`)
 	if matches := httpsRegex.FindStringSubmatch(url); matches != nil {
@@ -103,7 +103,7 @@ func NormalizeGitURLForHTTPS(url string) string {
 		path := strings.TrimSuffix(matches[2], ".git")
 		return fmt.Sprintf("https://%s/%s", host, path)
 	}
-	
+
 	// If no match, return as-is
 	return url
 }

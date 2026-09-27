@@ -155,21 +155,21 @@ Examples:
 		// (modulo registry/digest fields).
 		var mergedAnnotations map[string]string
 		var manifestToPush *workflow.UnifiedOCIManifest
-		
+
 		if manifestFlag != "" {
 			// Read the existing manifest and use it as the base
 			existingManifest, err := workflow.ReadUnifiedOCIManifest(manifestFlag)
 			if err != nil {
 				return err
 			}
-			
+
 			// Use the existing manifest's annotations as the primary source
 			mergedAnnotations = make(map[string]string)
 			// Copy all annotations from the existing manifest
 			for k, v := range existingManifest.Annotations {
 				mergedAnnotations[k] = v
 			}
-			
+
 			// Use the existing manifest's config and layers
 			manifestToPush = existingManifest
 			// Update the artifact name annotation in the manifest
@@ -183,14 +183,14 @@ Examples:
 				if err != nil {
 					return err
 				}
-				
+
 				// Use the existing manifest's annotations as the primary source
 				mergedAnnotations = make(map[string]string)
 				// Copy all annotations from the existing manifest
 				for k, v := range existingManifest.Annotations {
 					mergedAnnotations[k] = v
 				}
-				
+
 				// Use the existing manifest's config and layers
 				manifestToPush = existingManifest
 				// Update the artifact name annotation in the manifest
@@ -222,12 +222,12 @@ Examples:
 		if signerToUse == "" {
 			signerToUse = workflow.SignerOptions().Recommended()
 		}
-		
+
 		// Validate the signer is supported
 		if _, err := workflow.GetSigningProvider(signerToUse); err != nil {
 			return fmt.Errorf("invalid signer: %v (supported: %s)", err, workflow.SignerOptions().Summary())
 		}
-		
+
 		// Map the signer name to the canonical annotation value
 		signingFramework := signerToUse
 		if signerToUse == "cosign" || signerToUse == "sigstore" {
@@ -235,7 +235,7 @@ Examples:
 		} else if signerToUse == "notation" || signerToUse == "notary" || signerToUse == "notaryv2" {
 			signingFramework = "notation"
 		}
-		
+
 		// Update the merged annotations with the signing framework
 		// Only set if not already present in manifest (preserves wizard's choice)
 		// or if --signer flag was explicitly provided
@@ -246,7 +246,7 @@ Examples:
 		if signerFlag != "" || mergedAnnotations[workflow.AnnotationSigningFramework] == "" {
 			mergedAnnotations[workflow.AnnotationSigningFramework] = signingFramework
 		}
-		
+
 		// Also update the manifestToPush annotations so the written file is correct
 		if manifestToPush.Annotations == nil {
 			manifestToPush.Annotations = make(map[string]string)

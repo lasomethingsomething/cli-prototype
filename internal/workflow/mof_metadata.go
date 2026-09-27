@@ -24,7 +24,7 @@ type MOFMetadata struct {
 
 	// Generation metadata
 	GeneratedAt string `json:"generated_at,omitempty" yaml:"generated_at,omitempty"`
-	Generator   string   `json:"generator" yaml:"generator"`
+	Generator   string `json:"generator" yaml:"generator"`
 }
 
 // ReleaseMetadata contains release information

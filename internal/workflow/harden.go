@@ -130,12 +130,12 @@ func (w *HardenWorkflow) Run() error {
 		if err := sbomGen.Generate(w.modelPath, sbomPath, w.sbomFormat); err != nil {
 			return fmt.Errorf("SBOM generation failed: %v. SBOM is a required prerequisite for Phase 1 Step 2", err)
 		}
-		
+
 		// Make SBOM deterministic (remove timestamps, UUIDs, etc.)
 		if err := EnsureDeterministicSBOM(sbomPath); err != nil {
 			return fmt.Errorf("failed to make SBOM deterministic: %v. SBOM is a required prerequisite for Phase 1 Step 2", err)
 		}
-		
+
 		w.sbomPath = sbomPath
 		w.annotations.SBOMFormat = string(w.sbomFormat)
 		fmt.Printf("  ✓ SBOM generated: %s\n", w.sbomPath)
@@ -153,8 +153,7 @@ func (w *HardenWorkflow) Run() error {
 
 		detectedClass, result, err := ClassifyModelPath(w.modelPath)
 		if err != nil {
-			w.workflowErr = fmt.Errorf("MOF classification failed: %v", err)
-			fmt.Printf("  ✗ MOF classification failed: %v\n", err)
+			return fmt.Errorf("MOF classification failed: %v", err)
 		} else {
 			w.applyMOFClassification(detectedClass, result)
 			w.mofClass = w.annotations.MOFClass

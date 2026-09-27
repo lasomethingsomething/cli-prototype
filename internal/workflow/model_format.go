@@ -11,12 +11,12 @@ import (
 type ModelFormat string
 
 const (
-	ModelFormatSklearn    ModelFormat = "sklearn"
-	ModelFormatPyTorch    ModelFormat = "pytorch"
-	ModelFormatTensorFlow ModelFormat = "tensorflow"
-	ModelFormatONNX       ModelFormat = "onnx"
+	ModelFormatSklearn     ModelFormat = "sklearn"
+	ModelFormatPyTorch     ModelFormat = "pytorch"
+	ModelFormatTensorFlow  ModelFormat = "tensorflow"
+	ModelFormatONNX        ModelFormat = "onnx"
 	ModelFormatHuggingFace ModelFormat = "huggingface"
-	ModelFormatUnknown    ModelFormat = "unknown"
+	ModelFormatUnknown     ModelFormat = "unknown"
 )
 
 // ModelFileExtensions is the canonical list of model file extensions
@@ -177,7 +177,7 @@ func DeriveRuntimeFromModelPath(modelPath string, modelName string, repoURL stri
 
 	return &RuntimeInfo{
 		ModelFormat: modelFormat,
-		Runtime:    runtime,
+		Runtime:     runtime,
 		StorageUri:  storageUri,
 	}, nil
 }
@@ -213,5 +213,3 @@ func FindModelFile(dir string) string {
 
 	return ""
 }
-
-
