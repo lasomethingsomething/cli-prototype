@@ -234,6 +234,25 @@ func waitForCertManagerWebhook() error {
 // checkPodDNS runs a DNS check pod to verify pod networking works
 // Returns an error with actionable hint if DNS is broken
 func checkPodDNS() error {
+	// Wait for default ServiceAccount to exist (needed for kubectl run)
+	// On fresh clusters, the default SA may not be created yet
+	fmt.Println("      Waiting for default ServiceAccount...")
+	const maxAttempts = 12
+	const waitInterval = 5 * time.Second
+	
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		cmd := exec.Command("kubectl", "get", "sa", "default", "-n", "default")
+		if err := cmd.Run(); err == nil {
+			break
+		}
+		if attempt < maxAttempts {
+			time.Sleep(waitInterval)
+		}
+		if attempt == maxAttempts {
+			return fmt.Errorf("timeout waiting for default ServiceAccount to be created")
+		}
+	}
+	
 	// Create a busybox pod to test DNS
 	fmt.Println("      Running DNS pre-flight check...")
 	
