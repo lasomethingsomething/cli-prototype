@@ -210,6 +210,48 @@ func parseMemoryString(memoryStr string) int {
 	return int(gigabytes)
 }
 
+// checkPodDNS runs a DNS check pod to verify pod networking works
+// Returns an error with actionable hint if DNS is broken
+func checkPodDNS() error {
+	// Create a busybox pod to test DNS
+	fmt.Println("      Running DNS pre-flight check...")
+	
+	// Run a pod that tries to resolve github.com
+	dnsCheckCmd := exec.Command("kubectl", "run", "dns-precheck", "--image=busybox:latest", "--rm", "--restart=Never", "--", "nslookup", "github.com")
+	// Set timeout for the DNS check
+	dnsCheckCmd.Env = append(os.Environ(), "KUBECTL_TIMEOUT=10")
+	
+	output, err := dnsCheckCmd.CombinedOutput()
+	outputStr := string(output)
+	
+	if err != nil {
+		// DNS lookup failed - check for specific errors
+		if strings.Contains(outputStr, "Error") || strings.Contains(outputStr, "timeout") || strings.Contains(outputStr, "failed") {
+			cleanupCmd := exec.Command("kubectl", "delete", "pod", "dns-precheck", "--ignore-not-found")
+			_ = cleanupCmd.Run()
+			
+			return fmt.Errorf("pod DNS is broken in this cluster. This is likely a driver/machine issue, not an auth problem.\n\nTry using the Docker driver instead: minikube delete && minikube start --driver=docker\n\nOriginal error: %s", outputStr)
+		}
+		// Clean up the pod
+		cleanupCmd := exec.Command("kubectl", "delete", "pod", "dns-precheck", "--ignore-not-found")
+		_ = cleanupCmd.Run()
+		return fmt.Errorf("DNS check failed: %s", outputStr)
+	}
+	
+	// Check if the output contains a successful resolution
+	if strings.Contains(outputStr, "github.com") || strings.Contains(outputStr, "140.82") {
+		// Clean up the pod
+		cleanupCmd := exec.Command("kubectl", "delete", "pod", "dns-precheck", "--ignore-not-found")
+		_ = cleanupCmd.Run()
+		return nil
+	}
+	
+	// Clean up the pod
+	cleanupCmd := exec.Command("kubectl", "delete", "pod", "dns-precheck", "--ignore-not-found")
+	_ = cleanupCmd.Run()
+	return fmt.Errorf("DNS check: unexpected output: %s", outputStr)
+}
+
 // ensureRegistry ensures a local registry is running
 func ensureRegistry(interactiveMode bool) error {
 	fmt.Println("Checking local registry (localhost:5000)...")
@@ -318,9 +360,14 @@ func ensureCluster(interactiveMode bool) error {
 	hasPodman := exec.Command("podman", "--version").Run() == nil
 	hasDocker := exec.Command("docker", "--version").Run() == nil
 	
-	driver := "podman"
-	if !hasPodman && hasDocker {
-		driver = "docker"
+	// On macOS, default to docker driver (podman driver has pod DNS issues)
+	// See friction log #45: podman driver breaks pod DNS on macOS
+	driver := "docker"
+	if !hasDocker && hasPodman {
+		// Fall back to podman only if docker is not available
+		driver = "podman"
+		fmt.Println("    ⚠ Using podman driver (docker not installed)")
+		fmt.Println("      Note: On macOS, the podman driver may have DNS issues. Install Docker for best results.")
 	} else if !hasPodman && !hasDocker {
 		return fmt.Errorf("neither podman nor docker available - install one first")
 	}
@@ -425,6 +472,14 @@ func ensureCluster(interactiveMode bool) error {
 		}
 		return fmt.Errorf("failed to start minikube: %v", err)
 	}
+	
+	// Pre-flight DNS check: verify pod DNS works before bootstrap
+	// This catches driver issues (e.g., podman driver on macOS breaks DNS)
+	fmt.Println("    - Checking pod DNS...")
+	if err := checkPodDNS(); err != nil {
+		return err
+	}
+	fmt.Println("    ✓ Pod DNS working")
 	
 	// Wait for nodes to be ready
 	fmt.Println("  - Waiting for nodes to be ready...")
