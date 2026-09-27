@@ -19,19 +19,19 @@ import (
 )
 
 type wizardResult struct {
-	packageSucceeded      bool
-	checkSucceeded        bool
-	signSucceeded         bool
-	signSimulated         bool // True if signing was simulated
-	verifySucceeded       bool
-	verifySimulated       bool // True if verification was simulated
-	publishSucceeded      bool
-	publishDestination    string
-	deploySucceeded       bool
-	deployVerified        bool // True if InferenceService reached Ready
-	predictionVerified   bool // True if a prediction was successfully served
-	deployNoOp            bool // True if deploy was a no-op (already deployed)
-	modelName             string
+	packageSucceeded   bool
+	checkSucceeded     bool
+	signSucceeded      bool
+	signSimulated      bool // True if signing was simulated
+	verifySucceeded    bool
+	verifySimulated    bool // True if verification was simulated
+	publishSucceeded   bool
+	publishDestination string
+	deploySucceeded    bool
+	deployVerified     bool // True if InferenceService reached Ready
+	predictionVerified bool // True if a prediction was successfully served
+	deployNoOp         bool // True if deploy was a no-op (already deployed)
+	modelName          string
 	artifactName       string
 	signer             string
 	gitOps             string
@@ -289,7 +289,7 @@ Examples:
 		deployVerified := false
 		predictionVerified := false
 		deployNoOp := false
-		
+
 		// Just-in-time tool check for registry provider
 		if !registryProvider.IsInstalled() {
 			installed, err := workflow.EnsureToolInstalled(registryProvider.Name(), "packaging", interactive())
@@ -304,7 +304,7 @@ Examples:
 				registryProvider, _ = workflow.GetRegistryProvider(localRegistryTool)
 			}
 		}
-		
+
 		if !registryProvider.IsInstalled() {
 			fmt.Println(warningStyle.Render("Warning: Registry tool not installed"))
 			fmt.Printf("   Install with: %s\n\n", registryProvider.InstallInstructions())
@@ -394,7 +394,7 @@ Examples:
 			}
 
 			annotations := workflow.NewAnnotationSet()
-			
+
 			// Derive runtime from model format (e.g., sklearn -> sklearn/MLServer, not vllm)
 			// Use the model classification to detect format
 			modelFormat := workflow.DetectModelFormatFromPath(modelPath)
@@ -413,7 +413,7 @@ Examples:
 					annotations.Runtime = "sklearn"
 				}
 			}
-			
+
 			if err := huh.NewSelect[string]().
 				Title("How should the Model Openness Framework class be set?").
 				Description("Auto detects the classification from the model files.").
@@ -530,7 +530,7 @@ Examples:
 
 			signSucceeded = false
 			signSimulated = true
-			
+
 			// Map the signer choice to canonical annotation value
 			signingFramework := cfg.Signer
 			if cfg.Signer == "cosign" || cfg.Signer == "sigstore" {
@@ -538,7 +538,7 @@ Examples:
 			} else if cfg.Signer == "notation" || cfg.Signer == "notary" || cfg.Signer == "notaryv2" {
 				signingFramework = "notation"
 			}
-			
+
 			// Always update manifest with the chosen signing framework
 			manifestPath := filepath.Join(modelPath, "manifest.json")
 			manifest, err := workflow.ReadUnifiedOCIManifest(manifestPath)
@@ -573,12 +573,12 @@ Examples:
 					}
 				}
 			}
-			
+
 			// Demonstrate signing simulation (always happens, tool installed or not)
 			fmt.Printf("Simulating signing %s with %s...\n", fullArtifact, cfg.Signer)
 			fmt.Println(successStyle.Render("✓ Signing path demonstrated"))
 			signSucceeded = true
-			
+
 			fmt.Println()
 		}
 
@@ -593,7 +593,7 @@ Examples:
 
 			verifySucceeded = false
 			verifySimulated = true
-			
+
 			if !sp.IsInstalled() {
 				// Just-in-time check with option to install
 				installed, err := workflow.EnsureToolInstalled(cfg.Signer, "signature verification", interactive())
@@ -611,12 +611,12 @@ Examples:
 					}
 				}
 			}
-			
+
 			// Demonstrate verification simulation (always happens, tool installed or not)
 			fmt.Printf("Simulating signature verification for %s...\n", fullArtifact)
 			fmt.Println(successStyle.Render("✓ Verification path demonstrated"))
 			verifySucceeded = true
-			
+
 			fmt.Println()
 		}
 
@@ -667,7 +667,7 @@ Examples:
 						Run(); err != nil {
 						return err
 					}
-					
+
 					if setupRegistry {
 						fmt.Println()
 						fmt.Println(stepStyle.Render("Setting up local registry..."))
@@ -758,7 +758,7 @@ Examples:
 				Run(); err != nil {
 				return err
 			}
-			
+
 			// If no cluster, offer to set it up
 			if !hasKubernetes {
 				if err := huh.NewConfirm().
@@ -768,7 +768,7 @@ Examples:
 					Run(); err != nil {
 					return err
 				}
-				
+
 				if setupCluster {
 					// Get cluster configuration
 					var clusterCPUs string
@@ -783,7 +783,7 @@ Examples:
 					if clusterCPUs == "" {
 						clusterCPUs = "4"
 					}
-					
+
 					if err := huh.NewInput().
 						Title("Memory for minikube (e.g., 8g):").
 						Placeholder("8g").
@@ -794,7 +794,7 @@ Examples:
 					if clusterMemory == "" {
 						clusterMemory = "8g"
 					}
-					
+
 					// Set up the cluster
 					fmt.Println()
 					fmt.Println(stepStyle.Render("Setting up minikube cluster..."))
@@ -802,9 +802,9 @@ Examples:
 					if err := workflow.ClusterSetup(clusterCPUs, clusterMemory); err != nil {
 						return fmt.Errorf("failed to set up cluster: %v", err)
 					}
-					
+
 					hasKubernetes = true
-					
+
 					// Now offer Flux bootstrap
 					if err := huh.NewConfirm().
 						Title("Bootstrap Flux on this cluster?").
@@ -813,7 +813,7 @@ Examples:
 						Run(); err != nil {
 						return err
 					}
-					
+
 					if setupFlux {
 						// Get repo URL
 						if err := huh.NewInput().
@@ -824,7 +824,7 @@ Examples:
 							return err
 						}
 						repoURL = strings.TrimSpace(repoURL)
-						
+
 						// Get manifest path
 						if err := huh.NewInput().
 							Title("Flux sync path in repo:").
@@ -834,12 +834,12 @@ Examples:
 							return err
 						}
 						manifestPath = strings.TrimSpace(manifestPath)
-						
+
 						// If manifestPath is empty, use default
 						if manifestPath == "" {
 							manifestPath = "./clusters/minikube"
 						}
-						
+
 						fmt.Println()
 						fmt.Println(stepStyle.Render("Bootstrapping Flux..."))
 						fmt.Println()
@@ -849,7 +849,7 @@ Examples:
 					}
 				}
 			}
-			
+
 			if hasKubernetes {
 				if err := huh.NewInput().
 					Title("Git repository URL:").

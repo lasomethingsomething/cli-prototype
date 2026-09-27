@@ -11,9 +11,9 @@ import (
 
 // DeployResult contains the result of a GitOps deployment
 type DeployResult struct {
-	Error            error
-	Deployed        bool // True if a new commit was created and pushed
-	Ready           bool // True if InferenceService reached Ready
+	Error              error
+	Deployed           bool // True if a new commit was created and pushed
+	Ready              bool // True if InferenceService reached Ready
 	PredictionVerified bool // True if a prediction was successfully served
 }
 
@@ -78,7 +78,7 @@ func (f *FluxProvider) Deploy(modelName, repoURL, path, modelPath string) Deploy
 		return DeployResult{Error: fmt.Errorf("not in a git repo: %v", err)}
 	}
 	remoteURL := strings.TrimSpace(string(remote))
-	
+
 	// Normalize URLs for comparison
 	if repoURL != "" {
 		if !URLsAreEqual(remoteURL, repoURL) {
@@ -88,7 +88,7 @@ func (f *FluxProvider) Deploy(modelName, repoURL, path, modelPath string) Deploy
 
 	// Pre-flight: verify the git remote and working tree state
 	fmt.Println("Pre-flight checks:")
-	
+
 	// Get current branch for pre-flight checks
 	branch, err := GetCurrentGitBranch()
 	if err != nil {
@@ -163,11 +163,11 @@ func (f *FluxProvider) Deploy(modelName, repoURL, path, modelPath string) Deploy
 			return DeployResult{Error: fmt.Errorf("git commit failed: %s", outStr)}
 		}
 	}
-	
+
 	// Check if commit actually created a new commit
 	hasNewCommit := !strings.Contains(string(commitOut), "nothing to commit") &&
 		!strings.Contains(string(commitOut), "no changes added")
-	
+
 	if hasNewCommit {
 		fmt.Printf("✓ Committed manifest to git\n")
 	} else {
@@ -230,9 +230,9 @@ func (f *FluxProvider) Deploy(modelName, repoURL, path, modelPath string) Deploy
 		fmt.Printf("⚠ InferenceService did not reach Ready state: %v\n", err)
 		ready = false
 		return DeployResult{
-			Error:             nil,
-			Deployed:          hasNewCommit,
-			Ready:             ready,
+			Error:              nil,
+			Deployed:           hasNewCommit,
+			Ready:              ready,
 			PredictionVerified: false,
 		}
 	} else {
@@ -254,9 +254,9 @@ func (f *FluxProvider) Deploy(modelName, repoURL, path, modelPath string) Deploy
 	}
 
 	return DeployResult{
-		Error:             nil,
-		Deployed:          hasNewCommit,
-		Ready:             ready,
+		Error:              nil,
+		Deployed:           hasNewCommit,
+		Ready:              ready,
 		PredictionVerified: predictionVerified,
 	}
 }
@@ -265,7 +265,7 @@ func (f *FluxProvider) Deploy(modelName, repoURL, path, modelPath string) Deploy
 func WaitForInferenceServiceReady(name, namespace string) error {
 	const maxAttempts = 30
 	const waitInterval = 5 * time.Second
-	
+
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		cmd := exec.Command("kubectl", "get", "inferenceservice", name, "-n", namespace, "-o", "jsonpath={.status.conditions[?(@.type==\"Ready\")].status}")
 		output, err := cmd.Output()
@@ -280,13 +280,13 @@ func WaitForInferenceServiceReady(name, namespace string) error {
 			}
 			fmt.Printf("  Attempt %d/%d: InferenceService status: %s\n", attempt, maxAttempts, status)
 		}
-		
+
 		// Wait before next attempt
 		if attempt < maxAttempts {
 			time.Sleep(waitInterval)
 		}
 	}
-	
+
 	return fmt.Errorf("timeout waiting for InferenceService '%s' in namespace '%s' to reach Ready", name, namespace)
 }
 
@@ -305,40 +305,21 @@ func VerifyInferenceServicePrediction(name, namespace string) (bool, string, err
 	predictURL := fmt.Sprintf("http://%s.%s.svc.cluster.local/v1/models/%s:predict", predictorService, namespace, name)
 
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		// Wait for predictor pod to exist and be ready
-		getPodsCmd := exec.Command("kubectl", "get", "pods", "-n", namespace, "-l", "app="+predictorService, "-o", "jsonpath={.items[0].metadata.name}")
-		podNameBytes, err := getPodsCmd.Output()
-		if err != nil {
-			// Pod not found yet, continue
-			if attempt < maxAttempts {
-				time.Sleep(waitInterval)
-			}
-			continue
-		}
-
-		podName := strings.TrimSpace(string(podNameBytes))
-		if podName == "" {
-			// No pods found yet
-			if attempt < maxAttempts {
-				time.Sleep(waitInterval)
-			}
-			continue
-		}
-
 		// Use kubectl run with curl image to test the prediction
-		// The curl pod will make the request and return the output
+		// -i: attach (keep STDIN open, required for --rm to wait for completion)
+		// --rm: delete pod when it exits
+		// --restart=Never: don't restart on failure
 		curlCmd := exec.Command("kubectl", "run", "prediction-probe",
 			"--image=curlimages/curl",
 			"--restart=Never",
 			"-n", namespace,
-			"--rm",
-			"--quiet",
+			"-i", "--rm",
 			"--",
 			"curl", "-s", "-X", "POST",
 			predictURL,
 			"-H", "Content-Type: application/json",
 			"-d", payload)
-		
+
 		output, err := curlCmd.CombinedOutput()
 		if err == nil {
 			outputStr := strings.TrimSpace(string(output))
@@ -407,7 +388,7 @@ func DetectIngredients() []Ingredient {
 	// This distinguishes between "flux not installed" vs "flux installed but cluster unreachable"
 	_, fluxBinaryErr := exec.LookPath("flux")
 	fluxPresent := false
-	
+
 	// If flux binary is not installed, don't try to query the cluster
 	if fluxBinaryErr == nil {
 		// Flux binary is installed, now check if it's actually running in the cluster
@@ -424,7 +405,7 @@ func DetectIngredients() []Ingredient {
 		// We still mark it as not Present in the cluster, but the binary is on PATH
 	}
 	// If flux binary is not on PATH, fluxPresent remains false
-	
+
 	ings = append(ings, Ingredient{Name: "flux", Description: "GitOps agent", Present: fluxPresent})
 	return ings
 }
@@ -459,7 +440,6 @@ func verifyGitPushable(remoteURL, branch string) error {
 	return nil
 }
 
-
 // verifyGitWorkingTreeClean checks if the working tree is clean
 func verifyGitWorkingTreeClean() error {
 	// Check for uncommitted changes
@@ -468,7 +448,7 @@ func verifyGitWorkingTreeClean() error {
 	if err != nil {
 		return fmt.Errorf("failed to check git status: %v", err)
 	}
-	
+
 	// If there's any output, the working tree is not clean
 	if len(output) > 0 {
 		// Parse the output to get file names
@@ -493,14 +473,14 @@ func verifyGitNotBehindOrigin(remoteURL, branch string) error {
 	if err := fetchCmd.Run(); err != nil {
 		return fmt.Errorf("failed to fetch from origin: %v", err)
 	}
-	
+
 	// Check if local branch is behind origin
 	// git rev-list HEAD..origin/branch --count will return >0 if behind
 	localBranch := branch
 	if localBranch == "" {
 		localBranch = "HEAD"
 	}
-	
+
 	// Use merge-base to check if we're behind
 	mergeBaseCmd := exec.Command("git", "merge-base", localBranch, "origin/"+branch)
 	mergeBaseOut, err := mergeBaseCmd.Output()
@@ -512,7 +492,7 @@ func verifyGitNotBehindOrigin(remoteURL, branch string) error {
 			return fmt.Errorf("failed to determine branch relationship: %v", err)
 		}
 	}
-	
+
 	// Check if HEAD is an ancestor of origin/branch (meaning we're behind)
 	// git rev-list mergeBase..origin/branch --count
 	originRef := "origin/" + branch
@@ -527,11 +507,11 @@ func verifyGitNotBehindOrigin(remoteURL, branch string) error {
 			return nil
 		}
 	}
-	
+
 	count := strings.TrimSpace(string(countOut))
 	if count != "0" {
 		return fmt.Errorf("local branch is behind origin/%s. Run 'git pull' first to fast-forward", branch)
 	}
-	
+
 	return nil
 }

@@ -6,17 +6,17 @@ import (
 
 // DeployWorkflow orchestrates the deployment using pluggable providers
 type DeployWorkflow struct {
-	gitOps              string
-	registry            string
-	gitOpsProvider      GitOpsProvider
-	registryProvider    RegistryProvider
-	modelName           string
-	modelPath           string // Local path to the model files
-	artifactRef         string // Full artifact reference with annotations (Story #63)
-	repoURL             string
-	manifestPath        string
-	deployed            bool // True if a new deploy actually happened (not no-op)
-	readyVerified       bool // True if InferenceService reached Ready
+	gitOps             string
+	registry           string
+	gitOpsProvider     GitOpsProvider
+	registryProvider   RegistryProvider
+	modelName          string
+	modelPath          string // Local path to the model files
+	artifactRef        string // Full artifact reference with annotations (Story #63)
+	repoURL            string
+	manifestPath       string
+	deployed           bool // True if a new deploy actually happened (not no-op)
+	readyVerified      bool // True if InferenceService reached Ready
 	predictionVerified bool // True if a prediction was successfully served
 }
 
@@ -94,7 +94,7 @@ func (w *DeployWorkflow) Run() error {
 	if w.manifestPath == "" {
 		return fmt.Errorf("manifest path is required for GitOps deployment")
 	}
-	
+
 	artifactToDeploy := w.modelName
 	if w.artifactRef != "" {
 		artifactToDeploy = w.artifactRef
@@ -102,12 +102,12 @@ func (w *DeployWorkflow) Run() error {
 	fmt.Printf("Deploying artifact '%s' from repository '%s' with %s...\n",
 		artifactToDeploy, w.repoURL, w.gitOps)
 	fmt.Printf("  Trust Profile annotations will be available to GitOps admission policies\n")
-	
+
 	deployResult := w.gitOpsProvider.Deploy(artifactToDeploy, w.repoURL, w.manifestPath, w.modelPath)
 	if deployResult.Error != nil {
 		return deployResult.Error
 	}
-	
+
 	w.deployed = deployResult.Deployed
 	w.readyVerified = deployResult.Ready
 	w.predictionVerified = deployResult.PredictionVerified
