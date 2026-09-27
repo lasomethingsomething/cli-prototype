@@ -27,17 +27,19 @@ func TestEvaluateArtifactFailsOnMissingTrustAndInfra(t *testing.T) {
 	ann := fullAnnotations()
 	delete(ann, AnnotationSigningFramework)
 	delete(ann, AnnotationRuntime)
-	delete(ann, AnnotationCUDAVersionMin) // conditional: warning only
+	delete(ann, AnnotationCUDAVersionMin) // now advisory: warning only
 
 	r := EvaluateArtifact("gitops", "m:v1", ann, Policy{})
 	if r.Passed {
 		t.Fatal("expected failure")
 	}
-	if len(r.Missing) != 2 || r.Missing[0] != AnnotationSigningFramework || r.Missing[1] != AnnotationRuntime {
-		t.Errorf("Missing = %v, want the two required keys in order", r.Missing)
+	// Runtime/Accelerator are now advisory, only SigningFramework is required
+	if len(r.Missing) != 1 || r.Missing[0] != AnnotationSigningFramework {
+		t.Errorf("Missing = %v, want only the required trust-profile key", r.Missing)
 	}
-	if len(r.Warnings) != 1 || !strings.Contains(r.Warnings[0], AnnotationCUDAVersionMin) {
-		t.Errorf("Warnings = %v, want one about the conditional annotation", r.Warnings)
+	// Runtime, Accelerator, CUDAVersionMin, MemoryMin are all now advisory
+	if len(r.Warnings) < 1 || !strings.Contains(r.Warnings[0], AnnotationRuntime) {
+		t.Errorf("Warnings = %v, want at least one about the advisory annotations (Runtime)", r.Warnings)
 	}
 	if !strings.Contains(r.Summary(), AnnotationSigningFramework) {
 		t.Errorf("Summary() = %q, want the missing keys listed", r.Summary())
@@ -116,8 +118,19 @@ func TestEvaluateEnvironmentPolicyAirGapped(t *testing.T) {
 
 func TestEvaluateEnvironmentPolicyUnknownEnvironmentWarns(t *testing.T) {
 	r := EvaluateArtifact("gitops", "m:v1", fullAnnotations(), Policy{Environment: "moon-base"})
-	if !r.Passed || len(r.Warnings) != 1 || !strings.Contains(r.Warnings[0], "moon-base") {
-		t.Errorf("unknown environment should warn, got passed=%v warnings=%v", r.Passed, r.Warnings)
+	if !r.Passed {
+		t.Errorf("unknown environment should pass (warnings only), got passed=%v", r.Passed)
+	}
+	// Check that environment warning is present among the warnings
+	foundEnvWarning := false
+	for _, w := range r.Warnings {
+		if strings.Contains(w, "moon-base") {
+			foundEnvWarning = true
+			break
+		}
+	}
+	if !foundEnvWarning || len(r.Warnings) < 1 {
+		t.Errorf("unknown environment should warn, got warnings=%v", r.Warnings)
 	}
 }
 

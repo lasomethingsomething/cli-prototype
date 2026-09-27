@@ -128,8 +128,8 @@ var TrustProfileAnnotations = []string{
 // artifact to a destination; ConditionalInfrastructureAnnotations only
 // produce a warning when absent.
 var (
-	InfrastructureAnnotations            = []string{AnnotationRuntime, AnnotationAccelerator}
-	ConditionalInfrastructureAnnotations = []string{AnnotationCUDAVersionMin, AnnotationMemoryMin}
+	InfrastructureAnnotations            = []string{}
+	ConditionalInfrastructureAnnotations = []string{AnnotationRuntime, AnnotationAccelerator, AnnotationCUDAVersionMin, AnnotationMemoryMin}
 )
 
 // EvaluateTrustProfile checks the annotations external policy engines need

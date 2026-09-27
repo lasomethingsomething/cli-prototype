@@ -252,9 +252,11 @@ func TestToolCategories(t *testing.T) {
 		"notation":     CategoryBrew,
 		"xcode-clt":    CategoryEnvironment,
 		"ssh-key":      CategoryEnvironment,
+		"git-remote":   CategoryEnvironment,
 		"kserve":       CategoryCluster,
 		"cert-manager":  CategoryCluster,
 		"metrics-server": CategoryCluster,
+		"cluster-setup": CategoryCluster,
 	}
 	
 	for _, tool := range AllTools() {
@@ -290,7 +292,8 @@ func TestOrasToolIsInstalled(t *testing.T) {
 func TestToolInstallInstructions(t *testing.T) {
 	for _, tool := range AllTools() {
 		instructions := tool.InstallInstructions()
-		if instructions == "" {
+		// git-remote is a check, not an installable tool, so empty instructions are expected
+		if instructions == "" && tool.Name() != "git-remote" {
 			t.Errorf("Tool %s has empty install instructions", tool.Name())
 		}
 	}

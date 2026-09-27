@@ -226,7 +226,7 @@ func TestPackageWorkflowLeavesSBOMAndMOFToHarden(t *testing.T) {
 // and forwards that same annotation map to the registry provider's Push.
 func TestPackageWorkflowRunWritesManifestWithAnnotations(t *testing.T) {
 	modelPath := t.TempDir()
-	if err := os.WriteFile(filepath.Join(modelPath, "model.txt"), []byte("weights"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(modelPath, "model.safetensors"), []byte("weights"), 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -265,8 +265,8 @@ func TestPackageWorkflowRunWritesManifestWithAnnotations(t *testing.T) {
 	if manifest.Annotations[AnnotationAccelerator] != "nvidia-gpu" {
 		t.Errorf("manifest annotation %s = %q, want %q", AnnotationAccelerator, manifest.Annotations[AnnotationAccelerator], "nvidia-gpu")
 	}
-	if len(manifest.Layers) != 1 || manifest.Layers[0].Annotations["org.opencontainers.image.title"] != "model.txt" {
-		t.Errorf("manifest layers = %+v, want one layer for model.txt", manifest.Layers)
+	if len(manifest.Layers) != 1 || manifest.Layers[0].Annotations["org.opencontainers.image.title"] != "model.safetensors" {
+		t.Errorf("manifest layers = %+v, want one layer for model.safetensors", manifest.Layers)
 	}
 	if err := ValidateOCIManifest(manifest); err != nil {
 		t.Errorf("written manifest does not validate: %v", err)
@@ -301,7 +301,7 @@ func TestPackageWorkflowRunWritesManifestWithAnnotations(t *testing.T) {
 // when the same directory is packaged again.
 func TestPackageWorkflowRunTwiceKeepsLayers(t *testing.T) {
 	modelPath := t.TempDir()
-	if err := os.WriteFile(filepath.Join(modelPath, "model.txt"), []byte("weights"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(modelPath, "model.pt"), []byte("weights"), 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -339,9 +339,13 @@ func TestPackageWorkflowRunVerifiesLocalParity(t *testing.T) {
 	registryURL := "ghcr.io/my-org"
 
 	t.Run("match", func(t *testing.T) {
+		modelPath := t.TempDir()
+		if err := os.WriteFile(filepath.Join(modelPath, "model.pt"), []byte("weights"), 0644); err != nil {
+			t.Fatal(err)
+		}
 		fake := &fakeRegistryProvider{installed: true}
 		pf := &PackageWorkflow{registry: "fake", registryProvider: fake, annotations: NewAnnotationSet(), verifyParity: true}
-		pf.SetPackageInfo("phi-4-mini", t.TempDir(), artifactName, registryURL, false, "")
+		pf.SetPackageInfo("phi-4-mini", modelPath, artifactName, registryURL, false, "")
 
 		if err := pf.Run(); err != nil {
 			t.Fatalf("Run() error = %v, want parity to pass when the registry holds the pushed digest", err)
@@ -355,12 +359,16 @@ func TestPackageWorkflowRunVerifiesLocalParity(t *testing.T) {
 	})
 
 	t.Run("mismatch", func(t *testing.T) {
+		modelPath := t.TempDir()
+		if err := os.WriteFile(filepath.Join(modelPath, "model.pt"), []byte("weights"), 0644); err != nil {
+			t.Fatal(err)
+		}
 		fake := &fakeRegistryProvider{
 			installed:      true,
 			artifactDigest: map[string]string{artifactName: "sha256:" + strings.Repeat("f", 64)},
 		}
 		pf := &PackageWorkflow{registry: "fake", registryProvider: fake, annotations: NewAnnotationSet(), verifyParity: true}
-		pf.SetPackageInfo("phi-4-mini", t.TempDir(), artifactName, registryURL, false, "")
+		pf.SetPackageInfo("phi-4-mini", modelPath, artifactName, registryURL, false, "")
 
 		err := pf.Run()
 		if err == nil || !strings.Contains(err.Error(), "local parity") {
@@ -369,9 +377,13 @@ func TestPackageWorkflowRunVerifiesLocalParity(t *testing.T) {
 	})
 
 	t.Run("skipped when tool reports no digest", func(t *testing.T) {
+		modelPath := t.TempDir()
+		if err := os.WriteFile(filepath.Join(modelPath, "model.pt"), []byte("weights"), 0644); err != nil {
+			t.Fatal(err)
+		}
 		fake := &noDigestProvider{fakeRegistryProvider{installed: true}}
 		pf := &PackageWorkflow{registry: "fake", registryProvider: fake, annotations: NewAnnotationSet(), verifyParity: true}
-		pf.SetPackageInfo("phi-4-mini", t.TempDir(), artifactName, registryURL, false, "")
+		pf.SetPackageInfo("phi-4-mini", modelPath, artifactName, registryURL, false, "")
 
 		if err := pf.Run(); err != nil {
 			t.Fatalf("Run() error = %v, want parity to be skipped (not failed) without a pushed digest", err)
@@ -433,7 +445,7 @@ func fakeSyft(t *testing.T, scanScript string) {
 // `model-cli sign` step (Phase 1, Step 3; issue #88).
 func TestPackageWorkflowDoesNotGenerateProvenance(t *testing.T) {
 	modelPath := t.TempDir()
-	if err := os.WriteFile(filepath.Join(modelPath, "model.txt"), []byte("weights"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(modelPath, "model.pt"), []byte("weights"), 0644); err != nil {
 		t.Fatal(err)
 	}
 

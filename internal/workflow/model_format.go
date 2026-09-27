@@ -50,12 +50,12 @@ func DetectModelFormatFromPath(modelPath string) ModelFormat {
 	}
 
 	// Check for PyTorch models
-	if hasFileWithExtensions(modelPath, ".pt", ".pth") {
+	if hasFileWithExtensions(modelPath, ".pt", ".pth", ".safetensors") {
 		return ModelFormatPyTorch
 	}
 
 	// Check for TensorFlow models
-	if hasFileWithExtensions(modelPath, ".pb", ".h5", ".hdf5", ".tflite") {
+	if hasFileWithExtensions(modelPath, ".pb", ".h5", ".hdf5", ".tflite", ".bin") {
 		return ModelFormatTensorFlow
 	}
 

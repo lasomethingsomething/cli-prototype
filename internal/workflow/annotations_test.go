@@ -25,14 +25,19 @@ func TestNewAnnotationSet(t *testing.T) {
 	if annotations.SBOMFormat != "spdx-json" {
 		t.Errorf("SBOMFormat = %q, want %q", annotations.SBOMFormat, "spdx-json")
 	}
-	if annotations.Runtime != "vllm" {
-		t.Errorf("Runtime = %q, want %q", annotations.Runtime, "vllm")
+	// Runtime, Accelerator, CUDAMin, MemoryMin are intentionally empty now
+	// (Batch 15) - they must be explicitly set based on model format
+	if annotations.Runtime != "" {
+		t.Errorf("Runtime = %q, want empty (derived from model format)", annotations.Runtime)
 	}
-	if annotations.Accelerator != "nvidia-gpu" {
-		t.Errorf("Accelerator = %q, want %q", annotations.Accelerator, "nvidia-gpu")
+	if annotations.Accelerator != "" {
+		t.Errorf("Accelerator = %q, want empty (derived from model format)", annotations.Accelerator)
 	}
-	if annotations.CUDAMin != "12.1" {
-		t.Errorf("CUDAMin = %q, want %q", annotations.CUDAMin, "12.1")
+	if annotations.CUDAMin != "" {
+		t.Errorf("CUDAMin = %q, want empty (derived from model format)", annotations.CUDAMin)
+	}
+	if annotations.MemoryMin != "" {
+		t.Errorf("MemoryMin = %q, want empty (derived from model format)", annotations.MemoryMin)
 	}
 	// Only the registry tool that packages the artifact knows the format
 	// (issue #102); a default would let a manifest claim one not used.
@@ -51,7 +56,8 @@ func TestAnnotationSetToMap(t *testing.T) {
 
 	m := annotations.ToMap()
 
-	// Check all expected keys are present
+	// Check all expected keys are present (Runtime, Accelerator, CUDAVersionMin are
+	// empty in NewAnnotationSet and won't be in ToMap unless explicitly set)
 	expectedKeys := []string{
 		AnnotationProfileVersion,
 		AnnotationArtifactType,
@@ -62,9 +68,6 @@ func TestAnnotationSetToMap(t *testing.T) {
 		AnnotationSBOMFormat,
 		AnnotationProvenanceType,
 		AnnotationPackagingFormat,
-		AnnotationRuntime,
-		AnnotationAccelerator,
-		AnnotationCUDAVersionMin,
 	}
 
 	for _, key := range expectedKeys {

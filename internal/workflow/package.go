@@ -137,7 +137,7 @@ func (w *PackageWorkflow) Run() error {
 		fmt.Printf("  ⚠ Warning: failed to generate metadata contract: %v\n", err)
 	}
 
-	// Derive runtime from model format if not explicitly set
+		// Derive runtime from model format if not explicitly set
 	// This ensures sklearn models don't get vllm/GPU defaults
 	if err := w.deriveRuntimeFromModel(); err != nil {
 		return err
@@ -338,12 +338,31 @@ func mapModelFormatToRuntime(format ModelFormat) (runtime, accelerator, memory s
 // runtime, accelerator, and memory annotations. Errors out if model format
 // can't be detected, rather than silently using vllm/GPU defaults.
 func (w *PackageWorkflow) deriveRuntimeFromModel() error {
+	// If all runtime-related annotations are already set, skip derivation
+	if w.annotations.Runtime != "" && w.annotations.Accelerator != "" && w.annotations.MemoryMin != "" {
+		return nil
+	}
+	
 	if w.modelPath == "" {
 		return fmt.Errorf("model path not specified, cannot derive runtime")
 	}
 
 	modelFormat := DetectModelFormatFromPath(w.modelPath)
 	if modelFormat == ModelFormatUnknown {
+		// If we can't detect the model format but all required annotations are already set,
+		// that's acceptable (e.g., explicitly set by the caller)
+		if w.annotations.Runtime != "" && w.annotations.Accelerator != "" && w.annotations.MemoryMin != "" {
+			return nil
+		}
+		// If any of the runtime-related annotations are already set, we don't need to derive
+		// (the user has provided explicit values)
+		if w.annotations.Runtime != "" || w.annotations.Accelerator != "" || w.annotations.MemoryMin != "" {
+			// Set CUDAMin based on accelerator if it's set
+			if w.annotations.Accelerator == "cpu" {
+				w.annotations.CUDAMin = ""
+			}
+			return nil
+		}
 		if hasAnyModelFiles(w.modelPath) {
 			return fmt.Errorf("cannot determine model format from files in %s. Found files but none match known model extensions: %v",
 				w.modelPath, ModelFileExtensions)
@@ -358,9 +377,16 @@ func (w *PackageWorkflow) deriveRuntimeFromModel() error {
 		return fmt.Errorf("no runtime mapping for model format: %s. Please specify runtime explicitly", modelFormat)
 	}
 
-	w.annotations.Runtime = runtime
-	w.annotations.Accelerator = accelerator
-	w.annotations.MemoryMin = memory
+	// Only set if not already set
+	if w.annotations.Runtime == "" {
+		w.annotations.Runtime = runtime
+	}
+	if w.annotations.Accelerator == "" {
+		w.annotations.Accelerator = accelerator
+	}
+	if w.annotations.MemoryMin == "" {
+		w.annotations.MemoryMin = memory
+	}
 	if accelerator == "cpu" {
 		w.annotations.CUDAMin = ""
 	}
