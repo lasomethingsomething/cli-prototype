@@ -1026,6 +1026,11 @@ Examples:
 					if err := wf.Run(); err != nil {
 						return err
 					}
+					// After re-run, check if manifest is still uncommitted
+					// This means user chose No and pre-flight was bypassed again
+					if manifestStillDirty := wf.ManifestGenerated(); manifestStillDirty != "" {
+						return fmt.Errorf("working tree is not clean. Commit changes first")
+					}
 				}
 
 				// Set the results from the workflow
