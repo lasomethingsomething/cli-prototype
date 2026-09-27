@@ -1053,7 +1053,7 @@ Examples:
 				deployVerified = wf.ReadyVerified()
 				predictionVerified = wf.PredictionVerified()
 				deployNoOp = !wf.Deployed()
-				deployNewCommit = wf.NewCommit()
+				deployNewCommit = deployNewCommit || wf.NewCommit()
 			}
 			fmt.Println()
 		} else if !skipDeploy {
