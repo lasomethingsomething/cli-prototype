@@ -238,7 +238,7 @@ func checkPodDNS() error {
 	fmt.Println("      Running DNS pre-flight check...")
 	
 	// Run a pod that tries to resolve github.com
-	dnsCheckCmd := exec.Command("kubectl", "run", "dns-precheck", "--image=busybox:latest", "--rm", "--restart=Never", "--", "nslookup", "github.com")
+	dnsCheckCmd := exec.Command("kubectl", "run", "dns-precheck", "--image=busybox:latest", "--rm", "-i", "--restart=Never", "--", "nslookup", "github.com")
 	// Set timeout for the DNS check
 	dnsCheckCmd.Env = append(os.Environ(), "KUBECTL_TIMEOUT=10")
 	
