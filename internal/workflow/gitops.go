@@ -486,14 +486,13 @@ func DetectIngredients() []Ingredient {
 	// If flux binary is not installed, don't try to query the cluster
 	if fluxBinaryErr == nil {
 		// Flux binary is installed, now check if it's actually running in the cluster
-		fluxOut, ferr := exec.Command("flux", "get", "kustomization", "--all-namespaces").CombinedOutput()
+		// Use -o json for structured output instead of TTY-dependent table parsing
+		fluxOut, ferr := exec.Command("flux", "get", "kustomization", "--all-namespaces", "-o", "json").CombinedOutput()
 		if ferr == nil {
-			for _, line := range strings.Split(string(fluxOut), "\n") {
-				fields := strings.Fields(line)
-				if len(fields) >= 5 && fields[1] == "flux-system" && fields[4] == "True" {
-					fluxPresent = true
-				}
-			}
+			// Parse JSON output to find flux-system with Ready=True
+			fluxPresent = strings.Contains(string(fluxOut), `"name":"flux-system"`) &&
+				strings.Contains(string(fluxOut), `"type":"Ready"`) &&
+				strings.Contains(string(fluxOut), `"status":"True"`)
 		}
 		// If flux binary is installed but cluster query failed, flux is "installed but cluster unreachable"
 		// We still mark it as not Present in the cluster, but the binary is on PATH
