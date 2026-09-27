@@ -156,6 +156,40 @@ var (
 			Foreground(lipgloss.Color("#FFAA00"))
 )
 
+// getServingTopologyOptions returns topology options with the recommended tag
+// derived from the model format, reusing the same detection used for runtime.
+func getServingTopologyOptions(modelFormat workflow.ModelFormat) workflow.ToolOptions {
+	opts := workflow.ServingTopologyOptions()
+	for i := range opts {
+		opts[i].Recommended = false
+	}
+
+	switch modelFormat {
+	case workflow.ModelFormatSklearn, workflow.ModelFormatONNX, workflow.ModelFormatTensorFlow:
+		for i := range opts {
+			if opts[i].Name == "kserve" {
+				opts[i].Recommended = true
+				break
+			}
+		}
+	case workflow.ModelFormatPyTorch, workflow.ModelFormatHuggingFace:
+		for i := range opts {
+			if opts[i].Name == "kserve-vllm" {
+				opts[i].Recommended = true
+				break
+			}
+		}
+	default:
+		for i := range opts {
+			if opts[i].Name == "kserve" {
+				opts[i].Recommended = true
+				break
+			}
+		}
+	}
+	return opts
+}
+
 var wizardCmd = &cobra.Command{
 	Use:   "wizard",
 	Short: "Interactive tour guide through the full ML model workflow",
@@ -635,7 +669,7 @@ Examples:
 
 		fmt.Println(stepStyle.Render("Publishing artifact"))
 		fmt.Println()
-		publishArtifact := false
+		publishArtifact := true
 		publishDestination := ""
 		if err := huh.NewConfirm().
 			Title("Publish this artifact to an OCI registry?").
@@ -649,8 +683,8 @@ Examples:
 			if err := huh.NewSelect[string]().
 				Title("Where is the OCI registry?").
 				Options(
-					huh.NewOption("an existing OCI registry", "existing"),
 					huh.NewOption("a local Podman registry at localhost:5000 (recommended)", "local-podman"),
+					huh.NewOption("an existing OCI registry", "existing"),
 				).
 				Value(&publishTarget).
 				Run(); err != nil {
@@ -955,16 +989,20 @@ Examples:
 
 			fmt.Println()
 			fmt.Println(stepStyle.Render("Step 7: Runtime Execution & Optimization"))
+
+			// Detect model format for topology recommendation
+			modelFormat := workflow.DetectModelFormatFromPath(modelPath)
+
 			servingTopology := cfg.ServingTopology
 			if servingTopology == "" {
 				servingTopology = cfg.Runtime
 			}
 			if servingTopology == "" {
-				servingTopology = workflow.ServingTopologyOptions().Recommended()
+				servingTopology = getServingTopologyOptions(modelFormat).Recommended()
 			}
 			if err := huh.NewSelect[string]().
 				Title("Which serving topology should the wizard demonstrate?").
-				Options(toolOptions(workflow.ServingTopologyOptions())...).
+				Options(toolOptions(getServingTopologyOptions(modelFormat))...).
 				Value(&servingTopology).
 				Run(); err != nil {
 				return err
