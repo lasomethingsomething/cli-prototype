@@ -75,6 +75,9 @@ func AllTools() []Tool {
 		&kserveTool{},
 		&certManagerTool{},
 		&metricsServerTool{},
+		
+		// Cluster setup status (detects if setup is complete)
+		&clusterSetupTool{},
 	}
 }
 
@@ -705,3 +708,22 @@ func (r *DoctorReport) MissingBrewTools() []Tool {
 	}
 	return missing
 }
+
+// =============================================================================
+// Cluster Setup Tool - checks if the cluster is fully set up
+// =============================================================================
+
+// clusterSetupTool checks if the cluster is set up and ready
+type clusterSetupTool struct{}
+
+func (c *clusterSetupTool) Name() string              { return "cluster-setup" }
+func (c *clusterSetupTool) Category() ToolCategory    { return CategoryCluster }
+func (c *clusterSetupTool) IsInstalled() bool {
+	// Check if flux-system namespace exists (indicates Flux is bootstrapped)
+	cmd := exec.Command("kubectl", "get", "ns", "flux-system")
+	return cmd.Run() == nil
+}
+func (c *clusterSetupTool) InstallInstructions() string {
+	return "Run: model-cli setup"
+}
+func (c *clusterSetupTool) Description() string { return "Cluster setup status (Flux bootstrapped with kustomizations ready)" }
