@@ -243,10 +243,13 @@ func (f *FluxProvider) Deploy(modelName, repoURL, path, modelPath string) Deploy
 	predictionVerified := false
 	if ready {
 		fmt.Printf("Verifying prediction...\n")
-		predOk, predResult, predErr := VerifyInferenceServicePrediction(modelName, inferenceConfig.Namespace)
+		predOk, predResult, predErr := VerifyInferenceServicePrediction(modelName, modelPath, inferenceConfig.Namespace)
 		if predErr == nil && predOk {
 			fmt.Printf("✓ Prediction served: %s\n", predResult)
 			predictionVerified = true
+		} else if predErr != nil && predErr.Error() == "prediction verification skipped: no sample payload known for this model" {
+			// Deliberate skip, not a failure
+			fmt.Printf("⚠ Prediction verification skipped: no sample payload known for this model\n")
 		} else {
 			// Don't fail the deployment, just note it
 			fmt.Printf("⚠ Ready but couldn't verify a prediction automatically — the predictor may still be starting\n")
@@ -309,17 +312,45 @@ func stripPodDeletionNotice(output string) string {
 	return output
 }
 
+// getPredictionPayload determines the appropriate payload for prediction verification
+// based on the model name and path. Returns the payload and nil error if a payload
+// can be determined, or empty string and error if verification should be skipped.
+func getPredictionPayload(name, modelPath string) (string, error) {
+	// Convention 1: check for sample-request.json in the model directory
+	sampleRequestPath := filepath.Join(modelPath, "sample-request.json")
+	if content, err := os.ReadFile(sampleRequestPath); err == nil {
+		return string(content), nil
+	}
+
+	// Convention 2: hardcoded payload for known models (iris)
+	// This ensures byte-identical behavior for the iris golden path
+	if name == "iris" {
+		return `{"instances": [[1.0, 2.0, 3.0, 4.0]]}`, nil
+	}
+
+	// Fallback: no payload known for this model
+	return "", fmt.Errorf("prediction verification skipped: no sample payload known for this model")
+}
+
 // VerifyInferenceServicePrediction runs a test prediction against the InferenceService
 // and returns (true, result, nil) if successful. It uses V1 protocol with instances payload,
 // service DNS without port (ClusterIP on 80), and handles predictor bind race
 // with retries up to ~90s. The result is the parsed prediction output.
-func VerifyInferenceServicePrediction(name, namespace string) (bool, string, error) {
+//
+// Payload selection:
+// 1. If sample-request.json exists in modelPath, use it verbatim
+// 2. If model name is "iris", use the hardcoded 4-feature payload (for byte-identical behavior)
+// 3. Otherwise, return error to skip verification
+func VerifyInferenceServicePrediction(name, modelPath, namespace string) (bool, string, error) {
 	const maxAttempts = 18
 	const waitInterval = 5 * time.Second
 
-	// Default payload for V1 protocol - instances field with sample data
-	// Works for sklearn, pytorch, etc.
-	payload := `{"instances": [[1.0, 2.0, 3.0, 4.0]]}`
+	// Determine payload based on model
+	payload, err := getPredictionPayload(name, modelPath)
+	if err != nil {
+		return false, "", err
+	}
+
 	predictorService := name + "-predictor"
 	predictURL := fmt.Sprintf("http://%s.%s.svc.cluster.local/v1/models/%s:predict", predictorService, namespace, name)
 
