@@ -67,10 +67,10 @@ Try the complete local package, harden, compliance, and publish flow with a plai
 ```bash
 mkdir -p ~/test-model
 echo "test" > ~/test-model/model.txt
-./model-cli wizard
+model-cli wizard
 ```
 
-Key answers: model name `test-model`, model path `~/test-model`, artifact name `test:v1`. At the cluster prompt, answer **No** — phases 5-7 run as guided simulations.
+Key answers: type model name `test-model`, model path `~/test-model`, artifact name `test:v1` (no defaults apply outside the repo). At the cluster prompt, answer **No** — phases 5-7 run as guided simulations.
 
 The test creates these local files:
 - `~/test-model/manifest.json` - an OCI manifest carrying CNCF AI Interoperability Profile, SBOM format, and MOF annotations
