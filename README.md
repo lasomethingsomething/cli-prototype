@@ -19,8 +19,11 @@ macOS + Homebrew; run `model-cli doctor --fix`
 This is the recommended path. Each command does one thing:
 
 ```bash
-# 1. Install the CLI (Intel: darwin_amd64, Apple Silicon: darwin_arm64)
-curl -sL https://github.com/lasomethingsomething/cli-prototype/releases/latest/download/model-cli_darwin_amd64.tar.gz | tar xz
+# 1. Install the CLI
+# Apple Silicon
+curl -sL https://github.com/lasomethingsomething/cli-prototype/releases/download/v0.1.1/model-cli_0.1.1_darwin_arm64.tar.gz | tar xz
+# Intel
+curl -sL https://github.com/lasomethingsomething/cli-prototype/releases/download/v0.1.1/model-cli_0.1.1_darwin_amd64.tar.gz | tar xz
 chmod +x model-cli
 mv model-cli /usr/local/bin
 

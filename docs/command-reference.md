@@ -17,7 +17,10 @@ This installs `model-cli` to `$GOPATH/bin`; ensure that directory is on your
 Alternatively, download a pre-built binary from the [releases page](https://github.com/lasomethingsomething/cli-prototype/releases):
 
 ```bash
-curl -sL https://github.com/lasomethingsomething/cli-prototype/releases/latest/download/model-cli_darwin_amd64.tar.gz | tar xz
+# Apple Silicon
+curl -sL https://github.com/lasomethingsomething/cli-prototype/releases/download/v0.1.1/model-cli_0.1.1_darwin_arm64.tar.gz | tar xz
+# Intel
+curl -sL https://github.com/lasomethingsomething/cli-prototype/releases/download/v0.1.1/model-cli_0.1.1_darwin_amd64.tar.gz | tar xz
 chmod +x model-cli
 mv model-cli /usr/local/bin
 ```
