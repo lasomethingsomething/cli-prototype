@@ -201,10 +201,19 @@ Examples:
 		fmt.Println(stepStyle.Render("Step 1: Develop & Package"))
 		fmt.Println()
 
+		// Check if sample model exists to provide sensible defaults
+		sampleModelPath := "./models/iris"
+		useSampleDefaults := false
+		if info, err := os.Stat(sampleModelPath); err == nil && info.IsDir() {
+			useSampleDefaults = true
+		}
+
 		var modelName string
+		if useSampleDefaults {
+			modelName = "iris"
+		}
 		if err := huh.NewInput().
 			Title("What's your model name?").
-			Placeholder("phi-4-mini").
 			Value(&modelName).
 			Run(); err != nil {
 			return err
@@ -212,9 +221,11 @@ Examples:
 		modelName = strings.TrimSpace(modelName)
 
 		var modelPath string
+		if useSampleDefaults {
+			modelPath = "./models/iris"
+		}
 		if err := huh.NewInput().
 			Title("Where are your model files?").
-			Placeholder("./models/phi-4-mini").
 			Value(&modelPath).
 			Run(); err != nil {
 			return err
@@ -227,9 +238,11 @@ Examples:
 		modelPath = expandedModelPath
 
 		var artifactName string
+		if useSampleDefaults {
+			artifactName = "test-model/iris"
+		}
 		if err := huh.NewInput().
 			Title("What should we call the artifact?").
-			Placeholder("my-org/my-model:v1.0.0").
 			Value(&artifactName).
 			Run(); err != nil {
 			return err
