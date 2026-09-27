@@ -158,6 +158,7 @@ var (
 
 // getServingTopologyOptions returns topology options with the recommended tag
 // derived from the model format, reusing the same detection used for runtime.
+// The recommended option is moved to the first position so Enter-through selects it.
 func getServingTopologyOptions(modelFormat workflow.ModelFormat) workflow.ToolOptions {
 	opts := workflow.ServingTopologyOptions()
 	for i := range opts {
@@ -187,6 +188,23 @@ func getServingTopologyOptions(modelFormat workflow.ModelFormat) workflow.ToolOp
 			}
 		}
 	}
+
+	// Reorder: move recommended option to first position
+	// Preserve relative order of remaining options
+	var recommendedIdx int = -1
+	for i, o := range opts {
+		if o.Recommended {
+			recommendedIdx = i
+			break
+		}
+	}
+	if recommendedIdx > 0 {
+		// Move recommended to front, shift others down
+		recommended := opts[recommendedIdx]
+		opts = append(opts[:recommendedIdx], opts[recommendedIdx+1:]...)
+		opts = append([]workflow.ToolOption{recommended}, opts...)
+	}
+
 	return opts
 }
 
