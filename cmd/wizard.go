@@ -85,7 +85,7 @@ func buildSummaryLines(r wizardResult) []string {
 	}
 	if r.skipDeploy {
 		lines = append(lines, "⚠ Skipped deployment")
-	} else if r.deployNoOp {
+	} else if r.deployNoOp && !r.deployNewCommit {
 		if r.predictionVerified {
 			lines = append(lines, fmt.Sprintf("⚠ Already deployed with %s (no changes, prediction verified)", r.gitOps))
 		} else {
