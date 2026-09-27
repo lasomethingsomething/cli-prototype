@@ -97,6 +97,14 @@ Examples:
 		fmt.Println(titleStyle.Render("Phase 5: Waiting for convergence"))
 		fmt.Println()
 		
+		// Wait for cert-manager webhook to be available
+		// This is the specific dependency that caused Certificate/kserve/serving-cert failures
+		fmt.Println("  - Waiting for cert-manager webhook...")
+		if err := waitForCertManagerWebhook(); err != nil {
+			return reportFailure("converge", err, completed)
+		}
+		fmt.Println("  ✓ cert-manager webhook ready")
+		
 		if err := waitForConvergence(); err != nil {
 			return reportFailure("converge", err, completed)
 		}
@@ -210,60 +218,16 @@ func parseMemoryString(memoryStr string) int {
 	return int(gigabytes)
 }
 
-// waitForClusterDependencies waits for cert-manager and kserve CRDs to be established
-// This prevents cold-start race conditions during flux bootstrap
-func waitForClusterDependencies() error {
-	fmt.Println("      Waiting for cert-manager...")
-	const maxAttempts = 30
-	const waitInterval = 10 * time.Second
-	
-	// Wait for cert-manager deployment
-	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		cmd := exec.Command("kubectl", "get", "deployment", "cert-manager", "-n", "cert-manager")
-		if err := cmd.Run(); err == nil {
-			fmt.Println("      ✓ cert-manager ready")
-			break
-		}
-		if attempt < maxAttempts {
-			time.Sleep(waitInterval)
-		}
-		if attempt == maxAttempts {
-			return fmt.Errorf("timeout waiting for cert-manager deployment")
-		}
+// waitForCertManagerWebhook waits for cert-manager webhook deployment to be available
+// This is the specific dependency that caused Certificate/kserve/serving-cert failures
+// Uses kubectl wait for condition=Available with 300s timeout
+func waitForCertManagerWebhook() error {
+	fmt.Println("      Running: kubectl -n cert-manager wait --for=condition=Available deploy/cert-manager-webhook --timeout=300s")
+	cmd := exec.Command("kubectl", "-n", "cert-manager", "wait", "--for=condition=Available", "deploy/cert-manager-webhook", "--timeout=300s")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("cert-manager webhook not available: %v\nOutput: %s\n\nHint: Check cert-manager installation with: kubectl get all -n cert-manager", err, string(output))
 	}
-	
-	// Wait for kserve CRD to be established
-	fmt.Println("      Waiting for kserve CRDs...")
-	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		cmd := exec.Command("kubectl", "get", "crd", "inferenceservices.serving.kserve.io")
-		if err := cmd.Run(); err == nil {
-			fmt.Println("      ✓ kserve CRDs ready")
-			break
-		}
-		if attempt < maxAttempts {
-			time.Sleep(waitInterval)
-		}
-		if attempt == maxAttempts {
-			return fmt.Errorf("timeout waiting for kserve CRDs")
-		}
-	}
-	
-	// Wait for kserve controller manager
-	fmt.Println("      Waiting for kserve controller...")
-	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		cmd := exec.Command("kubectl", "get", "deployment", "kserve-controller-manager", "-n", "kserve")
-		if err := cmd.Run(); err == nil {
-			fmt.Println("      ✓ kserve controller ready")
-			break
-		}
-		if attempt < maxAttempts {
-			time.Sleep(waitInterval)
-		}
-		if attempt == maxAttempts {
-			return fmt.Errorf("timeout waiting for kserve controller")
-		}
-	}
-	
 	return nil
 }
 
@@ -581,13 +545,6 @@ func bootstrapFlux(interactiveMode bool, bootstrapCommit *bool) error {
 	}
 	
 	// Flux not bootstrapped - need to bootstrap
-	// First, wait for cluster dependencies to be ready to avoid cold-start races
-	fmt.Println("  - Waiting for cluster dependencies...")
-	if err := waitForClusterDependencies(); err != nil {
-		return err
-	}
-	fmt.Println("  ✓ Cluster dependencies ready")
-	
 	fmt.Println("  - Bootstrapping Flux...")
 	
 	// Get repo URL
