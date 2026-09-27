@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -467,16 +468,8 @@ func waitForConvergence() error {
 		// Parse the JSON output to check Ready status
 		allReady, err := parseKustomizationReady(outputStr)
 		if err != nil {
-			// If parsing fails, try flux CLI as fallback with proper error capture
-			fluxCmd := exec.Command("flux", "get", "kustomizations", "-A")
-			fluxOutput, fluxErr := fluxCmd.CombinedOutput()
-			if fluxErr != nil {
-				return fmt.Errorf("failed to get kustomizations via kubectl: %v, flux CLI: %s",
-					err, string(fluxOutput))
-			}
-			// Parse flux output
-			allReady = strings.Contains(string(fluxOutput), "True") &&
-				!strings.Contains(string(fluxOutput), "False")
+			// Parse error means invalid JSON - print diagnostics and fail
+			return fmt.Errorf("failed to parse kustomizations JSON: %v. Output:\n%s", err, outputStr)
 		}
 		
 		if allReady {
@@ -501,17 +494,53 @@ func waitForConvergence() error {
 	return fmt.Errorf("timeout waiting for all kustomizations to be ready")
 }
 
+// ksConditions represents a Kustomization's conditions
+// Used for parsing kubectl get kustomizations -A -o json output
+type ksConditions struct {
+	Type   string `json:"type"`
+	Status string `json:"status"`
+}
+
+// ksStatus represents a Kustomization's status
+type ksStatus struct {
+	Conditions []ksConditions `json:"conditions"`
+}
+
+// ksItem represents a single Kustomization
+type ksItem struct {
+	Status ksStatus `json:"status"`
+}
+
+// ksList represents the list of Kustomizations
+type ksList struct {
+	Items []ksItem `json:"items"`
+}
+
 // parseKustomizationReady parses kubectl get kustomizations -A -o json output
-// and returns true if all kustomizations have Ready=True
+// and returns true if every kustomization has a Ready=True condition
 func parseKustomizationReady(jsonOutput string) (bool, error) {
-	// Simple check: look for Ready status in the JSON
-	// The JSON structure has items[].status.conditions[].type="Ready" and status="True"
-	if strings.Contains(jsonOutput, `"type":"Ready"`) &&
-		strings.Contains(jsonOutput, `"status":"True"`) &&
-		!strings.Contains(jsonOutput, `"status":"False"`) {
-		return true, nil
+	var list ksList
+	if err := json.Unmarshal([]byte(jsonOutput), &list); err != nil {
+		return false, fmt.Errorf("invalid JSON from kubectl: %v", err)
 	}
-	return false, fmt.Errorf("no Ready=True found in kustomizations")
+	if len(list.Items) == 0 {
+		return false, fmt.Errorf("no kustomizations found")
+	}
+	
+	for _, item := range list.Items {
+		ready := false
+		for _, c := range item.Status.Conditions {
+			if c.Type == "Ready" && c.Status == "True" {
+				ready = true
+				break
+			}
+		}
+		if !ready {
+			// Not an error - just not ready yet
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 // reportFailure prints a failure report and returns the error
