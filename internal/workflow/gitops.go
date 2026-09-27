@@ -9,12 +9,19 @@ import (
 	"time"
 )
 
+// DeployResult contains the result of a GitOps deployment
+type DeployResult struct {
+	Error      error
+	Deployed   bool // True if a new commit was created and pushed
+	Ready      bool // True if InferenceService reached Ready
+}
+
 // GitOpsProvider defines the interface for GitOps tools like ArgoCD and Flux
 type GitOpsProvider interface {
 	Name() string
 	IsInstalled() bool
 	InstallInstructions() string
-	Deploy(modelName, repoURL, path, modelPath string) error
+	Deploy(modelName, repoURL, path, modelPath string) DeployResult
 }
 
 // --- ArgoCD Provider ---
@@ -33,13 +40,14 @@ func (a *ArgoCDProvider) InstallInstructions() string {
 	return "brew install argoproj/tap/argocd"
 }
 
-func (a *ArgoCDProvider) Deploy(modelName, repoURL, path, modelPath string) error {
+func (a *ArgoCDProvider) Deploy(modelName, repoURL, path, modelPath string) DeployResult {
 	cmd := exec.Command("argocd", "app", "create", modelName, "--repo", repoURL, "--path", path, "--dest-namespace", "default")
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to create ArgoCD application: %v", err)
+		return DeployResult{Error: fmt.Errorf("failed to create ArgoCD application: %v", err)}
 	}
 	fmt.Printf("Created ArgoCD application: %s\n", modelName)
-	return nil
+	// ArgoCD deploy doesn't have the same no-op detection as Flux, so assume deployed
+	return DeployResult{Error: nil, Deployed: true, Ready: false}
 }
 
 // --- Flux Provider ---
@@ -59,25 +67,27 @@ func (f *FluxProvider) InstallInstructions() string {
 	return "brew install fluxcd/tap/flux"
 }
 
-func (f *FluxProvider) Deploy(modelName, repoURL, path, modelPath string) error {
+func (f *FluxProvider) Deploy(modelName, repoURL, path, modelPath string) DeployResult {
 	// GitOps: the CLI never touches the cluster directly.
 	// It commits the manifest into the Git repo and lets Flux reconcile.
 
 	// 1. Verify the working tree is the target repo
 	remote, err := exec.Command("git", "remote", "get-url", "origin").Output()
 	if err != nil {
-		return fmt.Errorf("not in a git repo: %v", err)
+		return DeployResult{Error: fmt.Errorf("not in a git repo: %v", err)}
 	}
 	remoteURL := strings.TrimSpace(string(remote))
 	
 	// Normalize URLs for comparison
 	if repoURL != "" {
 		if !URLsAreEqual(remoteURL, repoURL) {
-			return fmt.Errorf("current repo origin (%s) does not match target (%s)", remoteURL, repoURL)
+			return DeployResult{Error: fmt.Errorf("current repo origin (%s) does not match target (%s)", remoteURL, repoURL)}
 		}
 	}
 
 	// Pre-flight: verify the git remote and working tree state
+	fmt.Println("Pre-flight checks:")
+	
 	// Get current branch for pre-flight checks
 	branch, err := GetCurrentGitBranch()
 	if err != nil {
@@ -85,25 +95,32 @@ func (f *FluxProvider) Deploy(modelName, repoURL, path, modelPath string) error 
 	}
 
 	// Check 1: Verify user can push to origin with dry-run
+	fmt.Print("  - Verifying push permissions... ")
 	if err := verifyGitPushable(remoteURL, branch); err != nil {
-		return err
+		return DeployResult{Error: err}
 	}
+	fmt.Println("✓")
 
 	// Check 2: Verify working tree is clean
+	fmt.Print("  - Verifying clean working tree... ")
 	if err := verifyGitWorkingTreeClean(); err != nil {
-		return err
+		return DeployResult{Error: err}
 	}
+	fmt.Println("✓")
 
 	// Check 3: Verify local branch is not behind origin
+	fmt.Print("  - Verifying branch is not behind origin... ")
 	if err := verifyGitNotBehindOrigin(remoteURL, branch); err != nil {
-		return err
+		return DeployResult{Error: err}
 	}
+	fmt.Println("✓")
+	fmt.Println()
 
 	// Check cluster reachability (Flux needs a working cluster to reconcile)
 	// Use kubectl as a simple reachability probe
 	kubectlCmd := exec.Command("kubectl", "get", "nodes", "-o", "name")
 	if err := kubectlCmd.Run(); err != nil {
-		return fmt.Errorf("cluster unreachable — is minikube running? (flux installed, cluster unreachable)")
+		return DeployResult{Error: fmt.Errorf("cluster unreachable — is minikube running? (flux installed, cluster unreachable)")}
 	}
 
 	// 2. Generate and write the InferenceService manifest
@@ -117,22 +134,22 @@ func (f *FluxProvider) Deploy(modelName, repoURL, path, modelPath string) error 
 		branch,
 	)
 	if err != nil {
-		return fmt.Errorf("failed to create inference service config: %v", err)
+		return DeployResult{Error: fmt.Errorf("failed to create inference service config: %v", err)}
 	}
 
 	// Write manifest to the specified path
 	manifestPath := filepath.Join(path, modelName+".yaml")
 	if err := WriteInferenceServiceManifest(inferenceConfig, manifestPath); err != nil {
-		return fmt.Errorf("failed to write inference service manifest: %v", err)
+		return DeployResult{Error: fmt.Errorf("failed to write inference service manifest: %v", err)}
 	}
 	fmt.Printf("✓ InferenceService manifest generated: %s\n", manifestPath)
 
 	// 3. Commit the manifest path
 	if path == "" {
-		return fmt.Errorf("manifest path is empty; nothing to commit")
+		return DeployResult{Error: fmt.Errorf("manifest path is empty; nothing to commit")}
 	}
 	if out, err := exec.Command("git", "add", path).CombinedOutput(); err != nil {
-		return fmt.Errorf("git add %s failed: %s", path, out)
+		return DeployResult{Error: fmt.Errorf("git add %s failed: %s", path, out)}
 	}
 	commit := exec.Command("git", "commit", "-m", "Deploy model "+modelName+" via wizard")
 	commit.Env = append(os.Environ(), "GIT_EDITOR=true")
@@ -142,7 +159,7 @@ func (f *FluxProvider) Deploy(modelName, repoURL, path, modelPath string) error 
 		outStr := string(commitOut)
 		if !strings.Contains(outStr, "nothing to commit") &&
 			!strings.Contains(outStr, "no changes added") {
-			return fmt.Errorf("git commit failed: %s", outStr)
+			return DeployResult{Error: fmt.Errorf("git commit failed: %s", outStr)}
 		}
 	}
 	
@@ -159,7 +176,7 @@ func (f *FluxProvider) Deploy(modelName, repoURL, path, modelPath string) error 
 	// 4. Push to remote
 	pushOut, err := exec.Command("git", "push").CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("git push failed: %s", pushOut)
+		return DeployResult{Error: fmt.Errorf("git push failed: %s", pushOut)}
 	}
 	if hasNewCommit {
 		fmt.Printf("✓ Pushed to git repository\n")
@@ -206,13 +223,20 @@ func (f *FluxProvider) Deploy(modelName, repoURL, path, modelPath string) error 
 
 	// 8. Poll for InferenceService to reach READY=True
 	fmt.Printf("Waiting for InferenceService to become ready...\n")
+	ready := true
 	if err := WaitForInferenceServiceReady(modelName, inferenceConfig.Namespace); err != nil {
-		// Return error with details
-		return fmt.Errorf("InferenceService did not reach Ready state: %v", err)
+		// Don't return error - deployment may have happened but Ready not reached yet
+		fmt.Printf("⚠ InferenceService did not reach Ready state: %v\n", err)
+		ready = false
+	} else {
+		fmt.Printf("✓ InferenceService '%s' in namespace '%s' is Ready\n", modelName, inferenceConfig.Namespace)
 	}
-	fmt.Printf("✓ InferenceService '%s' in namespace '%s' is Ready\n", modelName, inferenceConfig.Namespace)
 
-	return nil
+	return DeployResult{
+		Error:    nil,
+		Deployed: hasNewCommit,
+		Ready:    ready,
+	}
 }
 
 // WaitForInferenceServiceReady polls kubectl until the InferenceService is ready or timeout

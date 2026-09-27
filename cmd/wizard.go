@@ -29,6 +29,7 @@ type wizardResult struct {
 	publishDestination string
 	deploySucceeded    bool
 	deployVerified     bool // True if InferenceService reached Ready
+	deployNoOp         bool // True if deploy was a no-op (already deployed)
 	modelName          string
 	artifactName       string
 	signer             string
@@ -81,6 +82,8 @@ func buildSummaryLines(r wizardResult) []string {
 	}
 	if r.skipDeploy {
 		lines = append(lines, "⚠ Skipped deployment")
+	} else if r.deployNoOp {
+		lines = append(lines, fmt.Sprintf("⚠ Already deployed with %s (no changes, InferenceService still Ready)", r.gitOps))
 	} else if r.deployVerified {
 		lines = append(lines, fmt.Sprintf("✓ Deployed to Kubernetes with %s (InferenceService verified Ready)", r.gitOps))
 	} else if r.deploySucceeded {
@@ -270,6 +273,8 @@ Examples:
 		verifySucceeded := false
 		verifySimulated := false
 		deploySucceeded := false
+		deployVerified := false
+		deployNoOp := false
 		
 		// Just-in-time tool check for registry provider
 		if !registryProvider.IsInstalled() {
@@ -900,6 +905,8 @@ Examples:
 					return err
 				}
 				deploySucceeded = true
+				deployVerified = wf.ReadyVerified()
+				deployNoOp = !wf.Deployed()
 			}
 			fmt.Println()
 		} else if !skipDeploy {
@@ -963,7 +970,8 @@ Examples:
 			publishSucceeded:   publishDestination != "",
 			publishDestination: publishDestination,
 			deploySucceeded:    deploySucceeded,
-			deployVerified:     deploySucceeded, // True only if all deployment steps including Ready verification passed
+			deployVerified:     deployVerified,
+			deployNoOp:         deployNoOp,
 			modelName:          modelName,
 			artifactName:       artifactName,
 			signer:             cfg.Signer,

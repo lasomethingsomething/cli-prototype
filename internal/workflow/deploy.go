@@ -15,6 +15,8 @@ type DeployWorkflow struct {
 	artifactRef      string // Full artifact reference with annotations (Story #63)
 	repoURL          string
 	manifestPath     string
+	deployed         bool // True if a new deploy actually happened (not no-op)
+	readyVerified    bool // True if InferenceService reached Ready
 }
 
 // NewDeployWorkflow creates a new deployment workflow with the given providers
@@ -51,6 +53,16 @@ func (w *DeployWorkflow) SetArtifactRef(ref string) {
 	w.artifactRef = ref
 }
 
+// Deployed returns true if a new deploy actually happened (not a no-op)
+func (w *DeployWorkflow) Deployed() bool {
+	return w.deployed
+}
+
+// ReadyVerified returns true if InferenceService reached Ready
+func (w *DeployWorkflow) ReadyVerified() bool {
+	return w.readyVerified
+}
+
 // Run executes the deployment workflow
 func (w *DeployWorkflow) Run() error {
 	if w.modelName == "" || w.repoURL == "" {
@@ -84,9 +96,14 @@ func (w *DeployWorkflow) Run() error {
 	fmt.Printf("Deploying artifact '%s' from repository '%s' with %s...\n",
 		artifactToDeploy, w.repoURL, w.gitOps)
 	fmt.Printf("  Trust Profile annotations will be available to GitOps admission policies\n")
-	if err := w.gitOpsProvider.Deploy(artifactToDeploy, w.repoURL, w.manifestPath, w.modelPath); err != nil {
-		return err
+	
+	deployResult := w.gitOpsProvider.Deploy(artifactToDeploy, w.repoURL, w.manifestPath, w.modelPath)
+	if deployResult.Error != nil {
+		return deployResult.Error
 	}
+	
+	w.deployed = deployResult.Deployed
+	w.readyVerified = deployResult.Ready
 
 	// Use registry provider
 	if w.registry == "oras" || w.registry == "modelpack" {
