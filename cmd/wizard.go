@@ -1023,6 +1023,8 @@ Examples:
 							fmt.Printf("⚠ Manifest already committed\n")
 						} else {
 							fmt.Printf("✓ Committed manifest: %s\n", manifestFile)
+							// Mark that a new commit was created for recap wording
+							deployNewCommit = true
 						}
 						
 						// Push to remote

@@ -122,9 +122,14 @@ func (w *DeployWorkflow) Run() error {
 	if w.artifactRef != "" {
 		artifactToDeploy = w.artifactRef
 	}
-	fmt.Printf("Deploying artifact '%s' from repository '%s' with %s...\n",
-		artifactToDeploy, w.repoURL, w.gitOps)
-	fmt.Printf("  Trust Profile annotations will be available to GitOps admission policies\n")
+	if !w.quiet {
+		fmt.Printf("Deploying artifact '%s' from repository '%s' with %s...\n",
+			artifactToDeploy, w.repoURL, w.gitOps)
+		fmt.Printf("  Trust Profile annotations will be available to GitOps admission policies\n")
+	}
+
+	// Propagate quiet flag to the underlying provider
+	w.gitOpsProvider.SetQuiet(w.quiet)
 
 	deployResult := w.gitOpsProvider.Deploy(artifactToDeploy, w.repoURL, w.manifestPath, w.modelPath)
 	if deployResult.Error != nil {

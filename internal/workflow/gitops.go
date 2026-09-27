@@ -25,6 +25,7 @@ type GitOpsProvider interface {
 	IsInstalled() bool
 	InstallInstructions() string
 	Deploy(modelName, repoURL, path, modelPath string) DeployResult
+	SetQuiet(quiet bool)
 }
 
 // --- ArgoCD Provider ---
@@ -43,6 +44,9 @@ func (a *ArgoCDProvider) InstallInstructions() string {
 	return "brew install argoproj/tap/argocd"
 }
 
+// SetQuiet is a no-op for ArgoCD (no duplicate output to suppress)
+func (a *ArgoCDProvider) SetQuiet(quiet bool) {}
+
 func (a *ArgoCDProvider) Deploy(modelName, repoURL, path, modelPath string) DeployResult {
 	cmd := exec.Command("argocd", "app", "create", modelName, "--repo", repoURL, "--path", path, "--dest-namespace", "default")
 	if err := cmd.Run(); err != nil {
@@ -55,10 +59,17 @@ func (a *ArgoCDProvider) Deploy(modelName, repoURL, path, modelPath string) Depl
 
 // --- Flux Provider ---
 
-type FluxProvider struct{}
+type FluxProvider struct {
+	quiet bool
+}
 
 func (f *FluxProvider) Name() string {
 	return "flux"
+}
+
+// SetQuiet suppresses prologue output in Deploy()
+func (f *FluxProvider) SetQuiet(quiet bool) {
+	f.quiet = quiet
 }
 
 func (f *FluxProvider) IsInstalled() bool {
@@ -113,7 +124,9 @@ func (f *FluxProvider) Deploy(modelName, repoURL, path, modelPath string) Deploy
 	if err := WriteInferenceServiceManifest(inferenceConfig, manifestPath); err != nil {
 		return DeployResult{Error: fmt.Errorf("failed to write inference service manifest: %v", err)}
 	}
-	fmt.Printf("✓ InferenceService manifest generated: %s\n", manifestPath)
+	if !f.quiet {
+		fmt.Printf("✓ InferenceService manifest generated: %s\n", manifestPath)
+	}
 
 	// Check if the generated manifest file is now dirty
 	// If so, return the manifest path so the caller can offer a commit prompt

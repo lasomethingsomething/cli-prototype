@@ -19,6 +19,7 @@ func (f *fakeGitOpsProvider) InstallInstructions() string { return "brew install
 func (f *fakeGitOpsProvider) Deploy(modelName, repoURL, path, modelPath string) DeployResult {
 	return DeployResult{Error: nil, Deployed: true, Ready: false}
 }
+func (f *fakeGitOpsProvider) SetQuiet(quiet bool) {}
 
 // fakeDeployRegistry embeds RegistryProvider so every method is satisfied
 // without external tools. Only the methods the deploy tests use are real;
