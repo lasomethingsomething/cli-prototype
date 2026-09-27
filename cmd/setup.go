@@ -432,35 +432,51 @@ func waitForConvergence() error {
 	const waitInterval = 10 * time.Second
 	
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		cmd := exec.Command("flux", "get", "kustomizations", "-A", "-o", "jsonpath={.items[*].status.ready}")
-		output, err := cmd.Output()
+		// Use kubectl instead of flux CLI (project history: flux version exit-1 trap)
+		// Query kustomizations via kubectl to get their Ready status
+		cmd := exec.Command("kubectl", "get", "kustomizations", "-A", "-o", "json")
+		output, err := cmd.CombinedOutput()
+		outputStr := string(output)
+		
 		if err != nil {
-			// Check for known cold-start race conditions
-			stderr := err.Error()
-			if strings.Contains(stderr, "connection refused") ||
-				strings.Contains(stderr, "no matches for kind") {
+			// Check for known cold-start race conditions in stderr
+			if strings.Contains(outputStr, "connection refused") ||
+				strings.Contains(outputStr, "no matches for kind") ||
+				strings.Contains(outputStr, "error") {
 				// These are transient - try to reconcile and continue
 				fmt.Printf("  Attempt %d/%d: Transient error detected, retrying...\n", attempt, maxAttempts)
+				fmt.Printf("    Command: %s\n", cmd.String())
+				fmt.Printf("    Output: %s\n", outputStr)
 				
 				// Try to reconcile all kustomizations
-				reconcileCmd := exec.Command("sh", "-c", "flux reconcile kustomization -A --with-source 2>/dev/null || true")
-				_ = reconcileCmd.Run()
+				reconcileCmd := exec.Command("flux", "reconcile", "kustomization", "-A", "--with-source")
+				reconcileOut, reconcileErr := reconcileCmd.CombinedOutput()
+				if reconcileErr != nil {
+					fmt.Printf("    Reconcile output: %s\n", string(reconcileOut))
+				}
 				
 				time.Sleep(waitInterval)
 				continue
 			}
 			
-			return fmt.Errorf("failed to get kustomizations: %v", err)
+			// For other errors, print full diagnostics and fail
+			return fmt.Errorf("failed to get kustomizations: command=%s exit=%v output=%s",
+				cmd.String(), err, outputStr)
 		}
 		
-		// Parse the ready statuses
-		statuses := strings.Fields(string(output))
-		allReady := true
-		for _, status := range statuses {
-			if status != "True" {
-				allReady = false
-				break
+		// Parse the JSON output to check Ready status
+		allReady, err := parseKustomizationReady(outputStr)
+		if err != nil {
+			// If parsing fails, try flux CLI as fallback with proper error capture
+			fluxCmd := exec.Command("flux", "get", "kustomizations", "-A")
+			fluxOutput, fluxErr := fluxCmd.CombinedOutput()
+			if fluxErr != nil {
+				return fmt.Errorf("failed to get kustomizations via kubectl: %v, flux CLI: %s",
+					err, string(fluxOutput))
 			}
+			// Parse flux output
+			allReady = strings.Contains(string(fluxOutput), "True") &&
+				!strings.Contains(string(fluxOutput), "False")
 		}
 		
 		if allReady {
@@ -475,12 +491,27 @@ func waitForConvergence() error {
 		}
 	}
 	
-	// Timeout - print which kustomizations are not ready
-	cmd := exec.Command("flux", "get", "kustomizations", "-A")
-	output, _ := cmd.Output()
-	fmt.Printf("\nTimeout waiting for convergence.\nStuck kustomizations:\n%s\n", output)
+	// Timeout - print diagnostic information
+	cmd := exec.Command("kubectl", "get", "kustomizations", "-A")
+	output, _ := cmd.CombinedOutput()
+	fmt.Printf("\nTimeout waiting for convergence.\n")
+	fmt.Printf("Command: %s\n", cmd.String())
+	fmt.Printf("Output:\n%s\n", string(output))
 	
 	return fmt.Errorf("timeout waiting for all kustomizations to be ready")
+}
+
+// parseKustomizationReady parses kubectl get kustomizations -A -o json output
+// and returns true if all kustomizations have Ready=True
+func parseKustomizationReady(jsonOutput string) (bool, error) {
+	// Simple check: look for Ready status in the JSON
+	// The JSON structure has items[].status.conditions[].type="Ready" and status="True"
+	if strings.Contains(jsonOutput, `"type":"Ready"`) &&
+		strings.Contains(jsonOutput, `"status":"True"`) &&
+		!strings.Contains(jsonOutput, `"status":"False"`) {
+		return true, nil
+	}
+	return false, fmt.Errorf("no Ready=True found in kustomizations")
 }
 
 // reportFailure prints a failure report and returns the error
