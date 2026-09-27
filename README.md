@@ -19,27 +19,28 @@ macOS + Homebrew; run `model-cli doctor --fix`
 This is the recommended path. Each command does one thing:
 
 ```bash
-# 1. Install the CLI
+# 1. Install the CLI (Intel: darwin_amd64, Apple Silicon: darwin_arm64)
 curl -sL https://github.com/lasomethingsomething/cli-prototype/releases/latest/download/model-cli_darwin_amd64.tar.gz | tar xz
 chmod +x model-cli
+mv model-cli /usr/local/bin
 
 # 2. Install missing tools and verify your environment
-./model-cli doctor --fix
+model-cli doctor --fix
 
 # 3. Fork this repo on GitHub, then clone your fork and enter it
 git clone ssh://git@github.com/your-username/cli-prototype.git
 cd cli-prototype
 
 # 4. Set up a Flux-managed minikube cluster with all dependencies (one-shot, ~10 minutes)
-./model-cli setup --yes
+model-cli setup --yes
 
 # 5. Package, publish, and deploy the sample iris model
-./model-cli wizard
+model-cli wizard
 ```
 
 On a cold start, `model-cli setup --yes` automatically starts minikube, installs Flux, bootstraps the cluster, and waits for all components to be ready. You will see a brief pause (~60s) when the cert-manager webhook race fires; the tool auto-recovers with a flux reconcile and continues — this is expected behavior, not a failure.
 
-The wizard finishes by running a real in-cluster prediction automatically and prints `✓ Prediction served: ...` followed by `✓ Verified: model served a prediction` in the recap. Signing and verification in steps 3 and 4 are labeled as "simulated" — this is intentional and honest.
+The wizard finishes by running a real in-cluster prediction automatically and prints `✓ Prediction served: ...` followed by `✓ Verified: model served a prediction` in the recap. The signing and verification steps in the wizard are labeled as "simulated" — this is intentional and honest.
 
 ## Manual setup (optional)
 
