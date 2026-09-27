@@ -104,7 +104,7 @@ func (f *FluxProvider) Deploy(modelName, repoURL, path, modelPath string) Deploy
 
 	// Check 2: Verify working tree is clean
 	fmt.Print("  - Verifying clean working tree... ")
-	if err := verifyGitWorkingTreeClean(); err != nil {
+	if err := verifyGitWorkingTreeClean(modelPath); err != nil {
 		return DeployResult{Error: err}
 	}
 	fmt.Println("✓")
@@ -494,7 +494,7 @@ func verifyGitPushable(remoteURL, branch string) error {
 }
 
 // verifyGitWorkingTreeClean checks if the working tree is clean
-func verifyGitWorkingTreeClean() error {
+func verifyGitWorkingTreeClean(modelPath string) error {
 	// Check for uncommitted changes
 	statusCmd := exec.Command("git", "status", "--porcelain")
 	output, err := statusCmd.Output()
@@ -507,13 +507,24 @@ func verifyGitWorkingTreeClean() error {
 		// Parse the output to get file names
 		lines := strings.Split(strings.TrimSpace(string(output)), "\n")
 		var dirtyFiles []string
+		var modelDirFiles []string
 		for _, line := range lines {
 			if len(line) > 0 {
 				dirtyFiles = append(dirtyFiles, line)
+				// Check if this file is inside the model directory
+				if modelPath != "" && strings.HasPrefix(line, modelPath+"/") {
+					modelDirFiles = append(modelDirFiles, line)
+				}
 			}
 		}
 		if len(dirtyFiles) > 0 {
-			return fmt.Errorf("working tree is not clean. Commit or stash changes first:\n  %s", strings.Join(dirtyFiles, "\n  "))
+			// If there are model directory files, show model-specific message
+			if len(modelDirFiles) > 0 {
+				return fmt.Errorf("working tree is not clean. Your model files aren't committed yet — GitOps deploys from Git, so commit them first:\n  %s\nFix: git add %s && git commit -m \"Add %s\"",
+					strings.Join(modelDirFiles, "\n  "), modelPath, filepath.Base(modelPath))
+			}
+			// Otherwise show generic message (without "or stash" for model dir case)
+			return fmt.Errorf("working tree is not clean. Commit changes first:\n  %s", strings.Join(dirtyFiles, "\n  "))
 		}
 	}
 	return nil

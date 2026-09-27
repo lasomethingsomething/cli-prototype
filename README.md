@@ -77,9 +77,25 @@ The test creates these local files:
 - `~/test-model/sbom.spdx-json` - the SBOM
 - `~/test-model/mof.json` - the MOF metadata
 
+## Bring your own model
+
+Put your trained model files in a directory, e.g. `models/mymodel/`.
+
+Commit them:
+```bash
+git add models/mymodel && git commit -m "Add mymodel"
+```
+The wizard deploys through Flux GitOps, so your model must be in Git; the wizard pushes its deploy commit on top.
+
+Run `model-cli wizard`, and at Step 1 type your own values (defaults only apply to the sample iris in-repo).
+
+Prediction verification: if your model accepts V1 instances requests, add `models/mymodel/sample-request.json` containing a sample request, e.g. `{"instances": [[5.1, 3.5, 1.4, 0.2]]}` adapted to your model's input shape. The wizard uses it verbatim to verify a real prediction.
+
+If no sample request exists: the wizard skips verification honestly with `⚠ Prediction verification skipped: no sample payload known for this model` — the deployment still succeeds, verification is just not claimed.
+
 ## Known limitations
 
-- The GitOps step assumes a clean git working copy. Generated files are gitignored but some metadata may not be fully deterministic yet.
+- The GitOps step assumes a clean git working copy (see Bring your own model). Generated files are gitignored but some metadata may not be fully deterministic yet.
 - The sklearn predictor serves the V1 protocol; V2-style `inputs` payloads are rejected.
 - Annotation conventions and model metadata are evolving as part of the CNCF AI inner-loop initiative #1740.
 
