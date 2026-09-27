@@ -493,6 +493,44 @@ func verifyGitPushable(remoteURL, branch string) error {
 	return nil
 }
 
+// isInsideModelPath checks if a git status --porcelain line's path is inside modelPath.
+// Git porcelain format: "<status> <path>" where status is 1-2 chars (e.g., "??", " M", "A ").
+// Handles both file forms (M models/iskipped/model.joblib) and untracked dir forms (?? models/iskipped/).
+// Both sides are normalized with filepath.Clean before comparing.
+func isInsideModelPath(statusLine, modelPath string) bool {
+	if modelPath == "" {
+		return false
+	}
+	
+	// Use Fields to split by whitespace - porcelain format is: <status1><status2> <path>
+	// Fields splits on any whitespace, so the path is everything after the first whitespace
+	fields := strings.Fields(statusLine)
+	if len(fields) < 2 {
+		return false
+	}
+	
+	// The path is the second field and everything after (rejoin in case path has spaces)
+	pathFromGit := strings.Join(fields[1:], " ")
+	if pathFromGit == "" {
+		return false
+	}
+	
+	// Normalize both paths: Clean handles ./ prefix and trailing slashes
+	cleanPath := filepath.Clean(pathFromGit)
+	cleanModelPath := filepath.Clean(modelPath)
+	
+	// Ensure model path ends with separator for prefix matching
+	// filepath.Clean removes trailing slashes, so we need to add it back
+	if !strings.HasSuffix(cleanModelPath, string(filepath.Separator)) {
+		cleanModelPath += string(filepath.Separator)
+	}
+	
+	// Check if cleanPath starts with cleanModelPath (which now has trailing separator)
+	// or if it exactly matches the model path (without trailing separator)
+	return strings.HasPrefix(cleanPath, cleanModelPath) || 
+		cleanPath == strings.TrimSuffix(cleanModelPath, string(filepath.Separator))
+}
+
 // verifyGitWorkingTreeClean checks if the working tree is clean
 func verifyGitWorkingTreeClean(modelPath string) error {
 	// Check for uncommitted changes
@@ -512,7 +550,7 @@ func verifyGitWorkingTreeClean(modelPath string) error {
 			if len(line) > 0 {
 				dirtyFiles = append(dirtyFiles, line)
 				// Check if this file is inside the model directory
-				if modelPath != "" && strings.HasPrefix(line, modelPath+"/") {
+				if isInsideModelPath(line, modelPath) {
 					modelDirFiles = append(modelDirFiles, line)
 				}
 			}
