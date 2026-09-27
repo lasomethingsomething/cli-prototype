@@ -14,6 +14,14 @@ model-cli --help
 This installs `model-cli` to `$GOPATH/bin`; ensure that directory is on your
 `PATH`.
 
+Alternatively, download a pre-built binary from the [releases page](https://github.com/lasomethingsomething/cli-prototype/releases):
+
+```bash
+curl -sL https://github.com/lasomethingsomething/cli-prototype/releases/latest/download/model-cli_darwin_amd64.tar.gz | tar xz
+chmod +x model-cli
+mv model-cli /usr/local/bin
+```
+
 ## Non-Interactive Package And Harden
 
 In CI or scripts, prompts are disabled automatically when stdin is not a

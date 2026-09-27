@@ -40,7 +40,7 @@ model-cli wizard
 
 On a cold start, `model-cli setup --yes` automatically starts minikube, installs Flux, bootstraps the cluster, and waits for all components to be ready. You will see a brief pause (~60s) when the cert-manager webhook race fires; the tool auto-recovers with a flux reconcile and continues — this is expected behavior, not a failure.
 
-The wizard finishes by running a real in-cluster prediction automatically and prints `✓ Prediction served: ...`. On a re-run where everything is already deployed, the recap honestly notes `⚠ Already deployed with flux (no changes, prediction verified)`. The signing and verification steps in the wizard are labeled as "simulated" — this is intentional and honest.
+The wizard finishes by running a real in-cluster prediction automatically and prints `✓ Prediction served: ...`. On a first deployment the recap reports `✓ Deployed with flux (prediction verified)`; on a re-run where everything is already deployed, it honestly notes `⚠ Already deployed with flux (no changes, prediction verified)`. The signing and verification steps in the wizard are labeled as "simulated" — this is intentional and honest.
 
 The wizard's defaults are the golden path: pressing Enter at every prompt on the sample iris model completes a real package → publish → GitOps deploy → verified prediction.
 
@@ -73,7 +73,7 @@ echo "test" > ~/test-model/model.txt
 model-cli wizard
 ```
 
-Key answers: type model name `test-model`, model path `~/test-model`, artifact name `test:v1` (no defaults apply outside the repo). At the cluster prompt, answer No (the default is Yes) — phases 5-7 run as guided simulations.
+Key answers: accept the defaults or type your own values (defaults only apply to the sample iris in-repo, so outside the repo you'll type them). At the cluster prompt, answer No (the default is Yes) — phases 5-7 run as guided simulations.
 
 The test creates these local files:
 - `~/test-model/manifest.json` - an OCI manifest carrying CNCF AI Interoperability Profile, SBOM format, and MOF annotations
