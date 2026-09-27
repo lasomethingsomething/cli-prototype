@@ -650,7 +650,7 @@ Examples:
 				Title("Where is the OCI registry?").
 				Options(
 					huh.NewOption("an existing OCI registry", "existing"),
-					huh.NewOption("a local Podman registry at localhost:5000", "local-podman"),
+					huh.NewOption("a local Podman registry at localhost:5000 (recommended)", "local-podman"),
 				).
 				Value(&publishTarget).
 				Run(); err != nil {
@@ -747,9 +747,9 @@ Examples:
 		}
 
 		// === Step 5: GitOps admission and policy enforcement ===
-		var hasKubernetes bool
+		var hasKubernetes bool = true
 		var repoURL string
-		var manifestPath string
+		var manifestPath string = "clusters/minikube/apps"
 		var setupCluster bool
 		var setupFlux bool
 		if !skipDeploy {
@@ -874,7 +874,6 @@ Examples:
 				repoURL = strings.TrimSpace(repoURL)
 				if err := huh.NewInput().
 					Title("Manifest path in repo:").
-					Placeholder("./manifests").
 					Value(&manifestPath).
 					Run(); err != nil {
 					return err
