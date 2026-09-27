@@ -210,6 +210,63 @@ func parseMemoryString(memoryStr string) int {
 	return int(gigabytes)
 }
 
+// waitForClusterDependencies waits for cert-manager and kserve CRDs to be established
+// This prevents cold-start race conditions during flux bootstrap
+func waitForClusterDependencies() error {
+	fmt.Println("      Waiting for cert-manager...")
+	const maxAttempts = 30
+	const waitInterval = 10 * time.Second
+	
+	// Wait for cert-manager deployment
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		cmd := exec.Command("kubectl", "get", "deployment", "cert-manager", "-n", "cert-manager")
+		if err := cmd.Run(); err == nil {
+			fmt.Println("      ✓ cert-manager ready")
+			break
+		}
+		if attempt < maxAttempts {
+			time.Sleep(waitInterval)
+		}
+		if attempt == maxAttempts {
+			return fmt.Errorf("timeout waiting for cert-manager deployment")
+		}
+	}
+	
+	// Wait for kserve CRD to be established
+	fmt.Println("      Waiting for kserve CRDs...")
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		cmd := exec.Command("kubectl", "get", "crd", "inferenceservices.serving.kserve.io")
+		if err := cmd.Run(); err == nil {
+			fmt.Println("      ✓ kserve CRDs ready")
+			break
+		}
+		if attempt < maxAttempts {
+			time.Sleep(waitInterval)
+		}
+		if attempt == maxAttempts {
+			return fmt.Errorf("timeout waiting for kserve CRDs")
+		}
+	}
+	
+	// Wait for kserve controller manager
+	fmt.Println("      Waiting for kserve controller...")
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		cmd := exec.Command("kubectl", "get", "deployment", "kserve-controller-manager", "-n", "kserve")
+		if err := cmd.Run(); err == nil {
+			fmt.Println("      ✓ kserve controller ready")
+			break
+		}
+		if attempt < maxAttempts {
+			time.Sleep(waitInterval)
+		}
+		if attempt == maxAttempts {
+			return fmt.Errorf("timeout waiting for kserve controller")
+		}
+	}
+	
+	return nil
+}
+
 // checkPodDNS runs a DNS check pod to verify pod networking works
 // Returns an error with actionable hint if DNS is broken
 func checkPodDNS() error {
@@ -524,6 +581,13 @@ func bootstrapFlux(interactiveMode bool, bootstrapCommit *bool) error {
 	}
 	
 	// Flux not bootstrapped - need to bootstrap
+	// First, wait for cluster dependencies to be ready to avoid cold-start races
+	fmt.Println("  - Waiting for cluster dependencies...")
+	if err := waitForClusterDependencies(); err != nil {
+		return err
+	}
+	fmt.Println("  ✓ Cluster dependencies ready")
+	
 	fmt.Println("  - Bootstrapping Flux...")
 	
 	// Get repo URL
