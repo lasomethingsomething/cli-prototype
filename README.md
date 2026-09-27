@@ -8,187 +8,60 @@ A trained ML model is a folder of files. Moving it safely from your laptop to pr
 
 model-cli is a thin orchestrator: it calls oras, syft, cosign, etc. via your PATH and does not bundle them. Model CLI guides you through that journey, collects the needed details, and lets you choose an appropriate tool for each task.
 
-## The workflow, in seven action-led steps
-
-1. **Develop & Package**: Creates a local OCI artifact manifest from the model folder and tags it with CNCF AI Interoperability Profile metadata.
-2. **Local Hardening & Compliance**: Generates an SBOM and MOF classification, and records both in the packaged artifact.
-3. **Supply Chain Check**: Cryptographically signs the artifact with Cosign so tampering can be detected later, and records a proof of origin (provenance) for the finished artifact.
-4. **Manifest-Level Validation**: Delegates upload to a registry to ORAS or ModelPack.
-5. **GitOps Admission & Policy Enforcement**: Commits the artifact manifest to your Git repository and pushes it. A connected Flux installation reconciles the change and rolls out the model with KServe. Does not auto-enforce policy.
-6. **Infrastructure & Resource Orchestration**: Validates that infrastructure matches the artifact's runtime and hardware requirements.
-7. **Runtime Execution & Optimization**: Validates serving runtime availability (vLLM, KServe). When deployed through the GitOps path, the KServe InferenceService is real and serving.
-
-If terms like SBOM, MOF, or admission are new to you, see the [Concepts and Glossary](docs/concepts-and-glossary.md).
-
-> **Status: prototype.** Model CLI guides ML-model packaging and delivery as OCI artifacts. It collects intent, writes standardized metadata, and delegates supported operations to selected tools such as ORAS, Syft, Cosign, Flux, and Argo CD. Some wizard stages and integrations remain simulated or incomplete; see Known limitations before relying on a step in production.
-
 ## System Requirements
 
-macOS + Homebrew; run `model-cli doctor`
+macOS + Homebrew; run `model-cli doctor --fix`
 
-> **Note:** The wizard pushes to your current Git repository. Ensure you own the repo or are working in a fork.
+> **Note:** The wizard pushes to your current Git repository. Ensure you own the repo or are working in a fork. An SSH key is required for Git operations.
 
-## Test Drive (about 20 minutes, fully real)
+## Quickstart (the golden path)
 
-This is the recommended path: a real Flux-managed cluster in minikube, a real local registry, real signing and publishing, and a real KServe deployment serving predictions. Every phase executes against live infrastructure.
-
-No cluster? The wizard falls back to guided simulations for phases 5–7; see the Clusterless Quick Tour at the end.
-
-### 0. Install
-
-Download the pre-built binary from [GitHub Releases](https://github.com/lasomethingsomething/cli-prototype/releases/latest):
+This is the recommended path. Each command does one thing:
 
 ```bash
-# macOS - map architecture: x86_64→amd64 (Intel), arm64→amd64 (Apple Silicon)
-arch=$(uname -m | sed 's/x86_64/amd64/')
-curl -sL https://github.com/lasomethingsomething/cli-prototype/releases/download/v0.1.1/model-cli_0.1.1_darwin_${arch}.tar.gz | tar xz
+# 1. Install the CLI
+curl -sL https://github.com/lasomethingsomething/cli-prototype/releases/latest/download/model-cli_darwin_amd64.tar.gz | tar xz
 chmod +x model-cli
-```
 
-> **Note:** The release tag is `v0.1.1` but the asset filenames have no `v` prefix (e.g., `model-cli_0.1.1_darwin_amd64.tar.gz`). On Intel Macs, `uname -m` reports `x86_64` which the `sed` command maps to `amd64`. On Apple Silicon, `uname -m` reports `arm64` which already matches the asset naming.
+# 2. Install missing tools and verify your environment
+./model-cli doctor --fix
 
-For Linux, replace `darwin` with `linux` in the URL.
-
-### 1. Fork, clone, and install prerequisites
-
-The Test Drive needs the repository (sample model `models/iris`, Flux config `clusters/minikube/`, a fork to push to).
-
-```bash
-# In GitHub: fork this repository (lasomethingsomething/cli-prototype) to your account, then:
-git clone https://github.com/your-username/cli-prototype.git
+# 3. Fork this repo on GitHub, then clone your fork and enter it
+git clone ssh://git@github.com/your-username/cli-prototype.git
 cd cli-prototype
-```
 
-> **Prerequisite:** An SSH key registered with GitHub is required for Flux to access your repository.
-
-model-cli is a thin orchestrator: it delegates to external tools like oras, syft, cosign, flux, podman, kubectl, minikube, and notation. These must all be installed and on your PATH before the cluster steps. Run the following to install any missing tools:
-
-```bash
+# 4. Set up a Flux-managed minikube cluster with all dependencies (one-shot, ~10 minutes)
 ./model-cli setup --yes
-```
 
-> **Note:** Replace `your-username` with your actual GitHub username in all commands below.
-
-**Your working copy must be clean before starting the wizard** (`git status` shows nothing modified). The wizard commits the manifest and pushes; uncommitted changes will make the deploy step fail.
-
-### 2. Start the cluster and bootstrap Flux (optional - the wizard can do this)
-
-If you want to set up the cluster manually before running the wizard, or if you're using an existing cluster:
-
-```bash
-# Start minikube with the podman driver (recommended) and at least 6GB memory
-# If you have Docker Desktop with <8GB allocated, use --memory=6g
-minikube start --driver=podman --cpus=4 --memory=6g
-
-# Bootstrap Flux using SSH transport (requires your SSH key from Step 1)
-flux bootstrap git --url=ssh://git@github.com/your-username/cli-prototype.git \
-  --branch=main --path=./clusters/minikube
-```
-
-> **Driver notes:**
-> - On Intel Macs with podman 5.x: use `--driver=podman` (required for podman 5.x compatibility)
-> - On Apple Silicon: `podman` is the default driver and works with latest podman
-> - If using Docker Desktop with <8GB RAM allocated: use `--memory=6g` instead of `--memory=8g`
-
-The repository contains a bootstrapped Flux cluster configuration in `clusters/minikube/`. The bootstrap uses SSH transport which requires an SSH key registered with GitHub.
-
-> **Bootstrap behavior:** `flux bootstrap git` is idempotent. If it fails partway through (e.g., network interruption), simply re-run the same command. Flux will push any missing commits to your repository, then reconcile the cluster state. You will see output like "already exists" or "already up-to-date" for resources that were successfully created on the first attempt.
-
-> **Note:** The wizard automatically generates the InferenceService manifest at `clusters/minikube/apps/iris.yaml` with the correct storageUri pointing to your fork.
-
-Wait until everything is reconciled:
-
-```bash
-kubectl get kustomizations -n flux-system
-# cert-manager, flux-system, kserve, metrics-server, models — all True
-```
-
-Flux installs KServe (model serving), cert-manager, and metrics-server, and keeps them synced to the repo.
-
-**Or:** Skip this step entirely — when you run the wizard and it asks "Do you have a Kubernetes cluster?", say No and the wizard will offer to set up minikube and Flux automatically.
-
-### 3. Start the local registry (optional - the wizard can do this)
-
-If you want to start the registry manually:
-
-```bash
-podman machine init    # first time only
-podman machine start
-podman run -d --rm --name model-cli-registry -p 5000:5000 registry:2
-curl http://localhost:5000/v2/    # {} means ready
-```
-
-**Or:** Skip this step entirely — when you run the wizard and choose to publish to a local Podman registry, the wizard will offer to set it up automatically.
-
-### 4. Run the wizard
-
-```bash
+# 5. Package, publish, and deploy the sample iris model
 ./model-cli wizard
 ```
 
-Answers that produce a fully real deployment, using the sample model in this repo:
- | Prompt | Answer |
- |---|---|
- | What's your model name? | `iris` |
- | Where are your model files? | `./models/iris` |
- | What should we call the artifact? | `test-model/iris` |
- | Which tool should generate the SBOM? | `syft` |
- | How should the Model Openness Framework class be set? | `auto (recommended)` |
- | Which signing approach should the wizard demonstrate? | `cosign` |
- | Publish this artifact to an OCI registry? | Yes |
- | Where is the OCI registry? | `a local Podman registry at localhost:5000` |
- | Which client should publish the artifact? | `oras` |
- | How would you like to promote the artifact? | `flux` |
- | Do you have a Kubernetes cluster? | **Yes** |
- | Git repository URL | `ssh://git@github.com/your-username/cli-prototype.git` |
- | Manifest path in repo | `clusters/minikube/apps` |
- | Which serving topology should the wizard demonstrate? | `kserve` |
+On a cold start, `model-cli setup --yes` automatically starts minikube, installs Flux, bootstraps the cluster, and waits for all components to be ready. You will see a brief pause (~60s) when the cert-manager webhook race fires; the tool auto-recovers with a flux reconcile and continues — this is expected behavior, not a failure.
 
-### 5. Verify the deployment
+The wizard finishes by running a real in-cluster prediction automatically and prints `✓ Prediction served: ...` followed by `✓ Verified: model served a prediction` in the recap. Signing and verification in steps 3 and 4 are labeled as "simulated" — this is intentional and honest.
+
+## Manual setup (optional)
+
+If you prefer to set up the environment manually instead of using `model-cli setup --yes`:
 
 ```bash
-kubectl get kustomizations -n flux-system        # new revision applied
-kubectl get inferenceservice iris -n models   # READY True
+# Start minikube (use Docker driver on macOS)
+minikube start --driver=docker --cpus=4 --memory=6g
 
-# Forward local port 8080 to the iris-predictor deployment
-# This allows you to send prediction requests to localhost:8080
-# Port 8080 on your machine may already be taken (check `lsof -i :8080`).
-# If so, forward to a different local port: kubectl port-forward -n models deploy/iris-predictor 9090:8080
-kubectl port-forward -n models deploy/iris-predictor 8080:8080
-```
+# Start a local registry
+podman run -d --rm --name model-cli-registry -p 5000:5000 registry:2
 
-The predictor Service (ClusterIP) listens on port 80, not 8080 — the 8080 you use locally is the pod port via port-forward. In-cluster, curl http://iris-predictor.models.svc.cluster.local/v1/models/iris:predict (note: no port suffix).
+# Bootstrap Flux (token auth recommended)
+GITHUB_TOKEN=$(gh auth token) flux bootstrap git --url=https://github.com/your-username/cli-prototype.git --branch=main --path=./clusters/minikube --token-auth
 
-A freshly started predictor takes ~2 minutes to bind its port. Wait for the pod to be Ready (kubectl get pods -n models) before sending requests — otherwise you'll see connection refused.
-
-Then in another terminal, send a prediction. Note: the sklearn predictor speaks the **V1 protocol** — use `instances`, not the V2-style `inputs` payload:
-
-```bash
-curl -s http://localhost:8080/v1/models/iris\:predict \
-  -H "Content-Type: application/json" \
-  -d '{"instances": [[5.1, 3.5, 1.4, 0.2]]}'
-# -> {"predictions":[0]}   (setosa)
-```
-
-### What just happened
-
-1. The model folder was packaged as an OCI artifact with AI Interoperability Profile annotations
-2. An SBOM (Syft) and MOF classification were generated and attached
-3. The artifact was signed (Cosign), verified, and pushed to your local registry (ORAS)
-4. The wizard committed the manifest to your git repository and pushed
-5. Flux reconciled the new revision and KServe rolled out a new predictor pod
-6. The InferenceService serves predictions over the V1 protocol
-
-### Cleanup
-
-```bash
-podman stop model-cli-registry
-minikube delete
+# Wait for convergence
+kubectl wait --for=condition=Ready kustomization/models -n flux-system --timeout=300s
 ```
 
 ## Clusterless Quick Tour (5 minutes)
 
-Try the complete local package, harden, compliance, and publish flow with a plain text file. No real model, registry account, GPU, or cluster required. Without a cluster, the wizard demonstrates phases 5–7 as guided simulations.
+Try the complete local package, harden, compliance, and publish flow with a plain text file. No cluster required.
 
 ```bash
 mkdir -p ~/test-model
@@ -196,27 +69,18 @@ echo "test" > ~/test-model/model.txt
 ./model-cli wizard
 ```
 
-Key answers: model name `test-model`, model path `~/test-model`, artifact name `test:v1`, skip RAG context, SBOM tool `syft`, MOF class `auto`, signing tool `cosign`. At the publish prompt choose Yes with the local Podman registry at `localhost:5000` and the `oras` client. At the GitOps prompt (Step 5), answer **No** when asked whether you have a cluster: phases 5–7 run as guided simulations.
+Key answers: model name `test-model`, model path `~/test-model`, artifact name `test:v1`. At the cluster prompt, answer **No** — phases 5-7 run as guided simulations.
 
-The test creates these local files. When you publish, ORAS uploads the model directory and its manifest annotations to the selected registry:
-
+The test creates these local files:
 - `~/test-model/manifest.json` - an OCI manifest carrying CNCF AI Interoperability Profile, SBOM format, and MOF annotations
 - `~/test-model/sbom.spdx-json` - the SBOM
 - `~/test-model/mof.json` - the MOF metadata
 
-Stop the temporary local registry when the test is complete:
-
-```bash
-podman stop model-cli-registry
-```
-
 ## Known limitations
 
-- The GitOps step assumes a clean git working copy; generated files are now gitignored but SBOM and manifest metadata are not deterministic (timestamps, UUIDs), which still dirties the repo on every run. Commit or clean them before re-deploying.
-- The serving-topology recommendation does not yet account for the packaged model's runtime (a sklearn artifact is offered `vllm`).
+- The GitOps step assumes a clean git working copy. Generated files are gitignored but some metadata may not be fully deterministic yet.
 - The sklearn predictor serves the V1 protocol; V2-style `inputs` payloads are rejected.
-
-Annotation conventions and model metadata are evolving as part of the CNCF AI inner-loop initiative #1740, so the wizard inspects them without enforcing a fixed contract.
+- Annotation conventions and model metadata are evolving as part of the CNCF AI inner-loop initiative #1740.
 
 ## Documentation
 
@@ -226,4 +90,3 @@ Annotation conventions and model metadata are evolving as part of the CNCF AI in
 - [TUI Guide](docs/tui.md)
 - [Resources](docs/resources.md)
 - [Contributing](CONTRIBUTING.md)
-# temp
