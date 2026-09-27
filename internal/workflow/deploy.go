@@ -15,6 +15,7 @@ type DeployWorkflow struct {
 	artifactRef        string // Full artifact reference with annotations (Story #63)
 	repoURL            string
 	manifestPath       string
+	manifestGenerated  string // Path to generated manifest file, if not yet committed
 	deployed           bool // True if a new deploy actually happened (not no-op)
 	readyVerified      bool // True if InferenceService reached Ready
 	predictionVerified bool // True if a prediction was successfully served
@@ -69,6 +70,11 @@ func (w *DeployWorkflow) PredictionVerified() bool {
 	return w.predictionVerified
 }
 
+// ManifestGenerated returns the path to the generated manifest file, if not yet committed
+func (w *DeployWorkflow) ManifestGenerated() string {
+	return w.manifestGenerated
+}
+
 // Run executes the deployment workflow
 func (w *DeployWorkflow) Run() error {
 	if w.modelName == "" || w.repoURL == "" {
@@ -106,6 +112,13 @@ func (w *DeployWorkflow) Run() error {
 	deployResult := w.gitOpsProvider.Deploy(artifactToDeploy, w.repoURL, w.manifestPath, w.modelPath)
 	if deployResult.Error != nil {
 		return deployResult.Error
+	}
+	
+	// If manifest was generated but not committed, return it to the caller
+	// The caller (cmd/wizard) will handle the commit prompt
+	if deployResult.ManifestGenerated != "" {
+		w.manifestGenerated = deployResult.ManifestGenerated
+		return nil
 	}
 
 	w.deployed = deployResult.Deployed

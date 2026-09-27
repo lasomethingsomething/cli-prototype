@@ -15,6 +15,7 @@ type DeployResult struct {
 	Deployed           bool // True if a new commit was created and pushed
 	Ready              bool // True if InferenceService reached Ready
 	PredictionVerified bool // True if a prediction was successfully served
+	ManifestGenerated  string // Path to generated manifest file, if any (non-empty means it was generated but not yet committed)
 }
 
 // GitOpsProvider defines the interface for GitOps tools like ArgoCD and Flux
@@ -86,14 +87,57 @@ func (f *FluxProvider) Deploy(modelName, repoURL, path, modelPath string) Deploy
 		}
 	}
 
-	// Pre-flight: verify the git remote and working tree state
-	fmt.Println("Pre-flight checks:")
-
-	// Get current branch for pre-flight checks
+	// Get current branch early for later use
 	branch, err := GetCurrentGitBranch()
 	if err != nil {
 		branch = "main"
 	}
+
+	// 2. Generate and write the InferenceService manifest FIRST
+	// This happens before pre-flight so we can detect if it makes the tree dirty
+
+	// Create inference service config and generate manifest
+	inferenceConfig, err := CreateInferenceServiceConfig(
+		modelName,
+		modelPath,
+		repoURL,
+		branch,
+	)
+	if err != nil {
+		return DeployResult{Error: fmt.Errorf("failed to create inference service config: %v", err)}
+	}
+
+	// Write manifest to the specified path
+	manifestPath := filepath.Join(path, modelName+".yaml")
+	if err := WriteInferenceServiceManifest(inferenceConfig, manifestPath); err != nil {
+		return DeployResult{Error: fmt.Errorf("failed to write inference service manifest: %v", err)}
+	}
+	fmt.Printf("✓ InferenceService manifest generated: %s\n", manifestPath)
+
+	// Check if the generated manifest file is now dirty
+	// If so, return the manifest path so the caller can offer a commit prompt
+	statusCmd := exec.Command("git", "status", "--porcelain", manifestPath)
+	statusOut, err := statusCmd.Output()
+	if err != nil {
+		// If we can't check git status, continue with normal flow
+		// but return the manifest path so caller knows it was generated
+		return DeployResult{
+			Error:             nil,
+			ManifestGenerated: manifestPath,
+		}
+	}
+	
+	// If the manifest file shows up in porcelain output, it's untracked or modified
+	// Return the manifest path so the caller can offer a commit prompt
+	if len(statusOut) > 0 {
+		return DeployResult{
+			Error:             nil,
+			ManifestGenerated: manifestPath,
+		}
+	}
+
+	// Pre-flight: verify the git remote and working tree state
+	fmt.Println("Pre-flight checks:")
 
 	// Check 1: Verify user can push to origin with dry-run
 	fmt.Print("  - Verifying push permissions... ")
@@ -123,27 +167,6 @@ func (f *FluxProvider) Deploy(modelName, repoURL, path, modelPath string) Deploy
 	if err := kubectlCmd.Run(); err != nil {
 		return DeployResult{Error: fmt.Errorf("cluster unreachable — is minikube running? (flux installed, cluster unreachable)")}
 	}
-
-	// 2. Generate and write the InferenceService manifest
-	// branch was already retrieved in pre-flight checks
-
-	// Create inference service config and generate manifest
-	inferenceConfig, err := CreateInferenceServiceConfig(
-		modelName,
-		modelPath,
-		repoURL,
-		branch,
-	)
-	if err != nil {
-		return DeployResult{Error: fmt.Errorf("failed to create inference service config: %v", err)}
-	}
-
-	// Write manifest to the specified path
-	manifestPath := filepath.Join(path, modelName+".yaml")
-	if err := WriteInferenceServiceManifest(inferenceConfig, manifestPath); err != nil {
-		return DeployResult{Error: fmt.Errorf("failed to write inference service manifest: %v", err)}
-	}
-	fmt.Printf("✓ InferenceService manifest generated: %s\n", manifestPath)
 
 	// 3. Commit the manifest path
 	if path == "" {

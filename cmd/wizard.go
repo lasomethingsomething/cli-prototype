@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -982,6 +983,52 @@ Examples:
 				if err := wf.Run(); err != nil {
 					return err
 				}
+
+				// Check if a manifest was generated but not yet committed
+				if manifestFile := wf.ManifestGenerated(); manifestFile != "" {
+					// Prompt: Commit and push the generated manifest?
+					var commitManifest bool
+					if err := huh.NewConfirm().
+						Title("Commit and push the generated manifest?").
+						Description(fmt.Sprintf("The InferenceService manifest at %s is ready to be committed.", manifestFile)).
+						Value(&commitManifest).
+						Run(); err != nil {
+						return err
+					}
+					
+					if commitManifest {
+						// Stage ONLY the manifest file
+						if out, err := exec.Command("git", "add", manifestFile).CombinedOutput(); err != nil {
+							return fmt.Errorf("git add %s failed: %s", manifestFile, out)
+						}
+						commit := exec.Command("git", "commit", "-m", fmt.Sprintf("wizard: deploy %s via GitOps", modelName))
+						commit.Env = append(os.Environ(), "GIT_EDITOR=true")
+						if commitOut, err := commit.CombinedOutput(); err != nil {
+							outStr := string(commitOut)
+							if !strings.Contains(outStr, "nothing to commit") &&
+								!strings.Contains(outStr, "no changes added") {
+								return fmt.Errorf("git commit failed: %s", outStr)
+							}
+							fmt.Printf("⚠ Manifest already committed\n")
+						} else {
+							fmt.Printf("✓ Committed manifest: %s\n", manifestFile)
+						}
+						
+						// Push to remote
+						if pushOut, err := exec.Command("git", "push").CombinedOutput(); err != nil {
+							return fmt.Errorf("git push failed: %s", pushOut)
+						}
+						fmt.Printf("✓ Pushed to git repository\n")
+					}
+					
+					// Re-run the deploy workflow to continue with pre-flight checks
+					// If user committed, it will pass; if not, it will fail at dirty-tree check
+					if err := wf.Run(); err != nil {
+						return err
+					}
+				}
+
+				// Set the results from the workflow
 				deploySucceeded = true
 				deployVerified = wf.ReadyVerified()
 				predictionVerified = wf.PredictionVerified()
