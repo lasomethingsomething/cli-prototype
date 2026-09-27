@@ -290,6 +290,25 @@ func WaitForInferenceServiceReady(name, namespace string) error {
 	return fmt.Errorf("timeout waiting for InferenceService '%s' in namespace '%s' to reach Ready", name, namespace)
 }
 
+// stripPodDeletionNotice removes kubectl's "pod deleted" notice from output
+// kubectl run --rm outputs: pod "<pod-name>" deleted from <namespace>
+func stripPodDeletionNotice(output string) string {
+	// Known teardown notice patterns from kubectl run --rm
+	patterns := []string{
+		"pod \"prediction-probe\" deleted from ",
+		"pod 'prediction-probe' deleted from ",
+	}
+	for _, p := range patterns {
+		if strings.Contains(output, p) {
+			// Remove the pattern and any trailing content
+			if idx := strings.Index(output, p); idx != -1 {
+				output = strings.TrimSpace(output[:idx])
+			}
+		}
+	}
+	return output
+}
+
 // VerifyInferenceServicePrediction runs a test prediction against the InferenceService
 // and returns (true, result, nil) if successful. It uses V1 protocol with instances payload,
 // service DNS without port (ClusterIP on 80), and handles predictor bind race
@@ -323,10 +342,13 @@ func VerifyInferenceServicePrediction(name, namespace string) (bool, string, err
 		output, err := curlCmd.CombinedOutput()
 		if err == nil {
 			outputStr := strings.TrimSpace(string(output))
+			// Strip kubectl pod deletion notice from output
+			// kubectl run --rm outputs "pod <name> deleted from <namespace>" to stderr
+			cleanOutput := stripPodDeletionNotice(outputStr)
 			// Check if we got a valid response (contains predictions or similar)
 			// A valid prediction response typically contains "predictions" field
-			if outputStr != "" && !strings.Contains(outputStr, "error") && !strings.Contains(outputStr, "Error") && !strings.Contains(outputStr, "404") && !strings.Contains(outputStr, "connection refused") {
-				return true, outputStr, nil
+			if cleanOutput != "" && !strings.Contains(cleanOutput, "error") && !strings.Contains(cleanOutput, "Error") && !strings.Contains(cleanOutput, "404") && !strings.Contains(cleanOutput, "connection refused") {
+				return true, cleanOutput, nil
 			}
 		}
 
