@@ -19,18 +19,19 @@ import (
 )
 
 type wizardResult struct {
-	packageSucceeded   bool
-	checkSucceeded     bool
-	signSucceeded      bool
-	signSimulated      bool // True if signing was simulated
-	verifySucceeded    bool
-	verifySimulated    bool // True if verification was simulated
-	publishSucceeded   bool
-	publishDestination string
-	deploySucceeded    bool
-	deployVerified     bool // True if InferenceService reached Ready
-	deployNoOp         bool // True if deploy was a no-op (already deployed)
-	modelName          string
+	packageSucceeded      bool
+	checkSucceeded        bool
+	signSucceeded         bool
+	signSimulated         bool // True if signing was simulated
+	verifySucceeded       bool
+	verifySimulated       bool // True if verification was simulated
+	publishSucceeded      bool
+	publishDestination    string
+	deploySucceeded       bool
+	deployVerified        bool // True if InferenceService reached Ready
+	predictionVerified   bool // True if a prediction was successfully served
+	deployNoOp            bool // True if deploy was a no-op (already deployed)
+	modelName             string
 	artifactName       string
 	signer             string
 	gitOps             string
@@ -83,9 +84,18 @@ func buildSummaryLines(r wizardResult) []string {
 	if r.skipDeploy {
 		lines = append(lines, "⚠ Skipped deployment")
 	} else if r.deployNoOp {
-		lines = append(lines, fmt.Sprintf("⚠ Already deployed with %s (no changes, InferenceService still Ready)", r.gitOps))
+		if r.predictionVerified {
+			lines = append(lines, fmt.Sprintf("⚠ Already deployed with %s (no changes, prediction verified)", r.gitOps))
+		} else {
+			lines = append(lines, fmt.Sprintf("⚠ Already deployed with %s (no changes, InferenceService still Ready)", r.gitOps))
+		}
 	} else if r.deployVerified {
-		lines = append(lines, fmt.Sprintf("✓ Deployed to Kubernetes with %s (InferenceService verified Ready)", r.gitOps))
+		if r.predictionVerified {
+			lines = append(lines, fmt.Sprintf("✓ Deployed to Kubernetes with %s (InferenceService Ready, prediction verified)", r.gitOps))
+			lines = append(lines, "✓ Verified: model served a prediction")
+		} else {
+			lines = append(lines, fmt.Sprintf("✓ Deployed to Kubernetes with %s (InferenceService verified Ready)", r.gitOps))
+		}
 	} else if r.deploySucceeded {
 		lines = append(lines, fmt.Sprintf("✓ Deployed to Kubernetes with %s (GitOps commit successful, Flux reconciliation initiated)", r.gitOps))
 	} else {
@@ -97,6 +107,9 @@ func buildSummaryLines(r wizardResult) []string {
 }
 
 func wizardCompletionMessage(r wizardResult) string {
+	if r.deployVerified && r.predictionVerified {
+		return "Your model is deployed, InferenceService is Ready, and serving was verified with a prediction."
+	}
 	if r.deployVerified {
 		return "Your model is deployed and the InferenceService reached Ready state."
 	}
@@ -274,6 +287,7 @@ Examples:
 		verifySimulated := false
 		deploySucceeded := false
 		deployVerified := false
+		predictionVerified := false
 		deployNoOp := false
 		
 		// Just-in-time tool check for registry provider
@@ -906,6 +920,7 @@ Examples:
 				}
 				deploySucceeded = true
 				deployVerified = wf.ReadyVerified()
+				predictionVerified = wf.PredictionVerified()
 				deployNoOp = !wf.Deployed()
 			}
 			fmt.Println()
@@ -971,6 +986,7 @@ Examples:
 			publishDestination: publishDestination,
 			deploySucceeded:    deploySucceeded,
 			deployVerified:     deployVerified,
+			predictionVerified: predictionVerified,
 			deployNoOp:         deployNoOp,
 			modelName:          modelName,
 			artifactName:       artifactName,

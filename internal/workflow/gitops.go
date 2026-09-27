@@ -11,9 +11,10 @@ import (
 
 // DeployResult contains the result of a GitOps deployment
 type DeployResult struct {
-	Error      error
-	Deployed   bool // True if a new commit was created and pushed
-	Ready      bool // True if InferenceService reached Ready
+	Error            error
+	Deployed        bool // True if a new commit was created and pushed
+	Ready           bool // True if InferenceService reached Ready
+	PredictionVerified bool // True if a prediction was successfully served
 }
 
 // GitOpsProvider defines the interface for GitOps tools like ArgoCD and Flux
@@ -228,14 +229,35 @@ func (f *FluxProvider) Deploy(modelName, repoURL, path, modelPath string) Deploy
 		// Don't return error - deployment may have happened but Ready not reached yet
 		fmt.Printf("⚠ InferenceService did not reach Ready state: %v\n", err)
 		ready = false
+		return DeployResult{
+			Error:             nil,
+			Deployed:          hasNewCommit,
+			Ready:             ready,
+			PredictionVerified: false,
+		}
 	} else {
 		fmt.Printf("✓ InferenceService '%s' in namespace '%s' is Ready\n", modelName, inferenceConfig.Namespace)
 	}
 
+	// 9. Verify prediction if the service is Ready
+	predictionVerified := false
+	if ready {
+		fmt.Printf("Verifying prediction...\n")
+		predOk, predResult, predErr := VerifyInferenceServicePrediction(modelName, inferenceConfig.Namespace)
+		if predErr == nil && predOk {
+			fmt.Printf("✓ Prediction served: %s\n", predResult)
+			predictionVerified = true
+		} else {
+			// Don't fail the deployment, just note it
+			fmt.Printf("⚠ Ready but couldn't verify a prediction automatically — the predictor may still be starting\n")
+		}
+	}
+
 	return DeployResult{
-		Error:    nil,
-		Deployed: hasNewCommit,
-		Ready:    ready,
+		Error:             nil,
+		Deployed:          hasNewCommit,
+		Ready:             ready,
+		PredictionVerified: predictionVerified,
 	}
 }
 
@@ -266,6 +288,73 @@ func WaitForInferenceServiceReady(name, namespace string) error {
 	}
 	
 	return fmt.Errorf("timeout waiting for InferenceService '%s' in namespace '%s' to reach Ready", name, namespace)
+}
+
+// VerifyInferenceServicePrediction runs a test prediction against the InferenceService
+// and returns (true, result, nil) if successful. It uses V1 protocol with instances payload,
+// service DNS without port (ClusterIP on 80), and handles predictor bind race
+// with retries up to ~90s. The result is the parsed prediction output.
+func VerifyInferenceServicePrediction(name, namespace string) (bool, string, error) {
+	const maxAttempts = 18
+	const waitInterval = 5 * time.Second
+
+	// Default payload for V1 protocol - instances field with sample data
+	// Works for sklearn, pytorch, etc.
+	payload := `{"instances": [[1.0, 2.0, 3.0, 4.0]]}`
+	predictorService := name + "-predictor"
+	predictURL := fmt.Sprintf("http://%s.%s.svc.cluster.local/v1/models/%s:predict", predictorService, namespace, name)
+
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		// Wait for predictor pod to exist and be ready
+		getPodsCmd := exec.Command("kubectl", "get", "pods", "-n", namespace, "-l", "app="+predictorService, "-o", "jsonpath={.items[0].metadata.name}")
+		podNameBytes, err := getPodsCmd.Output()
+		if err != nil {
+			// Pod not found yet, continue
+			if attempt < maxAttempts {
+				time.Sleep(waitInterval)
+			}
+			continue
+		}
+
+		podName := strings.TrimSpace(string(podNameBytes))
+		if podName == "" {
+			// No pods found yet
+			if attempt < maxAttempts {
+				time.Sleep(waitInterval)
+			}
+			continue
+		}
+
+		// Use kubectl run with curl image to test the prediction
+		// The curl pod will make the request and return the output
+		curlCmd := exec.Command("kubectl", "run", "prediction-probe",
+			"--image=curlimages/curl",
+			"--restart=Never",
+			"-n", namespace,
+			"--rm",
+			"--quiet",
+			"--",
+			"curl", "-s", "-X", "POST",
+			predictURL,
+			"-H", "Content-Type: application/json",
+			"-d", payload)
+		
+		output, err := curlCmd.CombinedOutput()
+		if err == nil {
+			outputStr := strings.TrimSpace(string(output))
+			// Check if we got a valid response (contains predictions or similar)
+			// A valid prediction response typically contains "predictions" field
+			if outputStr != "" && !strings.Contains(outputStr, "error") && !strings.Contains(outputStr, "Error") && !strings.Contains(outputStr, "404") && !strings.Contains(outputStr, "connection refused") {
+				return true, outputStr, nil
+			}
+		}
+
+		if attempt < maxAttempts {
+			time.Sleep(waitInterval)
+		}
+	}
+
+	return false, "", fmt.Errorf("predictor not responding or prediction failed")
 }
 
 // Ingredient describes a cluster component that the Git repo provides.

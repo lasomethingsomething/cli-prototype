@@ -6,17 +6,18 @@ import (
 
 // DeployWorkflow orchestrates the deployment using pluggable providers
 type DeployWorkflow struct {
-	gitOps           string
-	registry         string
-	gitOpsProvider   GitOpsProvider
-	registryProvider RegistryProvider
-	modelName        string
-	modelPath        string // Local path to the model files
-	artifactRef      string // Full artifact reference with annotations (Story #63)
-	repoURL          string
-	manifestPath     string
-	deployed         bool // True if a new deploy actually happened (not no-op)
-	readyVerified    bool // True if InferenceService reached Ready
+	gitOps              string
+	registry            string
+	gitOpsProvider      GitOpsProvider
+	registryProvider    RegistryProvider
+	modelName           string
+	modelPath           string // Local path to the model files
+	artifactRef         string // Full artifact reference with annotations (Story #63)
+	repoURL             string
+	manifestPath        string
+	deployed            bool // True if a new deploy actually happened (not no-op)
+	readyVerified       bool // True if InferenceService reached Ready
+	predictionVerified bool // True if a prediction was successfully served
 }
 
 // NewDeployWorkflow creates a new deployment workflow with the given providers
@@ -63,6 +64,11 @@ func (w *DeployWorkflow) ReadyVerified() bool {
 	return w.readyVerified
 }
 
+// PredictionVerified returns true if a prediction was successfully served
+func (w *DeployWorkflow) PredictionVerified() bool {
+	return w.predictionVerified
+}
+
 // Run executes the deployment workflow
 func (w *DeployWorkflow) Run() error {
 	if w.modelName == "" || w.repoURL == "" {
@@ -104,6 +110,7 @@ func (w *DeployWorkflow) Run() error {
 	
 	w.deployed = deployResult.Deployed
 	w.readyVerified = deployResult.Ready
+	w.predictionVerified = deployResult.PredictionVerified
 
 	// Use registry provider
 	if w.registry == "oras" || w.registry == "modelpack" {
