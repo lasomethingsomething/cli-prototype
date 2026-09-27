@@ -77,6 +77,9 @@ func (w *DeployWorkflow) ManifestGenerated() string {
 
 // Run executes the deployment workflow
 func (w *DeployWorkflow) Run() error {
+	// Reset state for this run
+	w.manifestGenerated = ""
+	
 	if w.modelName == "" || w.repoURL == "" {
 		return fmt.Errorf("model info not set: call SetModelInfo before Run()")
 	}
