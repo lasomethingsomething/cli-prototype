@@ -626,9 +626,6 @@ func bootstrapFlux(interactiveMode bool, bootstrapCommit *bool) error {
 		bootstrapCmd.Env = append(os.Environ(), "GITHUB_TOKEN="+token)
 	}
 	
-	bootstrapCmd.Stdout = os.Stdout
-	bootstrapCmd.Stderr = os.Stderr
-	
 	if useSSH {
 		fmt.Printf("    Running: flux bootstrap git --url=%s --branch=main --path=./clusters/minikube\n", sshURL)
 		fmt.Println("    (using SSH - may fail if flux cannot access your SSH key)")
@@ -637,8 +634,44 @@ func bootstrapFlux(interactiveMode bool, bootstrapCommit *bool) error {
 		fmt.Println("    (using token auth)")
 	}
 	
-	if err := bootstrapCmd.Run(); err != nil {
-		return fmt.Errorf("flux bootstrap failed: %v\n  Hint: If using SSH, try token auth with GITHUB_TOKEN=$(gh auth token)", err)
+	output, err := bootstrapCmd.CombinedOutput()
+	// Print the output to terminal
+	if output != nil {
+		fmt.Print(string(output))
+	}
+	outputStr := string(output)
+	
+	if err != nil {
+		// Check for cold-start race: cert-manager webhook not ready
+		// Error pattern: Certificate/kserve/serving-cert dry-run failed: failed calling webhook "webhook.cert-manager.io": connection refused
+		if strings.Contains(outputStr, "webhook.cert-manager.io") && strings.Contains(outputStr, "connection refused") {
+			fmt.Println("    ⚠ Cold-start race detected (cert-manager webhook not ready yet) — retrying reconcile...")
+			
+			// Wait for webhook to come up
+			fmt.Println("    Waiting 60 seconds for cert-manager webhook...")
+			time.Sleep(60 * time.Second)
+			
+			// Trigger reconcile
+			fmt.Println("    Running: flux reconcile kustomization flux-system --with-source")
+			reconcileCmd := exec.Command("flux", "reconcile", "kustomization", "flux-system", "--with-source")
+			reconcileCmd.Stdout = os.Stdout
+			reconcileCmd.Stderr = os.Stderr
+			if err := reconcileCmd.Run(); err != nil {
+				// Continue - reconcile may not be available yet
+				fmt.Printf("    ⚠ Reconcile returned: %v\n", err)
+			}
+			
+			// Poll for flux-system kustomization to be ready
+			fmt.Println("    Waiting for flux-system kustomization to be ready...")
+			waitCmd := exec.Command("kubectl", "wait", "--for=condition=Ready", "kustomization/flux-system", "-n", "flux-system", "--timeout=300s")
+			if err := waitCmd.Run(); err != nil {
+				return fmt.Errorf("webhook race retry failed: %v. Check cert-manager with: kubectl get all -n cert-manager", err)
+			}
+			
+			fmt.Println("    ✓ Bootstrap recovered from cold-start race")
+		} else {
+			return fmt.Errorf("flux bootstrap failed: %v\n  Hint: If using SSH, try token auth with GITHUB_TOKEN=$(gh auth token)", err)
+		}
 	}
 	
 	*bootstrapCommit = true
