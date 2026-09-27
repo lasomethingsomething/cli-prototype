@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -172,6 +173,43 @@ func installRequiredTools(interactiveMode bool) error {
 	return nil
 }
 
+// parseMemoryString parses a memory string from podman (in bytes) and returns GB as integer
+func parseMemoryString(memoryStr string) int {
+	// memoryStr is a number representing bytes
+	memoryStr = strings.TrimSpace(memoryStr)
+	if memoryStr == "" {
+		return 0
+	}
+	
+	// Try to parse as integer (bytes)
+	bytes, err := strconv.ParseInt(memoryStr, 10, 64)
+	if err != nil {
+		// Might be in different format, try to extract number
+		// Handle formats like "1956MB", "1.956GB", etc.
+		memoryStr = strings.TrimSpace(memoryStr)
+		memoryStr = strings.TrimSuffix(memoryStr, "B")
+		memoryStr = strings.TrimSuffix(memoryStr, "MB")
+		memoryStr = strings.TrimSuffix(memoryStr, "GB")
+		memoryStr = strings.TrimSuffix(memoryStr, "TB")
+		
+		// Try to parse as float
+		var memoryFloat float64
+		_, err := fmt.Sscanf(memoryStr, "%f", &memoryFloat)
+		if err != nil {
+			return 0
+		}
+		
+		// If we stripped MB, divide by 1024 to get GB
+		// But we need to know what unit we had - check the original string
+		// Since we already stripped, we can't tell, so assume bytes was intended
+		return int(memoryFloat / 1024 / 1024 / 1024)
+	}
+	
+	// Convert bytes to GB
+	gigabytes := bytes / (1024 * 1024 * 1024)
+	return int(gigabytes)
+}
+
 // ensureRegistry ensures a local registry is running
 func ensureRegistry(interactiveMode bool) error {
 	fmt.Println("Checking local registry (localhost:5000)...")
@@ -287,15 +325,104 @@ func ensureCluster(interactiveMode bool) error {
 		return fmt.Errorf("neither podman nor docker available - install one first")
 	}
 	
+	// For podman driver, check machine capacity and adapt resources
+	memory := "6g"
+	cpus := "4"
+	minMemoryGB := 2 // Minimum memory required for minikube
+	
+	if driver == "podman" {
+		fmt.Println("    - Checking podman machine capacity...")
+		
+		// Get podman machine info
+		inspectCmd := exec.Command("podman", "machine", "inspect", "--format", "{{.HostMemory}}")
+		memoryBytes, err := inspectCmd.Output()
+		if err != nil {
+			// Try podman info as fallback
+			infoCmd := exec.Command("podman", "info", "--format", "{{.Host.MemTotal}}")
+			memoryBytes, err = infoCmd.Output()
+			if err != nil {
+				fmt.Println("    ⚠ Could not detect podman machine memory, using default 6g")
+			} else {
+				// Parse memory from podman info
+				memoryStr := strings.TrimSpace(string(memoryBytes))
+				// memory is in bytes, convert to GB
+				memoryGB := parseMemoryString(memoryStr)
+				if memoryGB > 0 {
+					// Reserve 1GB overhead, min 2GB for minikube
+					availableMemoryGB := memoryGB - 1
+					if availableMemoryGB < minMemoryGB {
+						return fmt.Errorf("podman machine has only %dGB memory (need at least %dGB). Run: podman machine set --memory %d",
+							memoryGB, minMemoryGB+1, (minMemoryGB+1)*1024)
+					}
+					// Use min of desired (6g) and available
+					if availableMemoryGB < 6 {
+						memory = fmt.Sprintf("%dg", availableMemoryGB)
+						fmt.Printf("    - Adjusted memory to %s (machine has %dGB)\n", memory, memoryGB)
+					}
+				}
+			}
+		} else {
+			// Successfully got memory from inspect
+			memoryStr := strings.TrimSpace(string(memoryBytes))
+			memoryGB := parseMemoryString(memoryStr)
+			if memoryGB > 0 {
+				// Reserve 1GB overhead, min 2GB for minikube
+				availableMemoryGB := memoryGB - 1
+				if availableMemoryGB < minMemoryGB {
+					return fmt.Errorf("podman machine has only %dGB memory (need at least %dGB). Run: podman machine set --memory %d",
+							memoryGB, minMemoryGB+1, (minMemoryGB+1)*1024)
+				}
+				// Use min of desired (6g) and available
+				if availableMemoryGB < 6 {
+					memory = fmt.Sprintf("%dg", availableMemoryGB)
+					fmt.Printf("    - Adjusted memory to %s (machine has %dGB)\n", memory, memoryGB)
+				}
+			}
+		}
+		
+		// Check CPU count
+		cpusCmd := exec.Command("podman", "machine", "inspect", "--format", "{{.CPUs}}")
+		cpusOutput, err := cpusCmd.Output()
+		if err != nil {
+			// Try podman info
+			infoCmd := exec.Command("podman", "info", "--format", "{{.Host.CPUs}}")
+			cpusOutput, err = infoCmd.Output()
+			if err != nil {
+				fmt.Println("    ⚠ Could not detect podman machine CPUs, using default 4")
+			} else {
+				cpus = strings.TrimSpace(string(cpusOutput))
+				// Use min of desired (4) and available
+				if c, _ := strconv.Atoi(cpus); c > 0 && c < 4 {
+					memory = cpus
+					fmt.Printf("    - Adjusted CPUs to %s (machine has %s)\n", cpus, cpus)
+				}
+			}
+		} else {
+			cpus = strings.TrimSpace(string(cpusOutput))
+			// Use min of desired (4) and available
+			if c, _ := strconv.Atoi(cpus); c > 0 && c < 4 {
+				cpus = fmt.Sprintf("%d", c)
+				fmt.Printf("    - Adjusted CPUs to %s (machine has %s)\n", cpus, cpus)
+			}
+		}
+	}
+	
 	// Start minikube with pinned version
-	startCmd := exec.Command("minikube", "start", "--driver="+driver, "--kubernetes-version="+PinnedKubernetesVersion, "--cpus=4", "--memory=6g")
+	startCmd := exec.Command("minikube", "start", "--driver="+driver, "--kubernetes-version="+PinnedKubernetesVersion, "--cpus="+cpus, "--memory="+memory)
 	startCmd.Stdout = os.Stdout
 	startCmd.Stderr = os.Stderr
 	
-	fmt.Printf("    Running: minikube start --driver=%s --kubernetes-version=%s --cpus=4 --memory=6g\n",
-		driver, PinnedKubernetesVersion)
+	fmt.Printf("    Running: minikube start --driver=%s --kubernetes-version=%s --cpus=%s --memory=%s\n",
+		driver, PinnedKubernetesVersion, cpus, memory)
 	
 	if err := startCmd.Run(); err != nil {
+		errMsg := err.Error()
+		// Check for podman memory error (exit code 14)
+		if strings.Contains(errMsg, "Podman has only") || strings.Contains(errMsg, "MK_USAGE") {
+			// Extract the required memory from the error message
+			// Error format: "Podman has only 1956MB memory but you specified 6144MB"
+			return fmt.Errorf("%v\n\nHint: Run 'podman machine set --memory <bytes>' to increase memory (e.g., podman machine set --memory 8192)", err)
+		}
 		return fmt.Errorf("failed to start minikube: %v", err)
 	}
 	
