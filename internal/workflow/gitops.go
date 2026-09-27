@@ -16,6 +16,7 @@ type DeployResult struct {
 	Ready              bool // True if InferenceService reached Ready
 	PredictionVerified bool // True if a prediction was successfully served
 	ManifestGenerated  string // Path to generated manifest file, if any (non-empty means it was generated but not yet committed)
+	NewCommit          bool // True if this deploy run created a new commit
 }
 
 // GitOpsProvider defines the interface for GitOps tools like ArgoCD and Flux
@@ -124,6 +125,7 @@ func (f *FluxProvider) Deploy(modelName, repoURL, path, modelPath string) Deploy
 		return DeployResult{
 			Error:             nil,
 			ManifestGenerated: manifestPath,
+			NewCommit:        false,
 		}
 	}
 	
@@ -133,6 +135,7 @@ func (f *FluxProvider) Deploy(modelName, repoURL, path, modelPath string) Deploy
 		return DeployResult{
 			Error:             nil,
 			ManifestGenerated: manifestPath,
+			NewCommit:        false,
 		}
 	}
 
@@ -257,6 +260,7 @@ func (f *FluxProvider) Deploy(modelName, repoURL, path, modelPath string) Deploy
 			Deployed:           hasNewCommit,
 			Ready:              ready,
 			PredictionVerified: false,
+			NewCommit:          hasNewCommit,
 		}
 	} else {
 		fmt.Printf("✓ InferenceService '%s' in namespace '%s' is Ready\n", modelName, inferenceConfig.Namespace)
@@ -284,6 +288,7 @@ func (f *FluxProvider) Deploy(modelName, repoURL, path, modelPath string) Deploy
 		Deployed:           hasNewCommit,
 		Ready:              ready,
 		PredictionVerified: predictionVerified,
+		NewCommit:          hasNewCommit,
 	}
 }
 

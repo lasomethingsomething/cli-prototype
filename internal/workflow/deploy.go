@@ -19,6 +19,8 @@ type DeployWorkflow struct {
 	deployed           bool // True if a new deploy actually happened (not no-op)
 	readyVerified      bool // True if InferenceService reached Ready
 	predictionVerified bool // True if a prediction was successfully served
+	newCommit          bool // True if a new commit was created
+	quiet              bool // If true, skip prologue/banner printing
 }
 
 // NewDeployWorkflow creates a new deployment workflow with the given providers
@@ -75,6 +77,16 @@ func (w *DeployWorkflow) ManifestGenerated() string {
 	return w.manifestGenerated
 }
 
+// SetQuiet suppresses prologue/banner printing on Run()
+func (w *DeployWorkflow) SetQuiet(quiet bool) {
+	w.quiet = quiet
+}
+
+// NewCommit returns true if a new commit was created during this deploy
+func (w *DeployWorkflow) NewCommit() bool {
+	return w.newCommit
+}
+
 // Run executes the deployment workflow
 func (w *DeployWorkflow) Run() error {
 	// Reset state for this run
@@ -83,7 +95,9 @@ func (w *DeployWorkflow) Run() error {
 	if w.modelName == "" || w.repoURL == "" {
 		return fmt.Errorf("model info not set: call SetModelInfo before Run()")
 	}
-	fmt.Printf("Starting deployment with GitOps: %s, Registry: %s\n", w.gitOps, w.registry)
+	if !w.quiet {
+		fmt.Printf("Starting deployment with GitOps: %s, Registry: %s\n", w.gitOps, w.registry)
+	}
 
 	// Check if GitOps provider is available
 	if !w.gitOpsProvider.IsInstalled() {
@@ -127,6 +141,7 @@ func (w *DeployWorkflow) Run() error {
 	w.deployed = deployResult.Deployed
 	w.readyVerified = deployResult.Ready
 	w.predictionVerified = deployResult.PredictionVerified
+	w.newCommit = deployResult.NewCommit
 
 	// Use registry provider
 	if w.registry == "oras" || w.registry == "modelpack" {

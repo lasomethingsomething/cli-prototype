@@ -32,6 +32,7 @@ type wizardResult struct {
 	deployVerified     bool // True if InferenceService reached Ready
 	predictionVerified bool // True if a prediction was successfully served
 	deployNoOp         bool // True if deploy was a no-op (already deployed)
+	deployNewCommit    bool // True if deploy created a new commit
 	modelName          string
 	artifactName       string
 	signer             string
@@ -92,10 +93,18 @@ func buildSummaryLines(r wizardResult) []string {
 		}
 	} else if r.deployVerified {
 		if r.predictionVerified {
-			lines = append(lines, fmt.Sprintf("✓ Deployed to Kubernetes with %s (InferenceService Ready, prediction verified)", r.gitOps))
-			lines = append(lines, "✓ Verified: model served a prediction")
+			if r.deployNewCommit {
+				lines = append(lines, fmt.Sprintf("✓ Deployed with %s (prediction verified)", r.gitOps))
+			} else {
+				lines = append(lines, fmt.Sprintf("✓ Deployed to Kubernetes with %s (InferenceService Ready, prediction verified)", r.gitOps))
+				lines = append(lines, "✓ Verified: model served a prediction")
+			}
 		} else {
-			lines = append(lines, fmt.Sprintf("✓ Deployed to Kubernetes with %s (InferenceService verified Ready)", r.gitOps))
+			if r.deployNewCommit {
+				lines = append(lines, fmt.Sprintf("✓ Deployed with %s", r.gitOps))
+			} else {
+				lines = append(lines, fmt.Sprintf("✓ Deployed to Kubernetes with %s (InferenceService verified Ready)", r.gitOps))
+			}
 		}
 	} else if r.deploySucceeded {
 		lines = append(lines, fmt.Sprintf("✓ Deployed to Kubernetes with %s (GitOps commit successful, Flux reconciliation initiated)", r.gitOps))
@@ -355,6 +364,7 @@ Examples:
 		deployVerified := false
 		predictionVerified := false
 		deployNoOp := false
+		deployNewCommit := false
 
 		// Just-in-time tool check for registry provider
 		if !registryProvider.IsInstalled() {
@@ -987,7 +997,8 @@ Examples:
 				// Check if a manifest was generated but not yet committed
 				if manifestFile := wf.ManifestGenerated(); manifestFile != "" {
 					// Prompt: Commit and push the generated manifest?
-					var commitManifest bool
+					// Default to Yes for Enter-through golden path
+					commitManifest := true
 					if err := huh.NewConfirm().
 						Title("Commit and push the generated manifest?").
 						Description(fmt.Sprintf("The InferenceService manifest at %s is ready to be committed.", manifestFile)).
@@ -1019,6 +1030,8 @@ Examples:
 							return fmt.Errorf("git push failed: %s", pushOut)
 						}
 						fmt.Printf("✓ Pushed to git repository\n")
+						// Suppress duplicate banner on re-run
+						wf.SetQuiet(true)
 					}
 					
 					// Re-run the deploy workflow to continue with pre-flight checks
@@ -1038,6 +1051,7 @@ Examples:
 				deployVerified = wf.ReadyVerified()
 				predictionVerified = wf.PredictionVerified()
 				deployNoOp = !wf.Deployed()
+				deployNewCommit = wf.NewCommit()
 			}
 			fmt.Println()
 		} else if !skipDeploy {
@@ -1108,6 +1122,7 @@ Examples:
 			deployVerified:     deployVerified,
 			predictionVerified: predictionVerified,
 			deployNoOp:         deployNoOp,
+			deployNewCommit:    deployNewCommit,
 			modelName:          modelName,
 			artifactName:       artifactName,
 			signer:             cfg.Signer,
