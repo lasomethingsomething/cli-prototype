@@ -40,7 +40,9 @@ model-cli wizard
 
 On a cold start, `model-cli setup --yes` automatically starts minikube, installs Flux, bootstraps the cluster, and waits for all components to be ready. You will see a brief pause (~60s) when the cert-manager webhook race fires; the tool auto-recovers with a flux reconcile and continues — this is expected behavior, not a failure.
 
-The wizard finishes by running a real in-cluster prediction automatically and prints `✓ Prediction served: ...` followed by `✓ Verified: model served a prediction` in the recap. The signing and verification steps in the wizard are labeled as "simulated" — this is intentional and honest.
+The wizard finishes by running a real in-cluster prediction automatically and prints `✓ Prediction served: ...`. On a re-run where everything is already deployed, the recap honestly notes `⚠ Already deployed with flux (no changes, prediction verified)`. The signing and verification steps in the wizard are labeled as "simulated" — this is intentional and honest.
+
+The wizard's defaults are the golden path: pressing Enter at every prompt on the sample iris model completes a real package → publish → GitOps deploy → verified prediction.
 
 ## Manual setup (optional)
 
@@ -55,6 +57,7 @@ podman run -d --rm --name model-cli-registry -p 5000:5000 registry:2
 
 # Bootstrap Flux (token auth recommended)
 GITHUB_TOKEN=$(gh auth token) flux bootstrap git --url=https://github.com/your-username/cli-prototype.git --branch=main --path=./clusters/minikube --token-auth
+Note: token auth (--token-auth) is the more reliable bootstrap path on macOS; the flux CLI's built-in SSH stack does not use the macOS Keychain.
 
 # Wait for convergence
 kubectl wait --for=condition=Ready kustomization/models -n flux-system --timeout=300s
@@ -70,7 +73,7 @@ echo "test" > ~/test-model/model.txt
 model-cli wizard
 ```
 
-Key answers: type model name `test-model`, model path `~/test-model`, artifact name `test:v1` (no defaults apply outside the repo). At the cluster prompt, answer **No** — phases 5-7 run as guided simulations.
+Key answers: type model name `test-model`, model path `~/test-model`, artifact name `test:v1` (no defaults apply outside the repo). At the cluster prompt, answer No (the default is Yes) — phases 5-7 run as guided simulations.
 
 The test creates these local files:
 - `~/test-model/manifest.json` - an OCI manifest carrying CNCF AI Interoperability Profile, SBOM format, and MOF annotations
