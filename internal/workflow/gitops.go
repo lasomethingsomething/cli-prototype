@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -486,15 +487,38 @@ func DetectIngredients() []Ingredient {
 	// If flux binary is not installed, don't try to query the cluster
 	if fluxBinaryErr == nil {
 		// Flux binary is installed, now check if it's actually running in the cluster
-		// Use -o json for structured output instead of TTY-dependent table parsing
-		fluxOut, ferr := exec.Command("flux", "get", "kustomization", "--all-namespaces", "-o", "json").CombinedOutput()
-		if ferr == nil {
-			// Parse JSON output to find flux-system with Ready=True
-			fluxPresent = strings.Contains(string(fluxOut), `"name":"flux-system"`) &&
-				strings.Contains(string(fluxOut), `"type":"Ready"`) &&
-				strings.Contains(string(fluxOut), `"status":"True"`)
+		// Use kubectl against the CRD for reliable JSON output (flux get has no -o flag)
+		kubectlOut, kubectlErr := exec.Command("kubectl", "get", "kustomizations.kustomize.toolkit.fluxcd.io", "-n", "flux-system", "-o", "json").CombinedOutput()
+		if kubectlErr == nil {
+			// Parse JSON output to find flux-system kustomization with Ready=True
+			var list struct {
+				Items []struct {
+					Metadata struct {
+						Name string `json:"name"`
+					} `json:"metadata"`
+					Status struct {
+						Conditions []struct {
+							Type   string `json:"type"`
+							Status string `json:"status"`
+						} `json:"conditions"`
+					} `json:"status"`
+				} `json:"items"`
+			}
+			if err := json.Unmarshal(kubectlOut, &list); err == nil {
+				for _, item := range list.Items {
+					if item.Metadata.Name == "flux-system" {
+						for _, cond := range item.Status.Conditions {
+							if cond.Type == "Ready" && cond.Status == "True" {
+								fluxPresent = true
+								break
+							}
+						}
+						break
+					}
+				}
+			}
 		}
-		// If flux binary is installed but cluster query failed, flux is "installed but cluster unreachable"
+		// If kubectl query failed while flux binary is present, flux is installed but cluster unreachable
 		// We still mark it as not Present in the cluster, but the binary is on PATH
 	}
 	// If flux binary is not on PATH, fluxPresent remains false
