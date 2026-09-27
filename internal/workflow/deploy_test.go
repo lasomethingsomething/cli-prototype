@@ -16,8 +16,8 @@ type fakeGitOpsProvider struct {
 func (f *fakeGitOpsProvider) Name() string                { return f.name }
 func (f *fakeGitOpsProvider) IsInstalled() bool           { return f.installed }
 func (f *fakeGitOpsProvider) InstallInstructions() string { return "brew install " + f.name }
-func (f *fakeGitOpsProvider) Deploy(modelName, repoURL, path, modelPath string) error {
-	return nil
+func (f *fakeGitOpsProvider) Deploy(modelName, repoURL, path, modelPath string) DeployResult {
+	return DeployResult{Error: nil, Deployed: true, Ready: false}
 }
 
 // fakeDeployRegistry embeds RegistryProvider so every method is satisfied

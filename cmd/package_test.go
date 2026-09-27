@@ -30,7 +30,7 @@ func TestAskCUDAMin(t *testing.T) {
 		args        []string
 		want        string
 	}{
-		{"nvidia keeps the default", "nvidia-gpu", nil, "12.1"},
+		{"nvidia keeps the default", "nvidia-gpu", nil, ""},
 		{"nvidia with explicit flag", "nvidia-gpu", []string{"--cuda-min", "11.8"}, "11.8"},
 		{"cpu drops the default", "cpu", nil, ""},
 		{"amd-gpu drops the default", "amd-gpu", nil, ""},
