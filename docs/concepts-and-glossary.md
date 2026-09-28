@@ -43,7 +43,7 @@ conventions are evolving as part of the
 | **[MOF](https://isitopen.ai/)** | The Model Openness Framework classifies how much of a model's weights, code, data, documentation, and license are open. |
 | **[ORAS](https://oras.land/)** | The recommended client for pushing OCI artifacts to registries such as Harbor, GHCR, or zot. |
 | **[ModelPack](https://github.com/modelpack/model-spec)** | An alternative model packaging format driven by `modctl`; Model CLI currently also needs ORAS for annotations and referrers. |
-| **Serving topology** | The arrangement that serves a model: direct vLLM, KServe, or KServe-managed vLLM. The combined option is currently demonstrated by the wizard rather than executed as a combined provider. |
+| **Serving topology** | The arrangement that serves a model: direct vLLM, KServe, or KServe-managed vLLM. The KServe-managed vLLM option deploys as a real InferenceService using the kserve-huggingfaceserver runtime (which embeds vLLM as a backend). Note: vLLM requires GPU nodes and significant memory. |
 | **Layer deduplication** | Storing identical model layers once rather than once per artifact. |
 | **GitOps** | A deployment approach where a controller, such as Flux or Argo CD, reconciles a cluster with the configuration in Git. |
 | **Admission** | The cluster policy decision about whether an artifact may enter an environment. |

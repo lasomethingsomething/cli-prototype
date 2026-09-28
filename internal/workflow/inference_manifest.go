@@ -31,6 +31,8 @@ type InferenceServiceConfig struct {
 	ModelFormatVersion string
 	// ContainerArgs are additional arguments for the serving container
 	ContainerArgs []string
+	// Annotations are additional annotations for the InferenceService metadata
+	Annotations map[string]string
 }
 
 // InferenceServiceTemplate is the template for generating an InferenceService manifest
@@ -41,18 +43,19 @@ metadata:
   namespace: {{.Namespace}}
   annotations:
     serving.kserve.io/deploymentMode: RawDeployment
+{{if .Annotations}}{{range $key, $value := .Annotations}}
+    {{ $key }}: "{{ $value }}"{{end}}
+{{end}}
 spec:
   predictor:
     model:
       modelFormat:
         name: {{.ModelFormatName}}
-        version: "{{.ModelFormatVersion}}"
+{{if .ModelFormatVersion}}        version: "{{.ModelFormatVersion}}"{{end}}
       runtime: {{.Runtime}}
       storageUri: "{{.StorageUri}}"
-{{if .ContainerArgs}}
-      container:
-        args:{{range .ContainerArgs}}
-        - {{.}}{{end}}
+{{if .ContainerArgs}}      args:{{range .ContainerArgs}}
+      - {{.}}{{end}}
 {{end}}
       resources:
         requests:
@@ -170,7 +173,7 @@ func CreateInferenceServiceConfig(
 
 	// Map model format to KServe model format name and version
 	modelFormatName := strings.ToLower(string(runtimeInfo.ModelFormat))
-	modelFormatVersion := "1" // Default version
+	modelFormatVersion := "" // Empty by default - only set for formats that need it
 	
 	// Validate and set model format for KServe
 	validFormats := map[string]string{
@@ -193,26 +196,23 @@ func CreateInferenceServiceConfig(
 	}
 
 	// Set container args based on runtime
+	// Only kserve-huggingfaceserver uses args; all others (sklearn, pytorch, etc.) have none
+	// This ensures byte-identical output for sklearn path
 	var containerArgs []string
-	switch runtime {
-	case "kserve-sklearnserver", "kserve-mlserver":
-		containerArgs = []string{
-			fmt.Sprintf("--model_name=%s", modelName),
-			fmt.Sprintf("--model_dir=/mnt/models"),
-			"--http_port=8080",
-		}
-	case "kserve-huggingfaceserver":
+	if runtime == "kserve-huggingfaceserver" {
 		containerArgs = []string{
 			fmt.Sprintf("--model_id=%s", modelName),
 			"--backend=vllm",
 		}
-	default:
-		// For other runtimes (pytorch, tensorflow, etc.), use standard args
-		containerArgs = []string{
-			fmt.Sprintf("--model_name=%s", modelName),
-			fmt.Sprintf("--model_dir=/mnt/models"),
-			"--http_port=8080",
-		}
+	}
+
+	// Set annotations for LLM path
+	annotations := make(map[string]string)
+	if runtime == "kserve-huggingfaceserver" {
+		annotations[AnnotationRuntime] = "kserve-huggingfaceserver"
+		annotations[AnnotationAccelerator] = "gpu"
+		// Set a realistic memory requirement for LLM models
+		annotations[AnnotationMemoryMin] = "24Gi"
 	}
 
 	return &InferenceServiceConfig{
@@ -226,6 +226,7 @@ func CreateInferenceServiceConfig(
 		ModelFormatName:    modelFormatName,
 		ModelFormatVersion: modelFormatVersion,
 		ContainerArgs:      containerArgs,
+		Annotations:       annotations,
 	}, nil
 }
 

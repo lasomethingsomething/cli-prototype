@@ -81,8 +81,11 @@ operation methods; tests can substitute fakes.
 | Runtime | `vllm` (recommended), `kserve` |
 
 The wizard also offers a **serving topology** demonstration: direct vLLM,
-KServe, or KServe-managed vLLM. The combined KServe + vLLM option is not a
-single runtime provider and is currently simulated.
+KServe, or KServe-managed vLLM. The KServe-managed vLLM option uses the
+kserve-huggingfaceserver runtime which embeds the vLLM engine as a backend, and
+deploys as a real InferenceService to the cluster. Note: vLLM serving requires
+GPU nodes and significant memory; the bundled CPU-only minikube cannot
+complete a vLLM serve (expect OOM or timeout).
 
 ## Registry Integration
 

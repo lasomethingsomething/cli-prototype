@@ -268,7 +268,13 @@ func (f *FluxProvider) Deploy(modelName, repoURL, path, modelPath, runtime strin
 	ready := true
 	if err := WaitForInferenceServiceReady(modelName, inferenceConfig.Namespace); err != nil {
 		// Don't return error - deployment may have happened but Ready not reached yet
-		fmt.Printf("⚠ InferenceService did not reach Ready state: %v\n", err)
+		// Provide specific messaging for LLM runtime on CPU-only clusters
+		if runtime == "kserve-huggingfaceserver" {
+			fmt.Printf("⚠ InferenceService did not reach Ready state: %v\n", err)
+			fmt.Printf("  Note: vLLM serving requires GPU nodes and significant memory. This CPU-only cluster may not have sufficient resources.\n")
+		} else {
+			fmt.Printf("⚠ InferenceService did not reach Ready state: %v\n", err)
+		}
 		ready = false
 		return DeployResult{
 			Error:              nil,

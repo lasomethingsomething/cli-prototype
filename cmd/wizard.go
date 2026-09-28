@@ -1021,8 +1021,8 @@ Examples:
 			}
 
 			if gitOpsProvider.IsInstalled() && registryProvider.IsInstalled() {
-				// Determine serving topology before deploying
-				// This ensures the InferenceService uses the correct runtime
+				// Step 6.5: Select serving topology (restored prompt)
+				// This was removed in a2be6b0 and needs to be restored for LLM path accessibility
 				modelFormat := workflow.DetectModelFormatFromPath(modelPath)
 				servingTopology := cfg.ServingTopology
 				if servingTopology == "" {
@@ -1031,10 +1031,39 @@ Examples:
 				if servingTopology == "" {
 					servingTopology = getServingTopologyOptions(modelFormat).Recommended()
 				}
+				
+				// Prompt user for serving topology selection
+				if err := huh.NewSelect[string]().
+					Title("Which serving topology should the wizard demonstrate?").
+					Options(toolOptions(getServingTopologyOptions(modelFormat))...).
+					Value(&servingTopology).
+					Run(); err != nil {
+					return err
+				}
+				
+				// For LLM topology, prompt for Hugging Face model id
+				var hfModelID string
+				if servingTopology == "kserve-vllm" {
+					if err := huh.NewInput().
+						Title("Hugging Face model ID:").
+						Placeholder("facebook/opt-125m").
+						Value(&hfModelID).
+						Run(); err != nil {
+						return err
+					}
+					hfModelID = strings.TrimSpace(hfModelID)
+					if hfModelID == "" {
+						hfModelID = "facebook/opt-125m" // default
+					}
+				}
+				
 				// Map serving topology to actual runtime that exists in the cluster
 				// kserve-vllm -> kserve-huggingfaceserver (which uses vLLM engine as backend)
 				if servingTopology == "kserve-vllm" {
 					cfg.Runtime = "kserve-huggingfaceserver"
+					// Store HF model id for use in manifest generation
+					// We'll pass it through modelName for the storageUri and container args
+					modelName = hfModelID
 				} else {
 					cfg.Runtime = servingTopology
 				}

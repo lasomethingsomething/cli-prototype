@@ -68,8 +68,11 @@ terminal.
 
 Tool menus show supported choices and mark the current recommendation. Some
 choices are mutually exclusive providers, such as ORAS versus ModelPack; the
-serving-topology demonstration additionally shows direct vLLM, KServe, and
-KServe-managed vLLM.
+serving-topology demonstration shows direct vLLM, KServe, and KServe-managed
+vLLM. When KServe-managed vLLM is selected, the wizard prompts for a Hugging
+Face model ID (default: facebook/opt-125m) to deploy. Note: vLLM serving
+requires GPU nodes and significant memory; the bundled CPU-only minikube
+cannot complete a vLLM serve.
 
 ## Styling And Accessibility
 
