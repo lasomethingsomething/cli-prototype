@@ -1097,45 +1097,45 @@ Examples:
 				cfg.Runtime = deployRuntime
 				cfg.ServingTopology = servingTopology
 				
-				// If vllm topology (direct serving), skip the deploy
+				// If vllm topology (direct serving), skip the entire deploy execution
 				if skipDeployBecauseOfTopology {
 					skipDeploy = true
-				}
-
-				// If LLM topology is selected, update manifest.json with LLM annotations
-				// so Step 6 can read them and show the GPU/memory requirements
-				if servingTopology == "kserve-vllm" {
-					manifestJSONPath := filepath.Join(modelPath, "manifest.json")
-					if manifest, err := workflow.ReadUnifiedOCIManifest(manifestJSONPath); err == nil {
-						// Ensure annotations map exists
-						if manifest.Annotations == nil {
-							manifest.Annotations = make(map[string]string)
-						}
-						// Add/update LLM-specific annotations
-						manifest.Annotations[workflow.AnnotationRuntime] = "kserve-huggingfaceserver"
-						manifest.Annotations[workflow.AnnotationAccelerator] = "gpu"
-						manifest.Annotations[workflow.AnnotationMemoryMin] = "24Gi"
-						// Write the updated manifest back
-						if err := workflow.WriteUnifiedOCIManifest(manifest, manifestJSONPath); err != nil {
-							// Don't fail the workflow, just log a warning
-							fmt.Printf("Warning: failed to update manifest.json with LLM annotations: %v\n", err)
+				} else {
+					// If LLM topology is selected, update manifest.json with LLM annotations
+					// so Step 6 can read them and show the GPU/memory requirements
+					if servingTopology == "kserve-vllm" {
+						manifestJSONPath := filepath.Join(modelPath, "manifest.json")
+						if manifest, err := workflow.ReadUnifiedOCIManifest(manifestJSONPath); err == nil {
+							// Ensure annotations map exists
+							if manifest.Annotations == nil {
+								manifest.Annotations = make(map[string]string)
+							}
+							// Add/update LLM-specific annotations
+							manifest.Annotations[workflow.AnnotationRuntime] = "kserve-huggingfaceserver"
+							manifest.Annotations[workflow.AnnotationAccelerator] = "gpu"
+							manifest.Annotations[workflow.AnnotationMemoryMin] = "24Gi"
+							// Write the updated manifest back
+							if err := workflow.WriteUnifiedOCIManifest(manifest, manifestJSONPath); err != nil {
+								// Don't fail the workflow, just log a warning
+								fmt.Printf("Warning: failed to update manifest.json with LLM annotations: %v\n", err)
+							}
 						}
 					}
-				}
 
-				wf, err := workflow.NewDeployWorkflow(cfg.GitOps, cfg.Registry)
-				if err != nil {
-					return err
-				}
-				wf.SetModelInfo(modelName, modelPath, repoURL, manifestPath)
-				wf.SetRuntime(cfg.Runtime)
-				// Pass HF model ID to workflow for manifest generation
-				if servingTopology == "kserve-vllm" {
-					wf.SetHFModelID(hfModelID)
-				}
+					wf, err := workflow.NewDeployWorkflow(cfg.GitOps, cfg.Registry)
+					if err != nil {
+						return err
+					}
+					wf.SetModelInfo(modelName, modelPath, repoURL, manifestPath)
+					wf.SetRuntime(cfg.Runtime)
+					// Pass HF model ID to workflow for manifest generation
+					if servingTopology == "kserve-vllm" {
+						wf.SetHFModelID(hfModelID)
+					}
 
-				if err := wf.Run(); err != nil {
-					return err
+					if err := wf.Run(); err != nil {
+						return err
+					}
 				}
 
 				// Check if a manifest was generated but not yet committed
