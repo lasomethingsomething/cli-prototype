@@ -1,11 +1,13 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,6 +20,50 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
+
+// parseMemory parses a Kubernetes memory string (Ki, Mi, Gi, Ti - base 2) to int64 Ki
+// Handles: Ki, Mi (1024 Ki), Gi (1048576 Ki), Ti (1073741824 Ki)
+func parseMemory(s string) int64 {
+	if s == "" {
+		return 0
+	}
+	// Handle suffixes: Ki, Mi, Gi, Ti (base 2)
+	// 1 Mi = 1024 Ki, 1 Gi = 1024 Mi = 1048576 Ki, 1 Ti = 1024 Gi = 1073741824 Ki
+	if strings.HasSuffix(s, "Gi") {
+		val, _ := strconv.ParseInt(strings.TrimSuffix(s, "Gi"), 10, 64)
+		return val * 1024 * 1024 // Gi to Ki
+	} else if strings.HasSuffix(s, "Mi") {
+		val, _ := strconv.ParseInt(strings.TrimSuffix(s, "Mi"), 10, 64)
+		return val * 1024 // Mi to Ki
+	} else if strings.HasSuffix(s, "Ti") {
+		val, _ := strconv.ParseInt(strings.TrimSuffix(s, "Ti"), 10, 64)
+		return val * 1024 * 1024 * 1024 // Ti to Ki
+	} else if strings.HasSuffix(s, "Ki") {
+		val, _ := strconv.ParseInt(strings.TrimSuffix(s, "Ki"), 10, 64)
+		return val
+	}
+	// Plain number (assume Ki)
+	val, _ := strconv.ParseInt(s, 10, 64)
+	return val
+}
+
+// parseCPU parses a Kubernetes CPU string to float64 cores
+// Handles: m (milli), k (kilo), or plain (cores)
+func parseCPU(s string) float64 {
+	if s == "" {
+		return 0
+	}
+	// Handle suffixes: m (milli), k (kilo), or plain (cores)
+	if strings.HasSuffix(s, "m") {
+		val, _ := strconv.ParseFloat(strings.TrimSuffix(s, "m"), 64)
+		return val / 1000 // milli to cores
+	} else if strings.HasSuffix(s, "k") {
+		val, _ := strconv.ParseFloat(strings.TrimSuffix(s, "k"), 64)
+		return val * 1000 // kilo-milli to milli, then /1000 = cores
+	}
+	val, _ := strconv.ParseFloat(s, 64)
+	return val
+}
 
 type wizardResult struct {
 	packageSucceeded   bool
@@ -111,8 +157,6 @@ func buildSummaryLines(r wizardResult) []string {
 	} else {
 		lines = append(lines, "⚠ Deployment not completed")
 	}
-	// Always label Steps 6-7 as simulated
-	lines = append(lines, "⚠ Steps 6-7 (Infrastructure & Resource Orchestration, Runtime Execution) - simulated")
 	return lines
 }
 
@@ -1067,7 +1111,127 @@ Examples:
 			fmt.Println()
 
 			fmt.Println(stepStyle.Render("Step 6: Infrastructure & Resource Orchestration"))
-			fmt.Println("Simulated: Kubernetes would match the artifact's accelerator, CUDA, memory, GPU, and vRAM annotations to available nodes.")
+			
+			// Read declared requirements from manifest's CNCF AI annotations
+			manifestPath := filepath.Join(modelPath, "manifest.json")
+			var annotations map[string]string
+			if manifest, err := workflow.ReadUnifiedOCIManifest(manifestPath); err == nil && manifest.Annotations != nil {
+				annotations = manifest.Annotations
+			}
+			
+			// Query actual nodes
+			nodesOut, nodesErr := exec.Command("kubectl", "get", "nodes", "-o", "json").CombinedOutput()
+			if nodesErr != nil {
+				fmt.Printf("⚠ Node query failed: %v\n", nodesErr)
+			} else {
+				// Parse node JSON
+				var nodesList struct {
+					Items []struct {
+						Metadata struct {
+							Name   string            `json:"name"`
+							Labels map[string]string `json:"labels"`
+						} `json:"metadata"`
+						Status struct {
+							Allocatable map[string]string `json:"allocatable"`
+							Capacity   map[string]string `json:"capacity"`
+						} `json:"status"`
+					} `json:"items"`
+				}
+				if err := json.Unmarshal(nodesOut, &nodesList); err == nil {
+					// Check each declared requirement
+					if len(annotations) == 0 {
+						fmt.Println("✓ No special requirements")
+					} else {
+						// org.cncf.ai.accelerator
+						if accel, ok := annotations[workflow.AnnotationAccelerator]; ok && accel != "" {
+							if accel == "cpu" {
+								// CPU is satisfied by any Ready node
+								fmt.Printf("✓ Accelerator: %s (satisfied by any node)\n", accel)
+							} else {
+								// Check for GPU labels
+								found := false
+								for _, node := range nodesList.Items {
+									if _, hasGPU := node.Metadata.Labels["nvidia.com/gpu.product"]; hasGPU {
+										fmt.Printf("✓ Accelerator: %s (node %s has GPU)\n", accel, node.Metadata.Name)
+										found = true
+										break
+									}
+								}
+								if !found {
+									fmt.Printf("⚠ Accelerator: %s (no nodes with GPU labels found)\n", accel)
+								}
+							}
+						}
+						
+						// org.cncf.ai.accelerator.cuda.min
+						if cudaMin, ok := annotations[workflow.AnnotationCUDAVersionMin]; ok && cudaMin != "" {
+							// Check node labels for CUDA version
+							// Note: This is informational - we don't fail the step
+							fmt.Printf("→ CUDA min: %s\n", cudaMin)
+						}
+						
+						// org.cncf.ai.resource.memory.min
+						if memMin, ok := annotations[workflow.AnnotationMemoryMin]; ok && memMin != "" {
+							memMinKi := parseMemory(memMin)
+							if memMinKi > 0 {
+								found := false
+								for _, node := range nodesList.Items {
+									if memStr, ok := node.Status.Allocatable["memory"]; ok {
+										nodeMemKi := parseMemory(memStr)
+										if nodeMemKi >= memMinKi {
+											fmt.Printf("✓ Memory min: %s (node %s has %s allocatable)\n", memMin, node.Metadata.Name, memStr)
+											found = true
+										}
+									}
+								}
+								if !found {
+									fmt.Printf("⚠ Memory min: %s (no nodes satisfy requirement)\n", memMin)
+								}
+							}
+						}
+						
+						// ai.node.gpu.type
+						if gpuType, ok := annotations[workflow.AnnotationGPUType]; ok && gpuType != "" {
+							found := false
+							for _, node := range nodesList.Items {
+								if nodeGPUType, ok := node.Metadata.Labels["nvidia.com/gpu.product"]; ok && nodeGPUType == gpuType {
+									fmt.Printf("✓ GPU type: %s (node %s has matching GPU)\n", gpuType, node.Metadata.Name)
+									found = true
+									break
+								}
+							}
+							if !found {
+								fmt.Printf("⚠ GPU type: %s (no nodes with matching GPU)\n", gpuType)
+							}
+						}
+						
+						// ai.node.vram.min
+						if vramMin, ok := annotations[workflow.AnnotationVRAMMin]; ok && vramMin != "" {
+							vramMinKi := parseMemory(vramMin)
+							if vramMinKi > 0 {
+								found := false
+								for _, node := range nodesList.Items {
+									if vramStr, ok := node.Status.Capacity["nvidia.com/gpu.memory"]; ok {
+										vramNodeKi := parseMemory(vramStr)
+										if vramNodeKi >= vramMinKi {
+											fmt.Printf("✓ vRAM min: %s (node %s has %s)\n", vramMin, node.Metadata.Name, vramStr)
+											found = true
+										}
+									}
+								}
+								if !found {
+									fmt.Printf("⚠ vRAM min: %s (no nodes satisfy requirement)\n", vramMin)
+								}
+							}
+						}
+						
+						// ai.node.gpu.topology
+						if gpuTopo, ok := annotations[workflow.AnnotationGPUTopology]; ok && gpuTopo != "" {
+							fmt.Printf("→ GPU topology: %s\n", gpuTopo)
+						}
+					}
+				}
+			}
 
 			ctxModel.SetStep(7)
 			displayInteractiveContext(ctxModel, "Press Enter to continue to deployment.")
@@ -1094,12 +1258,96 @@ Examples:
 				return err
 			}
 			cfg.ServingTopology = servingTopology
+			cfg.Runtime = servingTopology
 			if servingTopology == "kserve-vllm" {
 				cfg.Runtime = "vllm"
-				fmt.Println("Simulated: KServe would manage a vLLM deployment that pulls the OCI layers and applies the declared runtime requirements.")
-			} else {
-				cfg.Runtime = servingTopology
-				fmt.Printf("Simulated: %s would pull the OCI layers and serve the artifact with the declared runtime requirements.\n", cfg.Runtime)
+			}
+			
+			// Step 7: Real post-deploy runtime audit
+			// Only run if we actually deployed
+			if !skipDeploy && deploySucceeded {
+				// Get the InferenceService
+				isvcOut, isvcErr := exec.Command("kubectl", "get", "inferenceservice", modelName, "-n", "models", "-o", "json").CombinedOutput()
+				if isvcErr != nil {
+					fmt.Printf("⚠ InferenceService query failed: %v\n", isvcErr)
+				} else {
+					// Parse InferenceService JSON
+					var isvc struct {
+						Spec struct {
+							Predictor struct {
+								Model struct {
+									Runtime    string `json:"runtime"`
+									Resources struct {
+										Requests map[string]string `json:"requests"`
+										Limits   map[string]string `json:"limits"`
+									} `json:"resources"`
+								} `json:"model"`
+							} `json:"predictor"`
+						} `json:"spec"`
+						Status struct {
+							Conditions []struct {
+								Type   string `json:"type"`
+								Status string `json:"status"`
+							} `json:"conditions"`
+						} `json:"status"`
+					}
+					if err := json.Unmarshal(isvcOut, &isvc); err == nil {
+						// Compare deployed runtime vs declared annotation
+						if deployedRuntime := isvc.Spec.Predictor.Model.Runtime; deployedRuntime != "" {
+							if declaredRuntime, ok := annotations[workflow.AnnotationRuntime]; ok && declaredRuntime != "" {
+								if deployedRuntime == declaredRuntime {
+									fmt.Printf("✓ Runtime: %s (matches declared %s)\n", deployedRuntime, declaredRuntime)
+								} else {
+									fmt.Printf("⚠ Runtime: deployed=%s, declared=%s (mismatch)\n", deployedRuntime, declaredRuntime)
+								}
+							} else {
+								fmt.Printf("→ Runtime: %s (no declared runtime annotation)\n", deployedRuntime)
+							}
+						}
+						
+						// Report resource requests/limits vs declared memory min
+						if memMin, ok := annotations[workflow.AnnotationMemoryMin]; ok && memMin != "" {
+							memMinKi := parseMemory(memMin)
+							if memMinKi > 0 {
+								if reqMem, ok := isvc.Spec.Predictor.Model.Resources.Requests["memory"]; ok {
+									reqMemKi := parseMemory(reqMem)
+									if reqMemKi >= memMinKi {
+										fmt.Printf("✓ Memory request: %s (satisfies min %s)\n", reqMem, memMin)
+									} else {
+										fmt.Printf("⚠ Memory request: %s (below min %s)\n", reqMem, memMin)
+									}
+								} else {
+									fmt.Printf("→ Memory: no request declared\n")
+								}
+								
+								if limitMem, ok := isvc.Spec.Predictor.Model.Resources.Limits["memory"]; ok {
+									limitMemKi := parseMemory(limitMem)
+									if limitMemKi >= memMinKi {
+										fmt.Printf("✓ Memory limit: %s (satisfies min %s)\n", limitMem, memMin)
+									} else {
+										fmt.Printf("⚠ Memory limit: %s (below min %s)\n", limitMem, memMin)
+									}
+								} else {
+									fmt.Printf("→ Memory: no limit declared\n")
+								}
+							}
+						}
+						
+						// Report InferenceService Ready status
+						ready := false
+						for _, cond := range isvc.Status.Conditions {
+							if cond.Type == "Ready" && cond.Status == "True" {
+								ready = true
+								break
+							}
+						}
+						if ready {
+							fmt.Printf("✓ InferenceService %s is Ready\n", modelName)
+						} else {
+							fmt.Printf("⚠ InferenceService %s not Ready\n", modelName)
+						}
+					}
+				}
 			}
 		}
 
