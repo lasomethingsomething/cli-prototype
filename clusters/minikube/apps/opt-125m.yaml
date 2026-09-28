@@ -1,0 +1,29 @@
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: opt-125m
+  namespace: models
+  annotations:
+    serving.kserve.io/deploymentMode: RawDeployment
+
+    org.cncf.ai.accelerator: "gpu"
+    org.cncf.ai.resource.memory.min: "24Gi"
+    org.cncf.ai.runtime: "kserve-huggingfaceserver"
+spec:
+  predictor:
+    model:
+      modelFormat:
+        name: huggingface
+        version: "1"
+      runtime: kserve-huggingfaceserver
+      storageUri: "hf://facebook/opt-125m"
+      args:
+      - --model_id=facebook/opt-125m
+      - --backend=vllm
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          cpu: 500m
+          memory: 512Mi
