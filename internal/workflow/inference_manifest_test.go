@@ -190,7 +190,8 @@ func TestNormalizeGitURL(t *testing.T) {
 }
 
 // TestInferenceServiceManifestGoldenIris ensures byte-identical iris manifest generation
-// This is the golden test that locks the template against silent regressions
+// This is the golden test that locks the template AND derivation against silent regressions.
+// Uses CreateInferenceServiceConfig with real derivation path (runtime="" to derive from model format)
 func TestInferenceServiceManifestGoldenIris(t *testing.T) {
 	// Read the committed golden file
 	goldenPath := "../../clusters/minikube/apps/iris.yaml"
@@ -199,18 +200,35 @@ func TestInferenceServiceManifestGoldenIris(t *testing.T) {
 		t.Fatalf("Failed to read golden file %s: %v", goldenPath, err)
 	}
 
-	// Create config for iris (sklearn) with empty runtime to derive from model path
-	// Note: HFModelID is empty for sklearn, so it doesn't affect storageUri or container args
-	config := &InferenceServiceConfig{
-		ModelName:          "iris",
-		Namespace:          "models",
-		Runtime:            "kserve-sklearnserver",
-		HFModelID:          "",
-		StorageUri:         "https://raw.githubusercontent.com/lasomethingsomething/cli-prototype/main/models/iris/model.joblib",
-		ModelFormatName:    "sklearn",
-		ModelFormatVersion: "",
-		ContainerArgs:      nil,
-		Annotations:       nil,
+	// Build config through CreateInferenceServiceConfig with real derivation path
+	// runtime="" triggers derivation from model format
+	// This ensures derivation drift also fails this test
+	// Use absolute path to models/iris directory so FindModelFile can locate model.joblib
+	modelName := "iris"
+	modelPath := "../../models/iris"
+	repoURL := "https://github.com/lasomethingsomething/cli-prototype.git"
+	branch := "main"
+	
+	config, err := CreateInferenceServiceConfig(modelName, modelPath, repoURL, branch, "", "")
+	if err != nil {
+		t.Fatalf("CreateInferenceServiceConfig failed: %v", err)
+	}
+
+	// Verify the derived values are correct
+	if config.Runtime != "kserve-sklearnserver" {
+		t.Errorf("Derived runtime = %q, want %q", config.Runtime, "kserve-sklearnserver")
+	}
+	if config.ModelFormatName != "sklearn" {
+		t.Errorf("Derived modelFormatName = %q, want %q", config.ModelFormatName, "sklearn")
+	}
+	if config.ModelFormatVersion != "" {
+		t.Errorf("Derived modelFormatVersion should be empty for sklearn, got %q", config.ModelFormatVersion)
+	}
+	if len(config.ContainerArgs) != 0 {
+		t.Errorf("ContainerArgs should be empty for sklearn, got %v", config.ContainerArgs)
+	}
+	if len(config.Annotations) != 0 {
+		t.Errorf("Annotations should be empty for sklearn, got %v", config.Annotations)
 	}
 
 	// Generate manifest

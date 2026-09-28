@@ -1067,12 +1067,40 @@ Examples:
 				
 				// Map serving topology to actual runtime that exists in the cluster
 				// kserve-vllm -> kserve-huggingfaceserver (which uses vLLM engine as backend)
-				if servingTopology == "kserve-vllm" {
-					cfg.Runtime = "kserve-huggingfaceserver"
-				} else {
-					cfg.Runtime = servingTopology
+				// kserve -> derive from model format (e.g., sklearn -> kserve-sklearnserver)
+				// vllm -> not an InferenceService deployment, skip generation
+				var deployRuntime string
+				var skipDeployBecauseOfTopology bool
+				
+				switch servingTopology {
+				case "kserve-vllm":
+					deployRuntime = "kserve-huggingfaceserver"
+				case "kserve":
+					// Derive concrete runtime from model format
+					var runtimeInfo *workflow.RuntimeInfo
+					runtimeInfo, err = workflow.DeriveRuntimeFromModelPath(modelPath, modelName, repoURL, "")
+					if err != nil {
+						// Fallback to kserve-sklearnserver if we can't derive
+						deployRuntime = "kserve-sklearnserver"
+					} else {
+						deployRuntime = runtimeInfo.Runtime
+					}
+				case "vllm":
+					// Direct vLLM serving is not a KServe InferenceService deployment
+					// Print honest message and skip InferenceService generation
+					fmt.Println("Note: direct vLLM serving is demonstrated, not deployed through GitOps.")
+					skipDeployBecauseOfTopology = true
+				default:
+					deployRuntime = servingTopology
 				}
+				
+				cfg.Runtime = deployRuntime
 				cfg.ServingTopology = servingTopology
+				
+				// If vllm topology (direct serving), skip the deploy
+				if skipDeployBecauseOfTopology {
+					skipDeploy = true
+				}
 
 				// If LLM topology is selected, update manifest.json with LLM annotations
 				// so Step 6 can read them and show the GPU/memory requirements

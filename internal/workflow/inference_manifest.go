@@ -167,8 +167,13 @@ func CreateInferenceServiceConfig(
 		}
 
 		// Build storage URI - include the model directory path
-		// Strip leading "./" from modelPath for the URL
-		modelDir := strings.TrimPrefix(modelPath, "./")
+		// Clean the path to remove ./ and ../ prefixes
+		modelDir := filepath.Clean(modelPath)
+		// Remove leading ./ or ../ (filepath.Clean normalizes but doesn't remove them)
+		for strings.HasPrefix(modelDir, "../") {
+			modelDir = strings.TrimPrefix(modelDir, "../")
+		}
+		modelDir = strings.TrimPrefix(modelDir, "./")
 		storageUri = fmt.Sprintf("%s/%s/%s", rawBaseURL, modelDir, modelFile)
 	}
 
