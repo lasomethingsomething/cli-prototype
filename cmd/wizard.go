@@ -21,47 +21,40 @@ import (
 	"golang.org/x/term"
 )
 
-// parseMemory parses a Kubernetes memory string (Ki, Mi, Gi, Ti - base 2) to int64 Ki
-// Handles: Ki, Mi (1024 Ki), Gi (1048576 Ki), Ti (1073741824 Ki)
+// parseMemory parses a Kubernetes memory string to int64 Ki (base 2)
+// Handles k8s suffixes: Ki, Mi, Gi, Ti and IEC suffixes: KiB, MiB, GiB, TiB
+// Note: Both formats use base-2, and numerically: 1 MiB = 1 Mi = 1024 Ki, 1 GiB = 1 Gi = 1048576 Ki
 func parseMemory(s string) int64 {
 	if s == "" {
 		return 0
 	}
-	// Handle suffixes: Ki, Mi, Gi, Ti (base 2)
-	// 1 Mi = 1024 Ki, 1 Gi = 1024 Mi = 1048576 Ki, 1 Ti = 1024 Gi = 1073741824 Ki
+	// Normalize IEC suffixes (KiB, MiB, GiB, TiB) to k8s suffixes (Ki, Mi, Gi, Ti)
+	// This allows both annotation format (256MiB) and k8s format (256Mi) to work
+	if strings.HasSuffix(s, "GiB") {
+		s = strings.TrimSuffix(s, "GiB") + "Gi"
+	} else if strings.HasSuffix(s, "MiB") {
+		s = strings.TrimSuffix(s, "MiB") + "Mi"
+	} else if strings.HasSuffix(s, "TiB") {
+		s = strings.TrimSuffix(s, "TiB") + "Ti"
+	} else if strings.HasSuffix(s, "KiB") {
+		s = strings.TrimSuffix(s, "KiB") + "Ki"
+	}
+	// Handle k8s-style suffixes: Ki, Mi, Gi, Ti (base 2)
 	if strings.HasSuffix(s, "Gi") {
 		val, _ := strconv.ParseInt(strings.TrimSuffix(s, "Gi"), 10, 64)
-		return val * 1024 * 1024 // Gi to Ki
+		return val * 1024 * 1024
 	} else if strings.HasSuffix(s, "Mi") {
 		val, _ := strconv.ParseInt(strings.TrimSuffix(s, "Mi"), 10, 64)
-		return val * 1024 // Mi to Ki
+		return val * 1024
 	} else if strings.HasSuffix(s, "Ti") {
 		val, _ := strconv.ParseInt(strings.TrimSuffix(s, "Ti"), 10, 64)
-		return val * 1024 * 1024 * 1024 // Ti to Ki
+		return val * 1024 * 1024 * 1024
 	} else if strings.HasSuffix(s, "Ki") {
 		val, _ := strconv.ParseInt(strings.TrimSuffix(s, "Ki"), 10, 64)
 		return val
 	}
 	// Plain number (assume Ki)
 	val, _ := strconv.ParseInt(s, 10, 64)
-	return val
-}
-
-// parseCPU parses a Kubernetes CPU string to float64 cores
-// Handles: m (milli), k (kilo), or plain (cores)
-func parseCPU(s string) float64 {
-	if s == "" {
-		return 0
-	}
-	// Handle suffixes: m (milli), k (kilo), or plain (cores)
-	if strings.HasSuffix(s, "m") {
-		val, _ := strconv.ParseFloat(strings.TrimSuffix(s, "m"), 64)
-		return val / 1000 // milli to cores
-	} else if strings.HasSuffix(s, "k") {
-		val, _ := strconv.ParseFloat(strings.TrimSuffix(s, "k"), 64)
-		return val * 1000 // kilo-milli to milli, then /1000 = cores
-	}
-	val, _ := strconv.ParseFloat(s, 64)
 	return val
 }
 
@@ -1139,10 +1132,7 @@ Examples:
 				}
 				if err := json.Unmarshal(nodesOut, &nodesList); err == nil {
 					// Check each declared requirement
-					if len(annotations) == 0 {
-						fmt.Println("✓ No special requirements")
-					} else {
-						// org.cncf.ai.accelerator
+					// org.cncf.ai.accelerator
 						if accel, ok := annotations[workflow.AnnotationAccelerator]; ok && accel != "" {
 							if accel == "cpu" {
 								// CPU is satisfied by any Ready node
@@ -1211,7 +1201,8 @@ Examples:
 							if vramMinKi > 0 {
 								found := false
 								for _, node := range nodesList.Items {
-									if vramStr, ok := node.Status.Capacity["nvidia.com/gpu.memory"]; ok {
+									// GPU VRAM is in node labels, not capacity
+									if vramStr, ok := node.Metadata.Labels["nvidia.com/gpu.memory"]; ok {
 										vramNodeKi := parseMemory(vramStr)
 										if vramNodeKi >= vramMinKi {
 											fmt.Printf("✓ vRAM min: %s (node %s has %s)\n", vramMin, node.Metadata.Name, vramStr)
@@ -1231,7 +1222,6 @@ Examples:
 						}
 					}
 				}
-			}
 
 			ctxModel.SetStep(7)
 			displayInteractiveContext(ctxModel, "Press Enter to continue to deployment.")
@@ -1348,6 +1338,8 @@ Examples:
 						}
 					}
 				}
+			} else {
+				fmt.Println("→ Skipped runtime audit: no cluster deployment")
 			}
 		}
 
