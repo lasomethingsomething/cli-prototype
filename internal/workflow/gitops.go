@@ -25,7 +25,7 @@ type GitOpsProvider interface {
 	Name() string
 	IsInstalled() bool
 	InstallInstructions() string
-	Deploy(modelName, repoURL, path, modelPath string) DeployResult
+	Deploy(modelName, repoURL, path, modelPath, runtime string) DeployResult
 	SetQuiet(quiet bool)
 }
 
@@ -48,7 +48,7 @@ func (a *ArgoCDProvider) InstallInstructions() string {
 // SetQuiet is a no-op for ArgoCD (no duplicate output to suppress)
 func (a *ArgoCDProvider) SetQuiet(quiet bool) {}
 
-func (a *ArgoCDProvider) Deploy(modelName, repoURL, path, modelPath string) DeployResult {
+func (a *ArgoCDProvider) Deploy(modelName, repoURL, path, modelPath, runtime string) DeployResult {
 	cmd := exec.Command("argocd", "app", "create", modelName, "--repo", repoURL, "--path", path, "--dest-namespace", "default")
 	if err := cmd.Run(); err != nil {
 		return DeployResult{Error: fmt.Errorf("failed to create ArgoCD application: %v", err)}
@@ -82,7 +82,7 @@ func (f *FluxProvider) InstallInstructions() string {
 	return "brew install fluxcd/tap/flux"
 }
 
-func (f *FluxProvider) Deploy(modelName, repoURL, path, modelPath string) DeployResult {
+func (f *FluxProvider) Deploy(modelName, repoURL, path, modelPath, runtime string) DeployResult {
 	// GitOps: the CLI never touches the cluster directly.
 	// It commits the manifest into the Git repo and lets Flux reconcile.
 
@@ -115,6 +115,7 @@ func (f *FluxProvider) Deploy(modelName, repoURL, path, modelPath string) Deploy
 		modelPath,
 		repoURL,
 		branch,
+		runtime,
 	)
 	if err != nil {
 		return DeployResult{Error: fmt.Errorf("failed to create inference service config: %v", err)}

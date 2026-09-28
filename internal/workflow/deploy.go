@@ -15,6 +15,7 @@ type DeployWorkflow struct {
 	artifactRef        string // Full artifact reference with annotations (Story #63)
 	repoURL            string
 	manifestPath       string
+	runtime            string // Serving runtime (e.g., "kserve-sklearnserver", "kserve-huggingfaceserver")
 	manifestGenerated  string // Path to generated manifest file, if not yet committed
 	deployed           bool // True if a new deploy actually happened (not no-op)
 	readyVerified      bool // True if InferenceService reached Ready
@@ -49,6 +50,11 @@ func (w *DeployWorkflow) SetModelInfo(modelName, modelPath, repoURL, manifestPat
 	w.modelPath = modelPath
 	w.repoURL = repoURL
 	w.manifestPath = manifestPath
+}
+
+// SetRuntime sets the serving runtime for the InferenceService
+func (w *DeployWorkflow) SetRuntime(runtime string) {
+	w.runtime = runtime
 }
 
 // SetArtifactRef sets the full artifact reference (with Trust Profile annotations)
@@ -131,7 +137,7 @@ func (w *DeployWorkflow) Run() error {
 	// Propagate quiet flag to the underlying provider
 	w.gitOpsProvider.SetQuiet(w.quiet)
 
-	deployResult := w.gitOpsProvider.Deploy(artifactToDeploy, w.repoURL, w.manifestPath, w.modelPath)
+	deployResult := w.gitOpsProvider.Deploy(artifactToDeploy, w.repoURL, w.manifestPath, w.modelPath, w.runtime)
 	if deployResult.Error != nil {
 		return deployResult.Error
 	}

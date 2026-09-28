@@ -1021,11 +1021,31 @@ Examples:
 			}
 
 			if gitOpsProvider.IsInstalled() && registryProvider.IsInstalled() {
+				// Determine serving topology before deploying
+				// This ensures the InferenceService uses the correct runtime
+				modelFormat := workflow.DetectModelFormatFromPath(modelPath)
+				servingTopology := cfg.ServingTopology
+				if servingTopology == "" {
+					servingTopology = cfg.Runtime
+				}
+				if servingTopology == "" {
+					servingTopology = getServingTopologyOptions(modelFormat).Recommended()
+				}
+				// Map serving topology to actual runtime that exists in the cluster
+				// kserve-vllm -> kserve-huggingfaceserver (which uses vLLM engine as backend)
+				if servingTopology == "kserve-vllm" {
+					cfg.Runtime = "kserve-huggingfaceserver"
+				} else {
+					cfg.Runtime = servingTopology
+				}
+				cfg.ServingTopology = servingTopology
+
 				wf, err := workflow.NewDeployWorkflow(cfg.GitOps, cfg.Registry)
 				if err != nil {
 					return err
 				}
 				wf.SetModelInfo(modelName, modelPath, repoURL, manifestPath)
+				wf.SetRuntime(cfg.Runtime)
 
 				if err := wf.Run(); err != nil {
 					return err
@@ -1230,29 +1250,6 @@ Examples:
 			fmt.Println()
 			fmt.Println(stepStyle.Render("Step 7: Runtime Execution & Optimization"))
 
-			// Detect model format for topology recommendation
-			modelFormat := workflow.DetectModelFormatFromPath(modelPath)
-
-			servingTopology := cfg.ServingTopology
-			if servingTopology == "" {
-				servingTopology = cfg.Runtime
-			}
-			if servingTopology == "" {
-				servingTopology = getServingTopologyOptions(modelFormat).Recommended()
-			}
-			if err := huh.NewSelect[string]().
-				Title("Which serving topology should the wizard demonstrate?").
-				Options(toolOptions(getServingTopologyOptions(modelFormat))...).
-				Value(&servingTopology).
-				Run(); err != nil {
-				return err
-			}
-			cfg.ServingTopology = servingTopology
-			cfg.Runtime = servingTopology
-			if servingTopology == "kserve-vllm" {
-				cfg.Runtime = "vllm"
-			}
-			
 			// Step 7: Real post-deploy runtime audit
 			// Only run if we actually deployed
 			if !skipDeploy && deploySucceeded {

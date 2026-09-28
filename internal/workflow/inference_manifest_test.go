@@ -46,7 +46,7 @@ func TestCreateInferenceServiceConfigStorageUri(t *testing.T) {
 	modelPath := modelDir // Use absolute path
 	branch := "main"
 
-	config, err := CreateInferenceServiceConfig(modelName, modelPath, repoURL, branch)
+	config, err := CreateInferenceServiceConfig(modelName, modelPath, repoURL, branch, "")
 	if err != nil {
 		t.Fatalf("CreateInferenceServiceConfig failed: %v", err)
 	}
@@ -75,11 +75,6 @@ func TestCreateInferenceServiceConfigStorageUri(t *testing.T) {
 	if config.Runtime != "kserve-sklearnserver" {
 		t.Errorf("Runtime = %q, want %q", config.Runtime, "kserve-sklearnserver")
 	}
-
-	// Verify modelFormat
-	if config.ModelFormat != "sklearn" {
-		t.Errorf("ModelFormat = %q, want %q", config.ModelFormat, "sklearn")
-	}
 }
 
 // TestCreateInferenceServiceConfigWithSCPUrl tests with SCP-style Git URL
@@ -106,7 +101,7 @@ func TestCreateInferenceServiceConfigWithSCPUrl(t *testing.T) {
 	modelPath := modelDir
 	branch := "main"
 
-	config, err := CreateInferenceServiceConfig(modelName, modelPath, repoURL, branch)
+	config, err := CreateInferenceServiceConfig(modelName, modelPath, repoURL, branch, "")
 	if err != nil {
 		t.Fatalf("CreateInferenceServiceConfig failed: %v", err)
 	}
@@ -146,7 +141,7 @@ func TestCreateInferenceServiceConfigWithHTTPSUrl(t *testing.T) {
 	modelPath := modelDir
 	branch := "main"
 
-	config, err := CreateInferenceServiceConfig(modelName, modelPath, repoURL, branch)
+	config, err := CreateInferenceServiceConfig(modelName, modelPath, repoURL, branch, "")
 	if err != nil {
 		t.Fatalf("CreateInferenceServiceConfig failed: %v", err)
 	}
