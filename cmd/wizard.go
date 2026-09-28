@@ -1055,19 +1055,45 @@ Examples:
 					if hfModelID == "" {
 						hfModelID = "facebook/opt-125m" // default
 					}
+					// Derive a DNS-safe InferenceService name from the HF model ID
+					// Use the last path segment (e.g., "facebook/opt-125m" -> "opt-125m")
+					// and sanitize it (replace / with -)
+					modelName = filepath.Base(hfModelID)
+					// Replace any remaining invalid characters with -
+					modelName = strings.ReplaceAll(modelName, "/", "-")
+					modelName = strings.ReplaceAll(modelName, "_", "-")
+					modelName = strings.ToLower(modelName)
 				}
 				
 				// Map serving topology to actual runtime that exists in the cluster
 				// kserve-vllm -> kserve-huggingfaceserver (which uses vLLM engine as backend)
 				if servingTopology == "kserve-vllm" {
 					cfg.Runtime = "kserve-huggingfaceserver"
-					// Store HF model id for use in manifest generation
-					// We'll pass it through modelName for the storageUri and container args
-					modelName = hfModelID
 				} else {
 					cfg.Runtime = servingTopology
 				}
 				cfg.ServingTopology = servingTopology
+
+				// If LLM topology is selected, update manifest.json with LLM annotations
+				// so Step 6 can read them and show the GPU/memory requirements
+				if servingTopology == "kserve-vllm" {
+					manifestJSONPath := filepath.Join(modelPath, "manifest.json")
+					if manifest, err := workflow.ReadUnifiedOCIManifest(manifestJSONPath); err == nil {
+						// Ensure annotations map exists
+						if manifest.Annotations == nil {
+							manifest.Annotations = make(map[string]string)
+						}
+						// Add/update LLM-specific annotations
+						manifest.Annotations[workflow.AnnotationRuntime] = "kserve-huggingfaceserver"
+						manifest.Annotations[workflow.AnnotationAccelerator] = "gpu"
+						manifest.Annotations[workflow.AnnotationMemoryMin] = "24Gi"
+						// Write the updated manifest back
+						if err := workflow.WriteUnifiedOCIManifest(manifest, manifestJSONPath); err != nil {
+							// Don't fail the workflow, just log a warning
+							fmt.Printf("Warning: failed to update manifest.json with LLM annotations: %v\n", err)
+						}
+					}
+				}
 
 				wf, err := workflow.NewDeployWorkflow(cfg.GitOps, cfg.Registry)
 				if err != nil {
@@ -1075,6 +1101,10 @@ Examples:
 				}
 				wf.SetModelInfo(modelName, modelPath, repoURL, manifestPath)
 				wf.SetRuntime(cfg.Runtime)
+				// Pass HF model ID to workflow for manifest generation
+				if servingTopology == "kserve-vllm" {
+					wf.SetHFModelID(hfModelID)
+				}
 
 				if err := wf.Run(); err != nil {
 					return err

@@ -16,6 +16,7 @@ type DeployWorkflow struct {
 	repoURL            string
 	manifestPath       string
 	runtime            string // Serving runtime (e.g., "kserve-sklearnserver", "kserve-huggingfaceserver")
+	hfModelID          string // Hugging Face model ID (e.g., "facebook/opt-125m") for LLM serving
 	manifestGenerated  string // Path to generated manifest file, if not yet committed
 	deployed           bool // True if a new deploy actually happened (not no-op)
 	readyVerified      bool // True if InferenceService reached Ready
@@ -55,6 +56,11 @@ func (w *DeployWorkflow) SetModelInfo(modelName, modelPath, repoURL, manifestPat
 // SetRuntime sets the serving runtime for the InferenceService
 func (w *DeployWorkflow) SetRuntime(runtime string) {
 	w.runtime = runtime
+}
+
+// SetHFModelID sets the Hugging Face model ID for LLM serving
+func (w *DeployWorkflow) SetHFModelID(hfModelID string) {
+	w.hfModelID = hfModelID
 }
 
 // SetArtifactRef sets the full artifact reference (with Trust Profile annotations)
@@ -137,7 +143,7 @@ func (w *DeployWorkflow) Run() error {
 	// Propagate quiet flag to the underlying provider
 	w.gitOpsProvider.SetQuiet(w.quiet)
 
-	deployResult := w.gitOpsProvider.Deploy(artifactToDeploy, w.repoURL, w.manifestPath, w.modelPath, w.runtime)
+	deployResult := w.gitOpsProvider.Deploy(artifactToDeploy, w.repoURL, w.manifestPath, w.modelPath, w.runtime, w.hfModelID)
 	if deployResult.Error != nil {
 		return deployResult.Error
 	}

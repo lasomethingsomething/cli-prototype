@@ -11,7 +11,7 @@ import (
 
 // InferenceServiceConfig holds the configuration for generating an InferenceService manifest
 type InferenceServiceConfig struct {
-	// ModelName is the name of the model
+	// ModelName is the name of the model (Kubernetes DNS-safe name)
 	ModelName string
 	// Namespace is the Kubernetes namespace
 	Namespace string
@@ -25,6 +25,9 @@ type InferenceServiceConfig struct {
 	Runtime string
 	// StorageUri is the URL to the model file
 	StorageUri string
+	// HFModelID is the Hugging Face model identifier (e.g., "facebook/opt-125m")
+	// Used for storageUri and container args when using kserve-huggingfaceserver
+	HFModelID string
 	// ModelFormatName is the model format name (e.g., "sklearn", "huggingface")
 	ModelFormatName string
 	// ModelFormatVersion is the model format version (e.g., "1")
@@ -43,21 +46,19 @@ metadata:
   namespace: {{.Namespace}}
   annotations:
     serving.kserve.io/deploymentMode: RawDeployment
-{{if .Annotations}}{{range $key, $value := .Annotations}}
-    {{ $key }}: "{{ $value }}"{{end}}
-{{end}}
-spec:
+{{if .Annotations}}
+{{range $key, $value := .Annotations}}    {{ $key }}: "{{ $value }}"
+{{end}}{{end}}spec:
   predictor:
     model:
       modelFormat:
         name: {{.ModelFormatName}}
-{{if .ModelFormatVersion}}        version: "{{.ModelFormatVersion}}"{{end}}
-      runtime: {{.Runtime}}
+{{if .ModelFormatVersion}}        version: "{{.ModelFormatVersion}}"
+{{end}}      runtime: {{.Runtime}}
       storageUri: "{{.StorageUri}}"
-{{if .ContainerArgs}}      args:{{range .ContainerArgs}}
-      - {{.}}{{end}}
-{{end}}
-      resources:
+{{if .ContainerArgs}}      args:
+{{range .ContainerArgs}}      - {{.}}
+{{end}}{{end}}      resources:
         requests:
           cpu: 100m
           memory: 256Mi
@@ -104,12 +105,14 @@ func WriteInferenceServiceManifest(config *InferenceServiceConfig, outputPath st
 // CreateInferenceServiceConfig creates a config for generating an InferenceService manifest
 // It derives the runtime from the model format and constructs the storage URI
 // If runtime is provided, it overrides the derived runtime (for explicit serving topology selection)
+// If hfModelID is provided, it's used for Hugging Face model storageUri and container args
 func CreateInferenceServiceConfig(
 	modelName string,
 	modelPath string,
 	repoURL string,
 	branch string,
 	runtime string, // Optional: if provided, overrides the derived runtime
+	hfModelID string, // Optional: Hugging Face model ID for LLM serving
 ) (*InferenceServiceConfig, error) {
 	// Normalize the repo URL
 	normalizedRepo := normalizeGitURL(repoURL)
@@ -148,9 +151,11 @@ func CreateInferenceServiceConfig(
 
 	// Build storage URI
 	var storageUri string
-	if runtime == "kserve-huggingfaceserver" {
-		// For Hugging Face runtime, use hf:// prefix with model name
-		// This allows models to be pulled from Hugging Face Hub
+	if runtime == "kserve-huggingfaceserver" && hfModelID != "" {
+		// For Hugging Face runtime with explicit model ID, use hf:// prefix
+		storageUri = fmt.Sprintf("hf://%s", hfModelID)
+	} else if runtime == "kserve-huggingfaceserver" {
+		// For Hugging Face runtime without explicit model ID, use model name
 		storageUri = fmt.Sprintf("hf://%s", modelName)
 	} else {
 		rawBaseURL := fmt.Sprintf("https://raw.githubusercontent.com/%s/%s", normalizedRepo, branch)
@@ -200,8 +205,13 @@ func CreateInferenceServiceConfig(
 	// This ensures byte-identical output for sklearn path
 	var containerArgs []string
 	if runtime == "kserve-huggingfaceserver" {
+		// Use hfModelID if provided, otherwise fall back to modelName
+		modelID := hfModelID
+		if modelID == "" {
+			modelID = modelName
+		}
 		containerArgs = []string{
-			fmt.Sprintf("--model_id=%s", modelName),
+			fmt.Sprintf("--model_id=%s", modelID),
 			"--backend=vllm",
 		}
 	}
@@ -222,6 +232,7 @@ func CreateInferenceServiceConfig(
 		RepoURL:            repoURL,
 		Branch:             branch,
 		Runtime:            runtime,
+		HFModelID:          hfModelID,
 		StorageUri:         storageUri,
 		ModelFormatName:    modelFormatName,
 		ModelFormatVersion: modelFormatVersion,

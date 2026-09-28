@@ -46,7 +46,7 @@ func TestCreateInferenceServiceConfigStorageUri(t *testing.T) {
 	modelPath := modelDir // Use absolute path
 	branch := "main"
 
-	config, err := CreateInferenceServiceConfig(modelName, modelPath, repoURL, branch, "")
+	config, err := CreateInferenceServiceConfig(modelName, modelPath, repoURL, branch, "", "")
 	if err != nil {
 		t.Fatalf("CreateInferenceServiceConfig failed: %v", err)
 	}
@@ -101,7 +101,7 @@ func TestCreateInferenceServiceConfigWithSCPUrl(t *testing.T) {
 	modelPath := modelDir
 	branch := "main"
 
-	config, err := CreateInferenceServiceConfig(modelName, modelPath, repoURL, branch, "")
+	config, err := CreateInferenceServiceConfig(modelName, modelPath, repoURL, branch, "", "")
 	if err != nil {
 		t.Fatalf("CreateInferenceServiceConfig failed: %v", err)
 	}
@@ -141,7 +141,7 @@ func TestCreateInferenceServiceConfigWithHTTPSUrl(t *testing.T) {
 	modelPath := modelDir
 	branch := "main"
 
-	config, err := CreateInferenceServiceConfig(modelName, modelPath, repoURL, branch, "")
+	config, err := CreateInferenceServiceConfig(modelName, modelPath, repoURL, branch, "", "")
 	if err != nil {
 		t.Fatalf("CreateInferenceServiceConfig failed: %v", err)
 	}
@@ -188,3 +188,105 @@ func TestNormalizeGitURL(t *testing.T) {
 		})
 	}
 }
+
+// TestInferenceServiceManifestGoldenIris ensures byte-identical iris manifest generation
+// This is the golden test that locks the template against silent regressions
+func TestInferenceServiceManifestGoldenIris(t *testing.T) {
+	// Read the committed golden file
+	goldenPath := "../../clusters/minikube/apps/iris.yaml"
+	goldenContent, err := os.ReadFile(goldenPath)
+	if err != nil {
+		t.Fatalf("Failed to read golden file %s: %v", goldenPath, err)
+	}
+
+	// Create config for iris (sklearn) with empty runtime to derive from model path
+	// Note: HFModelID is empty for sklearn, so it doesn't affect storageUri or container args
+	config := &InferenceServiceConfig{
+		ModelName:          "iris",
+		Namespace:          "models",
+		Runtime:            "kserve-sklearnserver",
+		HFModelID:          "",
+		StorageUri:         "https://raw.githubusercontent.com/lasomethingsomething/cli-prototype/main/models/iris/model.joblib",
+		ModelFormatName:    "sklearn",
+		ModelFormatVersion: "",
+		ContainerArgs:      nil,
+		Annotations:       nil,
+	}
+
+	// Generate manifest
+	manifest, err := GenerateInferenceServiceManifest(config)
+	if err != nil {
+		t.Fatalf("GenerateInferenceServiceManifest failed: %v", err)
+	}
+
+	// Compare byte-by-byte
+	if manifest != string(goldenContent) {
+		t.Errorf("Generated manifest does not match golden file.\nExpected:\n%s\n\nGot:\n%s", string(goldenContent), manifest)
+	}
+}
+
+// TestInferenceServiceManifestGoldenHuggingFace ensures correct rendering for LLM path
+// Asserts the pinned contract: modelFormat with version, runtime, storageUri, args
+func TestInferenceServiceManifestGoldenHuggingFace(t *testing.T) {
+	// Create config for huggingfaceserver with HF model ID
+	config := &InferenceServiceConfig{
+		ModelName:          "opt-125m",
+		Namespace:          "models",
+		Runtime:            "kserve-huggingfaceserver",
+		StorageUri:         "hf://facebook/opt-125m",
+		ModelFormatName:    "huggingface",
+		ModelFormatVersion: "1",
+		ContainerArgs: []string{
+			"--model_id=facebook/opt-125m",
+			"--backend=vllm",
+		},
+		Annotations: map[string]string{
+			AnnotationRuntime:     "kserve-huggingfaceserver",
+			AnnotationAccelerator: "gpu",
+			AnnotationMemoryMin:   "24Gi",
+		},
+	}
+
+	// Generate manifest
+	manifest, err := GenerateInferenceServiceManifest(config)
+	if err != nil {
+		t.Fatalf("GenerateInferenceServiceManifest failed: %v", err)
+	}
+
+	// Verify expected content is present
+	expectedSubstrings := []string{
+		"apiVersion: serving.kserve.io/v1beta1",
+		"kind: InferenceService",
+		"name: opt-125m",
+		"namespace: models",
+		"serving.kserve.io/deploymentMode: RawDeployment",
+		"org.cncf.ai.runtime: \"kserve-huggingfaceserver\"",
+		"org.cncf.ai.accelerator: \"gpu\"",
+		"org.cncf.ai.resource.memory.min: \"24Gi\"",
+		"modelFormat:",
+		"name: huggingface",
+		"version: \"1\"",
+		"runtime: kserve-huggingfaceserver",
+		"storageUri: \"hf://facebook/opt-125m\"",
+		"args:",
+		"- --model_id=facebook/opt-125m",
+		"- --backend=vllm",
+	}
+
+	for _, substr := range expectedSubstrings {
+		if !strings.Contains(manifest, substr) {
+			t.Errorf("Manifest missing expected substring: %s\nGenerated:\n%s", substr, manifest)
+		}
+	}
+
+	// Verify no unwanted content
+	unwantedSubstrings := []string{
+		"container:", // Should not have container wrapper
+	}
+	for _, substr := range unwantedSubstrings {
+		if strings.Contains(manifest, substr) {
+			t.Errorf("Manifest contains unwanted substring: %s\nGenerated:\n%s", substr, manifest)
+		}
+	}
+}
+

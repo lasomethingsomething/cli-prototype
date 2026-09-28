@@ -16,7 +16,7 @@ type fakeGitOpsProvider struct {
 func (f *fakeGitOpsProvider) Name() string                { return f.name }
 func (f *fakeGitOpsProvider) IsInstalled() bool           { return f.installed }
 func (f *fakeGitOpsProvider) InstallInstructions() string { return "brew install " + f.name }
-func (f *fakeGitOpsProvider) Deploy(modelName, repoURL, path, modelPath, runtime string) DeployResult {
+func (f *fakeGitOpsProvider) Deploy(modelName, repoURL, path, modelPath, runtime, hfModelID string) DeployResult {
 	return DeployResult{Error: nil, Deployed: true, Ready: false}
 }
 func (f *fakeGitOpsProvider) SetQuiet(quiet bool) {}
