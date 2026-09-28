@@ -10,7 +10,7 @@ spec:
     model:
       modelFormat:
         name: sklearn
-      runtime: kserve-sklearnserver
+      runtime: kserve
       storageUri: "https://raw.githubusercontent.com/lasomethingsomething/cli-prototype/main/models/iris/model.joblib"
       resources:
         requests:
