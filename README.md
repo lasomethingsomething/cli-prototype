@@ -6,7 +6,7 @@
 
 A trained ML model is a folder of files. Moving it safely from your laptop to production requires packaging, security checks, publishing, and deployment. Specialized tools in the CNCF ecosystem already handle each task.
 
-model-cli is a thin orchestrator: it calls oras, syft, cosign, etc. via your PATH and does not bundle them. Model CLI guides you through that journey, collects the needed details, and lets you choose an appropriate tool for each task.
+Model CLI is a thin orchestrator that can call ORAS, Syft, Cosign, etc. via your PATH without bundling them. It guides you through the inner- to outer-loop journey, collects the needed details, and lets you choose an appropriate tool for each task.
 
 ## System Requirements
 
