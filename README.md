@@ -6,7 +6,22 @@
 
 A trained ML model is a folder of files. Moving it safely from your laptop to production requires packaging, security checks, publishing, and deployment. Specialized tools in the CNCF ecosystem already handle each task.
 
-Model CLI is a thin orchestrator that can call ORAS, Syft, Cosign, etc. via your PATH without bundling them. It guides you through the inner- to outer-loop journey, collects the needed details, and lets you choose an appropriate tool for each task.
+Model CLI is a thin orchestrator that guides you through the inner- to outer-loop journey, collecting the needed details and letting you choose an appropriate tool for each task.
+
+## What happens along the way
+
+The wizard drives seven steps, calling established CNCF tools on your PATH. Nothing is bundled.
+   Step | What happens | Tools |
+ |------|--------------|-------|
+ | 1. Package | Collects model details, writes `manifest.json` with CNCF AI annotations | model CLI |
+ | 2. SBOM & MOF | Generates SBOM and model metadata | Syft, model CLI |
+ | 3. Sign | Demonstrates signing (labeled "simulated") | Cosign or Notation |
+ | 4. Publish | Pushes the OCI artifact to your registry | ORAS, Podman |
+ | 5. GitOps deploy | Renders `InferenceService` manifest, commits, pushes, reconciles until Ready | git, Flux, kubectl, KServe |
+ | 6. Cluster audit | Checks deployed workload against declared annotations | kubectl |
+ | 7. Verify | Runs a real in-cluster prediction → `✓ Prediction served` | kubectl |
+
+`doctor` checks these tools up front (`--fix` installs missing ones); `setup` stands up minikube, the registry, and the Flux cluster.
 
 ## System Requirements
 
