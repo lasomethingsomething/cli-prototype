@@ -14,7 +14,7 @@ The wizard drives seven steps, calling established CNCF tools on your PATH. Noth
    Step | What happens | Tools |
  |------|--------------|-------|
  | 1. Package | Collects model details, writes `manifest.json` with CNCF AI annotations | model CLI |
- | 2. SBOM & MOF | Generates SBOM and model metadata | Syft, model CLI |
+ | 2. Generate SBOM & MOF | Generates SBOM and MOF metadata | Syft, model CLI |
  | 3. Sign | Demonstrates signing (labeled "simulated") | Cosign or Notation |
  | 4. Publish | Pushes the OCI artifact to your registry | ORAS, Podman |
  | 5. GitOps deploy | Renders `InferenceService` manifest, commits, pushes, reconciles until Ready | git, Flux, kubectl, KServe |
