@@ -120,6 +120,22 @@ If no sample request exists: the wizard skips verification honestly with `⚠ Pr
 - The sklearn predictor serves the V1 protocol; V2-style `inputs` payloads are rejected.
 - Annotation conventions and model metadata are evolving as part of the CNCF AI inner-loop initiative #1740.
 
+## Telemetry
+
+Telemetry is opt-in and off by default. Set `MODEL_CLI_OTEL_ENDPOINT` to any OTLP endpoint to enable it. The canonical form is a bare host and port, for example:
+
+```bash
+MODEL_CLI_OTEL_ENDPOINT=localhost:4318 ./model-cli doctor
+```
+
+`http://` and `https://` prefixed URLs are also accepted.
+
+The CLI collects one span plus a run counter and a duration histogram per command. Both metrics are labeled with `command` (the command name) and `exit` (one of `ok`, `error`, or `cancelled`). Resource attributes are limited to `service.name` and `service.version`; no personal data, arguments, or file paths are included. Telemetry is only collected when the environment variable is set.
+
+If the endpoint value is set but unparseable, a single warning line is printed to stderr and the CLI runs with telemetry disabled. If the endpoint is parseable but unreachable, a single export-failure line is printed at exit. Telemetry never changes exit codes.
+
+Data can be checked in any OTLP receiver such as an OpenTelemetry Collector's debug exporter.
+
 ## Documentation
 
 - [Command Reference](docs/command-reference.md)
