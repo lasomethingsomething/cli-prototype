@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -20,6 +21,9 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
+
+// ErrWizardCancelled signals the user pressed Esc to cancel the wizard.
+var ErrWizardCancelled = errors.New("wizard cancelled by user")
 
 // parseMemory parses a Kubernetes memory string to int64 Ki (base 2)
 // Handles k8s suffixes: Ki, Mi, Gi, Ti and IEC suffixes: KiB, MiB, GiB, TiB
@@ -379,7 +383,9 @@ Examples:
 		// Show interactive context panel with current progress
 		ctxModel.SetStep(1)
 		ctxModel.SetModelInfo(modelName, modelPath, artifactName)
-		displayInteractiveContext(ctxModel, "Press Enter to package your model locally.")
+		if displayInteractiveContext(ctxModel, "Press Enter to package your model locally.") {
+			return ErrWizardCancelled
+		}
 
 		fmt.Println(stepStyle.Render("Packaging model locally"))
 		fmt.Println()
@@ -469,7 +475,9 @@ Examples:
 		ctxModel.SetResults(packageSucceeded, false, false, false)
 		ctxModel.AddLog(fmt.Sprintf("Packaged artifact: %s", artifactName))
 		fmt.Println()
-		displayInteractiveContext(ctxModel, "Press Enter to generate an SBOM and classify the model.")
+		if displayInteractiveContext(ctxModel, "Press Enter to generate an SBOM and classify the model.") {
+			return ErrWizardCancelled
+		}
 
 		fmt.Println()
 
@@ -559,7 +567,9 @@ Examples:
 		ctxModel.SetResults(packageSucceeded, false, false, false)
 		ctxModel.AddLog("Hardening completed")
 		fmt.Println()
-		displayInteractiveContext(ctxModel, "Press Enter to run the local compliance check.")
+		if displayInteractiveContext(ctxModel, "Press Enter to run the local compliance check.") {
+			return ErrWizardCancelled
+		}
 
 		fmt.Println()
 
@@ -616,7 +626,9 @@ Examples:
 		if skipSigning {
 			nextAction = "Press Enter to choose how to publish the artifact."
 		}
-		displayInteractiveContext(ctxModel, nextAction)
+		if displayInteractiveContext(ctxModel, nextAction) {
+			return ErrWizardCancelled
+		}
 
 		fmt.Println()
 
@@ -842,7 +854,9 @@ Examples:
 		ctxModel.SetConfig(cfg.Registry, cfg.GitOps, cfg.Signer, "")
 		if !skipDeploy {
 			ctxModel.SetStep(5)
-			displayInteractiveContext(ctxModel, "Press Enter to continue to GitOps admission and policy enforcement.")
+			if displayInteractiveContext(ctxModel, "Press Enter to continue to GitOps admission and policy enforcement.") {
+				return ErrWizardCancelled
+			}
 			fmt.Println()
 		}
 
@@ -1031,7 +1045,7 @@ Examples:
 				if servingTopology == "" {
 					servingTopology = getServingTopologyOptions(modelFormat).Recommended()
 				}
-				
+
 				// Prompt user for serving topology selection
 				if err := huh.NewSelect[string]().
 					Title("Which serving topology should the wizard demonstrate?").
@@ -1040,7 +1054,7 @@ Examples:
 					Run(); err != nil {
 					return err
 				}
-				
+
 				// For LLM topology, prompt for Hugging Face model id
 				var hfModelID string
 				if servingTopology == "kserve-vllm" {
@@ -1064,14 +1078,14 @@ Examples:
 					modelName = strings.ReplaceAll(modelName, "_", "-")
 					modelName = strings.ToLower(modelName)
 				}
-				
+
 				// Map serving topology to actual runtime that exists in the cluster
 				// kserve-vllm -> kserve-huggingfaceserver (which uses vLLM engine as backend)
 				// kserve -> derive from model format (e.g., sklearn -> kserve-sklearnserver)
 				// vllm -> not an InferenceService deployment, skip generation
 				var deployRuntime string
 				var skipDeployBecauseOfTopology bool
-				
+
 				switch servingTopology {
 				case "kserve-vllm":
 					deployRuntime = "kserve-huggingfaceserver"
@@ -1093,10 +1107,10 @@ Examples:
 				default:
 					deployRuntime = servingTopology
 				}
-				
+
 				cfg.Runtime = deployRuntime
 				cfg.ServingTopology = servingTopology
-				
+
 				var wf *workflow.DeployWorkflow
 				// If vllm topology (direct serving), skip the entire deploy execution
 				if skipDeployBecauseOfTopology {
@@ -1211,18 +1225,20 @@ Examples:
 		if !skipDeploy {
 			fmt.Println()
 			ctxModel.SetStep(6)
-			displayInteractiveContext(ctxModel, "Press Enter to continue to infrastructure and resource orchestration.")
+			if displayInteractiveContext(ctxModel, "Press Enter to continue to infrastructure and resource orchestration.") {
+				return ErrWizardCancelled
+			}
 			fmt.Println()
 
 			fmt.Println(stepStyle.Render("Step 6: Infrastructure & Resource Orchestration"))
-			
+
 			// Read declared requirements from manifest's CNCF AI annotations
 			manifestPath := filepath.Join(modelPath, "manifest.json")
 			var annotations map[string]string
 			if manifest, err := workflow.ReadUnifiedOCIManifest(manifestPath); err == nil && manifest.Annotations != nil {
 				annotations = manifest.Annotations
 			}
-			
+
 			// Query actual nodes
 			nodesOut, nodesErr := exec.Command("kubectl", "get", "nodes", "-o", "json").CombinedOutput()
 			if nodesErr != nil {
@@ -1237,105 +1253,107 @@ Examples:
 						} `json:"metadata"`
 						Status struct {
 							Allocatable map[string]string `json:"allocatable"`
-							Capacity   map[string]string `json:"capacity"`
+							Capacity    map[string]string `json:"capacity"`
 						} `json:"status"`
 					} `json:"items"`
 				}
 				if err := json.Unmarshal(nodesOut, &nodesList); err == nil {
 					// Check each declared requirement
 					// org.cncf.ai.accelerator
-						if accel, ok := annotations[workflow.AnnotationAccelerator]; ok && accel != "" {
-							if accel == "cpu" {
-								// CPU is satisfied by any Ready node
-								fmt.Printf("✓ Accelerator: %s (satisfied by any node)\n", accel)
-							} else {
-								// Check for GPU labels
-								found := false
-								for _, node := range nodesList.Items {
-									if _, hasGPU := node.Metadata.Labels["nvidia.com/gpu.product"]; hasGPU {
-										fmt.Printf("✓ Accelerator: %s (node %s has GPU)\n", accel, node.Metadata.Name)
-										found = true
-										break
-									}
-								}
-								if !found {
-									fmt.Printf("⚠ Accelerator: %s (no nodes with GPU labels found)\n", accel)
-								}
-							}
-						}
-						
-						// org.cncf.ai.accelerator.cuda.min
-						if cudaMin, ok := annotations[workflow.AnnotationCUDAVersionMin]; ok && cudaMin != "" {
-							// Check node labels for CUDA version
-							// Note: This is informational - we don't fail the step
-							fmt.Printf("→ CUDA min: %s\n", cudaMin)
-						}
-						
-						// org.cncf.ai.resource.memory.min
-						if memMin, ok := annotations[workflow.AnnotationMemoryMin]; ok && memMin != "" {
-							memMinKi := parseMemory(memMin)
-							if memMinKi > 0 {
-								found := false
-								for _, node := range nodesList.Items {
-									if memStr, ok := node.Status.Allocatable["memory"]; ok {
-										nodeMemKi := parseMemory(memStr)
-										if nodeMemKi >= memMinKi {
-											fmt.Printf("✓ Memory min: %s (node %s has %s allocatable)\n", memMin, node.Metadata.Name, memStr)
-											found = true
-										}
-									}
-								}
-								if !found {
-									fmt.Printf("⚠ Memory min: %s (no nodes satisfy requirement)\n", memMin)
-								}
-							}
-						}
-						
-						// ai.node.gpu.type
-						if gpuType, ok := annotations[workflow.AnnotationGPUType]; ok && gpuType != "" {
+					if accel, ok := annotations[workflow.AnnotationAccelerator]; ok && accel != "" {
+						if accel == "cpu" {
+							// CPU is satisfied by any Ready node
+							fmt.Printf("✓ Accelerator: %s (satisfied by any node)\n", accel)
+						} else {
+							// Check for GPU labels
 							found := false
 							for _, node := range nodesList.Items {
-								if nodeGPUType, ok := node.Metadata.Labels["nvidia.com/gpu.product"]; ok && nodeGPUType == gpuType {
-									fmt.Printf("✓ GPU type: %s (node %s has matching GPU)\n", gpuType, node.Metadata.Name)
+								if _, hasGPU := node.Metadata.Labels["nvidia.com/gpu.product"]; hasGPU {
+									fmt.Printf("✓ Accelerator: %s (node %s has GPU)\n", accel, node.Metadata.Name)
 									found = true
 									break
 								}
 							}
 							if !found {
-								fmt.Printf("⚠ GPU type: %s (no nodes with matching GPU)\n", gpuType)
+								fmt.Printf("⚠ Accelerator: %s (no nodes with GPU labels found)\n", accel)
 							}
-						}
-						
-						// ai.node.vram.min
-						if vramMin, ok := annotations[workflow.AnnotationVRAMMin]; ok && vramMin != "" {
-							vramMinKi := parseMemory(vramMin)
-							if vramMinKi > 0 {
-								found := false
-								for _, node := range nodesList.Items {
-									// GPU VRAM is in node labels, not capacity
-									if vramStr, ok := node.Metadata.Labels["nvidia.com/gpu.memory"]; ok {
-										vramNodeKi := parseMemory(vramStr)
-										if vramNodeKi >= vramMinKi {
-											fmt.Printf("✓ vRAM min: %s (node %s has %s)\n", vramMin, node.Metadata.Name, vramStr)
-											found = true
-										}
-									}
-								}
-								if !found {
-									fmt.Printf("⚠ vRAM min: %s (no nodes satisfy requirement)\n", vramMin)
-								}
-							}
-						}
-						
-						// ai.node.gpu.topology
-						if gpuTopo, ok := annotations[workflow.AnnotationGPUTopology]; ok && gpuTopo != "" {
-							fmt.Printf("→ GPU topology: %s\n", gpuTopo)
 						}
 					}
+
+					// org.cncf.ai.accelerator.cuda.min
+					if cudaMin, ok := annotations[workflow.AnnotationCUDAVersionMin]; ok && cudaMin != "" {
+						// Check node labels for CUDA version
+						// Note: This is informational - we don't fail the step
+						fmt.Printf("→ CUDA min: %s\n", cudaMin)
+					}
+
+					// org.cncf.ai.resource.memory.min
+					if memMin, ok := annotations[workflow.AnnotationMemoryMin]; ok && memMin != "" {
+						memMinKi := parseMemory(memMin)
+						if memMinKi > 0 {
+							found := false
+							for _, node := range nodesList.Items {
+								if memStr, ok := node.Status.Allocatable["memory"]; ok {
+									nodeMemKi := parseMemory(memStr)
+									if nodeMemKi >= memMinKi {
+										fmt.Printf("✓ Memory min: %s (node %s has %s allocatable)\n", memMin, node.Metadata.Name, memStr)
+										found = true
+									}
+								}
+							}
+							if !found {
+								fmt.Printf("⚠ Memory min: %s (no nodes satisfy requirement)\n", memMin)
+							}
+						}
+					}
+
+					// ai.node.gpu.type
+					if gpuType, ok := annotations[workflow.AnnotationGPUType]; ok && gpuType != "" {
+						found := false
+						for _, node := range nodesList.Items {
+							if nodeGPUType, ok := node.Metadata.Labels["nvidia.com/gpu.product"]; ok && nodeGPUType == gpuType {
+								fmt.Printf("✓ GPU type: %s (node %s has matching GPU)\n", gpuType, node.Metadata.Name)
+								found = true
+								break
+							}
+						}
+						if !found {
+							fmt.Printf("⚠ GPU type: %s (no nodes with matching GPU)\n", gpuType)
+						}
+					}
+
+					// ai.node.vram.min
+					if vramMin, ok := annotations[workflow.AnnotationVRAMMin]; ok && vramMin != "" {
+						vramMinKi := parseMemory(vramMin)
+						if vramMinKi > 0 {
+							found := false
+							for _, node := range nodesList.Items {
+								// GPU VRAM is in node labels, not capacity
+								if vramStr, ok := node.Metadata.Labels["nvidia.com/gpu.memory"]; ok {
+									vramNodeKi := parseMemory(vramStr)
+									if vramNodeKi >= vramMinKi {
+										fmt.Printf("✓ vRAM min: %s (node %s has %s)\n", vramMin, node.Metadata.Name, vramStr)
+										found = true
+									}
+								}
+							}
+							if !found {
+								fmt.Printf("⚠ vRAM min: %s (no nodes satisfy requirement)\n", vramMin)
+							}
+						}
+					}
+
+					// ai.node.gpu.topology
+					if gpuTopo, ok := annotations[workflow.AnnotationGPUTopology]; ok && gpuTopo != "" {
+						fmt.Printf("→ GPU topology: %s\n", gpuTopo)
+					}
 				}
+			}
 
 			ctxModel.SetStep(7)
-			displayInteractiveContext(ctxModel, "Press Enter to continue to deployment.")
+			if displayInteractiveContext(ctxModel, "Press Enter to continue to deployment.") {
+				return ErrWizardCancelled
+			}
 			fmt.Println()
 
 			fmt.Println()
@@ -1354,7 +1372,7 @@ Examples:
 						Spec struct {
 							Predictor struct {
 								Model struct {
-									Runtime    string `json:"runtime"`
+									Runtime   string `json:"runtime"`
 									Resources struct {
 										Requests map[string]string `json:"requests"`
 										Limits   map[string]string `json:"limits"`
@@ -1382,7 +1400,7 @@ Examples:
 								fmt.Printf("→ Runtime: %s (no declared runtime annotation)\n", deployedRuntime)
 							}
 						}
-						
+
 						// Report resource requests/limits vs declared memory min
 						if memMin, ok := annotations[workflow.AnnotationMemoryMin]; ok && memMin != "" {
 							memMinKi := parseMemory(memMin)
@@ -1397,7 +1415,7 @@ Examples:
 								} else {
 									fmt.Printf("→ Memory: no request declared\n")
 								}
-								
+
 								if limitMem, ok := isvc.Spec.Predictor.Model.Resources.Limits["memory"]; ok {
 									limitMemKi := parseMemory(limitMem)
 									if limitMemKi >= memMinKi {
@@ -1410,7 +1428,7 @@ Examples:
 								}
 							}
 						}
-						
+
 						// Report InferenceService Ready status
 						ready := false
 						for _, cond := range isvc.Status.Conditions {
@@ -1564,13 +1582,13 @@ func expandHomePath(path string) (string, error) {
 }
 
 // displayInteractiveContext displays an interactive context panel with tabs
-func displayInteractiveContext(ctxModel *tui.ContextModel, nextAction string) {
+func displayInteractiveContext(ctxModel *tui.ContextModel, nextAction string) bool {
 	// Check if stdin is a TTY (interactive terminal)
 	if !isTTY() {
 		// Non-interactive mode: just print the first tab
 		fmt.Println()
 		fmt.Println(ctxModel.View())
-		return
+		return false
 	}
 
 	fmt.Println()
@@ -1586,20 +1604,19 @@ func displayInteractiveContext(ctxModel *tui.ContextModel, nextAction string) {
 	// If there was an error (user pressed ctrl+c), check if they cancelled
 	if err != nil {
 		// tea.Program returns an error on ctrl+c, but we handle Esc gracefully
-		// For now, just continue execution
-		return
+		return false
 	}
 
 	// Check if user cancelled (pressed Esc)
 	if ctxModel.IsCancelled() {
-		// User wants to go back - we need a way to signal this
-		// For now, we'll just exit the wizard
+		// Signal cancellation up to the wizard RunE so telemetry flushes
 		fmt.Println(warningStyle.Render("Cancelled by user"))
-		os.Exit(0)
+		return true
 	}
 
 	// User pressed Enter - reset for next use and continue
 	ctxModel.ResetControlFlags()
+	return false
 }
 
 // isTTY checks if stdin is a TTY (interactive terminal)
