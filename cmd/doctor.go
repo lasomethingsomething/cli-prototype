@@ -55,7 +55,7 @@ Examples:
 
 		// Check exit code: exit 1 if anything is missing
 		if !report.AllInstalled() {
-			os.Exit(1)
+			return fmt.Errorf("doctor: some checks failed or missing tools remain")
 		}
 
 		return nil
@@ -105,7 +105,7 @@ func runFix(cmd *cobra.Command, report *workflow.DoctorReport, yesFlag bool) err
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			fmt.Fprintf(os.Stderr, "Failed to install %s. Run: %s\n", tool.Name(), tool.InstallInstructions())
-			os.Exit(1)
+			return fmt.Errorf("failed to install %s: run: %s", tool.Name(), tool.InstallInstructions())
 		}
 
 		fmt.Printf("Successfully installed %s\n", tool.Name())
