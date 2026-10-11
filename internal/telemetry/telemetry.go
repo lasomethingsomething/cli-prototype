@@ -3,8 +3,10 @@ package telemetry
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -24,27 +26,86 @@ func Enabled() bool {
 	return os.Getenv("MODEL_CLI_OTEL_ENDPOINT") != ""
 }
 
-// normalizeEndpoint strips optional http:// or https:// prefix from a bare
-// host:port, or returns the input as-is if it is a valid URL with a path.
-// Returns the normalized endpoint and true if it appears valid, or the original
-// string and false if it cannot be parsed.
+// isValidHostPort checks if s is a valid host[:port] with numeric port in 1-65535.
+func isValidHostPort(s string) bool {
+	if s == "" {
+		return false
+	}
+	host, port, err := net.SplitHostPort(s)
+	if err != nil {
+		// No port, validate as plain host
+		return isValidHost(s)
+	}
+	if !isValidHost(host) {
+		return false
+	}
+	// Port must be numeric 1-65535
+	if port == "" {
+		return false
+	}
+	for _, c := range port {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	p, err := strconv.Atoi(port)
+	return err == nil && p >= 1 && p <= 65535
+}
+
+// isValidHost checks if s is a valid hostname or IP (no port).
+func isValidHost(s string) bool {
+	if s == "" {
+		return false
+	}
+	// IPv6 bracketed
+	if strings.HasPrefix(s, "[") && strings.HasSuffix(s, "]") {
+		return net.ParseIP(strings.TrimPrefix(strings.TrimSuffix(s, "]"), "[")) != nil
+	}
+	// IPv4 or hostname
+	if net.ParseIP(s) != nil {
+		return true
+	}
+	// Hostname: alphanum, dots, hyphens; no leading/trailing dot/hyphen
+	if len(s) == 0 {
+		return false
+	}
+	if s[0] == '.' || s[0] == '-' || s[len(s)-1] == '.' || s[len(s)-1] == '-' {
+		return false
+	}
+	for _, c := range s {
+		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '.' || c == '-') {
+			return false
+		}
+	}
+	return true
+}
+
+// normalizeEndpoint normalizes endpoint: strips http://https:// from bare host[:port],
+// keeps full URLs with paths, validates format. Returns normalized endpoint and ok.
 func normalizeEndpoint(endpoint string) (string, bool) {
-	if endpoint == "" {
-		return "", false
+	if strings.TrimSpace(endpoint) == "" {
+		return endpoint, false
 	}
 
-	// Try to parse as a URL first
-	if u, err := url.Parse(endpoint); err == nil && u.Host != "" {
-		// If it's http:// or https:// with no path (or just /), strip the scheme
-		// and return just the host:port
-		if (u.Scheme == "http" || u.Scheme == "https") && (u.Path == "" || u.Path == "/") {
-			return u.Host, true
+	// Parse as URL
+	u, err := url.Parse(endpoint)
+	if err == nil && u.Host != "" {
+		if u.Scheme == "http" || u.Scheme == "https" {
+			if u.Path == "" || u.Path == "/" {
+				// scheme + host[:port], strip scheme
+				if isValidHostPort(u.Host) {
+					return u.Host, true
+				}
+				return endpoint, false
+			}
+			// Full URL with path, keep as-is
+			return endpoint, true
 		}
-		// It's a valid URL with a non-trivial path - use it as-is
+		// URL with other scheme or relative, keep as-is
 		return endpoint, true
 	}
 
-	// Strip optional scheme prefix if present (for malformed but fixable input)
+	// Strip http:// or https:// prefix if present
 	normalized := endpoint
 	for _, prefix := range []string{"https://", "http://"} {
 		if strings.HasPrefix(normalized, prefix) {
@@ -53,15 +114,9 @@ func normalizeEndpoint(endpoint string) (string, bool) {
 		}
 	}
 
-	// Validate that what remains looks like a valid endpoint
-	// It should parse as a URL when prefixed with http:// and have a non-empty host
-	// that doesn't start with a colon
-	if normalized != "" {
-		if u, err := url.Parse("http://" + normalized); err == nil && u.Host != "" && !strings.HasPrefix(u.Host, ":") {
-			return normalized, true
-		}
+	if isValidHostPort(normalized) {
+		return normalized, true
 	}
-
 	return endpoint, false
 }
 
@@ -82,7 +137,15 @@ func Start(version string) *Telemetry {
 	endpoint = normalized
 
 	ctx := context.Background()
-	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(error) {}))
+
+	// Track endpoint and export errors for reporting in Shutdown
+	t := &Telemetry{endpoint: endpoint}
+	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(err error) {
+		if err != nil {
+			t.lastExportErr = err
+		}
+	}))
+
 	res, err := resource.New(ctx,
 		resource.WithAttributes(
 			attribute.String("service.name", "model-cli"),
@@ -92,8 +155,6 @@ func Start(version string) *Telemetry {
 	if err != nil {
 		return &Telemetry{}
 	}
-
-	t := &Telemetry{}
 
 	if exp, err := otlptracehttp.New(ctx,
 		otlptracehttp.WithEndpoint(endpoint),
@@ -137,6 +198,9 @@ type Telemetry struct {
 	tracer         trace.Tracer
 	runs           metric.Int64Counter
 	duration       metric.Float64Histogram
+	// endpoint and lastExportErr for error reporting in Shutdown
+	endpoint      string
+	lastExportErr error
 }
 
 // StartSpan begins a span for one command run.
@@ -171,5 +235,9 @@ func (t *Telemetry) Shutdown(ctx context.Context) {
 	}
 	if t.meterProvider != nil {
 		_ = t.meterProvider.Shutdown(ctx)
+	}
+	// Warn if export failed
+	if t.lastExportErr != nil && t.endpoint != "" {
+		fmt.Fprintf(os.Stderr, "model-cli: telemetry export to %s failed: %v\n", t.endpoint, t.lastExportErr)
 	}
 }
