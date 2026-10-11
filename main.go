@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -30,13 +31,20 @@ func main() {
 	took := time.Since(start).Seconds()
 	exit := "ok"
 	if err != nil {
-		exit = "error"
+		if errors.Is(err, cmd.ErrWizardCancelled) {
+			exit = "cancelled"
+		} else {
+			exit = "error"
+		}
 	}
 	tel.Record(ctx, command, exit, took)
 	span.End()
 	tel.Shutdown(context.Background())
 
 	if err != nil {
+		if errors.Is(err, cmd.ErrWizardCancelled) {
+			os.Exit(0)
+		}
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
