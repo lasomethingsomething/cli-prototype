@@ -27,29 +27,36 @@ func Enabled() bool {
 }
 
 // isValidHostPort checks if s is a valid host[:port] with numeric port in 1-65535.
-func isValidHostPort(s string) bool {
+// Returns the normalized form (appends :4318 if no port) and true if valid.
+func isValidHostPort(s string) (string, bool) {
 	if s == "" {
-		return false
+		return "", false
 	}
 	host, port, err := net.SplitHostPort(s)
 	if err != nil {
 		// No port, validate as plain host
-		return isValidHost(s)
+		if isValidHost(s) {
+			return s + ":4318", true
+		}
+		return s, false
 	}
 	if !isValidHost(host) {
-		return false
+		return s, false
 	}
 	// Port must be numeric 1-65535
 	if port == "" {
-		return false
+		return s, false
 	}
 	for _, c := range port {
 		if c < '0' || c > '9' {
-			return false
+			return s, false
 		}
 	}
 	p, err := strconv.Atoi(port)
-	return err == nil && p >= 1 && p <= 65535
+	if err != nil || p < 1 || p > 65535 {
+		return s, false
+	}
+	return s, true
 }
 
 // isValidHost checks if s is a valid hostname or IP (no port).
@@ -93,8 +100,8 @@ func normalizeEndpoint(endpoint string) (string, bool) {
 		if u.Scheme == "http" || u.Scheme == "https" {
 			if u.Path == "" || u.Path == "/" {
 				// scheme + host[:port], strip scheme
-				if isValidHostPort(u.Host) {
-					return u.Host, true
+				if normalized, ok := isValidHostPort(u.Host); ok {
+					return normalized, true
 				}
 				return endpoint, false
 			}
@@ -114,7 +121,7 @@ func normalizeEndpoint(endpoint string) (string, bool) {
 		}
 	}
 
-	if isValidHostPort(normalized) {
+	if normalized, ok := isValidHostPort(normalized); ok {
 		return normalized, true
 	}
 	return endpoint, false

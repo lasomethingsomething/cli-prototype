@@ -12,7 +12,7 @@ func TestNormalizeEndpoint(t *testing.T) {
 	}{
 		// Valid
 		{"localhost:4318", "localhost:4318", true},
-		{"localhost", "localhost", true},
+		{"localhost", "localhost:4318", true},
 		{"http://localhost:4318", "localhost:4318", true},
 		{"http://localhost:4318/v1", "http://localhost:4318/v1", true},
 		// Invalid
@@ -25,8 +25,8 @@ func TestNormalizeEndpoint(t *testing.T) {
 		{"host:0", "host:0", false},
 		{"host:65536", "host:65536", false},
 		{"host-", "host-", false},
-		// Valid: not-an-endpoint accepted
-		{"not-an-endpoint", "not-an-endpoint", true},
+		// Valid: bare host gets :4318 appended
+		{"not-an-endpoint", "not-an-endpoint:4318", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
