@@ -10,14 +10,20 @@ and container registries already understand, so standard tooling can push, pull,
 sign, and route them.
 
 **Annotations.** Model CLI attaches metadata to OCI manifests under CNCF AI
-Interoperability Profile keys:
+Interoperability Profile keys
+([spec](https://github.com/cncf/toc/blob/main/tags/tag-developer-experience/initiatives/cloud-native-oci-compliant-inner-loop/annotations.md)):
 
-- Profile: `org.cncf.ai.interop.profile.version`, `org.cncf.ai.artifact.type`
+- Profile: `org.cncf.ai.interop.profile.version`, `org.cncf.ai.artifact.type`, `org.cncf.ai.lifecycle.status`
 - Security: signing framework, SBOM format, provenance type, packaging format
 - MOF: openness class (I / II / III), version, components
 - Runtime: serving runtime, accelerator, minimum CUDA and memory
 - Infrastructure: `ai.node.gpu.type`, `ai.node.vram.min`, `ai.node.gpu.topology`
 - Execution: `ai.runtime.type`, layer deduplication, skill DLC endpoint, skill references
+
+Standard [OCI image-spec annotations](https://specs.opencontainers.org/image-spec/annotations/)
+(title, description, version, created, and more) are reused wherever possible
+per the profile; for example, harden's explicit `--license` is recorded as
+`org.opencontainers.image.licenses`.
 
 Policy engines, GitOps tools, and registries can inspect these without
 downloading the model.

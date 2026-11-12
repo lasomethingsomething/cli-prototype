@@ -102,6 +102,11 @@ Examples:
 		hw.SetOptions(generateSBOM, includeMOF)
 		hw.SetSBOMTool(sbomTool, workflow.SBOMFormat(sbomFormat))
 		hw.SetLicense(license)
+		// Only declare an artifact license when --license was explicitly
+		// set; the default licenses the MOF docs, not the model.
+		if cmd.Flags().Changed("license") {
+			hw.SetArtifactLicense(license)
+		}
 		hw.SetAnnotations(annotations)
 
 		// Run the workflow

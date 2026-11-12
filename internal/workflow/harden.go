@@ -25,6 +25,7 @@ type HardenWorkflow struct {
 	sbomTool          string
 	sbomFormat        SBOMFormat
 	license           string
+	artifactLicense   string
 
 	// sbomGenerator overrides the generator looked up by sbomTool (tests).
 	sbomGenerator SBOMGenerator
@@ -75,8 +76,18 @@ func (w *HardenWorkflow) SetGenerateMOFConfig(generate bool) {
 }
 
 // SetLicense sets the license for the MOF metadata (defaults to CC-BY-4.0)
+
 func (w *HardenWorkflow) SetLicense(license string) {
 	w.license = license
+}
+
+// SetArtifactLicense records a license the user explicitly declared for the
+// model artifact itself. It is reused as the standard
+// org.opencontainers.image.licenses annotation; unlike SetLicense, it is
+// never defaulted, because the --license flag default (CC-BY-4.0) licenses
+// the MOF documentation, not necessarily the model.
+func (w *HardenWorkflow) SetArtifactLicense(license string) {
+	w.artifactLicense = license
 }
 
 // SetSBOMTool sets the SBOM generation tool and format
@@ -330,6 +341,13 @@ func (w *HardenWorkflow) manifestAnnotations() map[string]string {
 	}
 	if w.annotations.ProvenanceType != "" {
 		annotations[AnnotationProvenanceType] = w.annotations.ProvenanceType
+	}
+	// Reuse the standard OCI annotation for the artifact license, but only
+	// when the user explicitly chose one: the --license flag default
+	// (CC-BY-4.0) licenses the MOF documentation, not necessarily the model,
+	// so it must never silently become the artifact's license claim.
+	if w.artifactLicense != "" {
+		annotations[OCILicenses] = w.artifactLicense
 	}
 	return annotations
 }

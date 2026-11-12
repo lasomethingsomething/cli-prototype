@@ -33,6 +33,29 @@ const (
 	LifecycleStatusProductReady = "product-ready"
 )
 
+// Reused OCI image-spec annotations. The profile does not redefine these:
+// "The OCI Image Spec defines a set of annotations that can be applied to
+// several components of the specification. These predefined keys should
+// be reused wherever possible."
+// Reference: https://specs.opencontainers.org/image-spec/annotations/
+const (
+	// OCIImageVersion is the version of the model artifact itself (not the
+	// profile version).
+	OCIImageVersion = "org.opencontainers.image.version"
+	// OCIImageTitle is the model artifact name.
+	OCIImageTitle = "org.opencontainers.image.title"
+	// OCIImageDescription describes the artifact.
+	OCIImageDescription = "org.opencontainers.image.description"
+	// OCIImageAuthors is the authorship of the model artifact.
+	OCIImageAuthors = "org.opencontainers.image.authors"
+	// OCIImageSource is the source repository/location of the model.
+	OCIImageSource = "org.opencontainers.image.source"
+	// OCIImageCreated is the creation timestamp (RFC 3339).
+	OCIImageCreated = "org.opencontainers.image.created"
+	// OCILicenses is the license identifier(s) of the model artifact.
+	OCILicenses = "org.opencontainers.image.licenses"
+)
+
 // MOF (Model Openness Framework) annotations (MUST when applicable)
 const (
 	// MOFClass identifies the openness class of the model

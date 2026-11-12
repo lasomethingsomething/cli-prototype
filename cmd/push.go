@@ -526,9 +526,16 @@ func createUnifiedOCIManifest(artifactType workflow.ArtifactType, artifactName, 
 	}
 
 	// Add standardized OCI annotations
-	manifest.Annotations["org.opencontainers.image.title"] = artifactName
-	manifest.Annotations["org.opencontainers.image.description"] = fmt.Sprintf("%s artifact pushed by model-cli", artifactType)
-	manifest.Annotations["org.opencontainers.image.version"] = "1.0.0"
+	// Add standardized OCI annotations (image-spec keys reused per the
+	// profile: https://specs.opencontainers.org/image-spec/annotations/)
+	manifest.Annotations[workflow.OCIImageTitle] = artifactName
+	manifest.Annotations[workflow.OCIImageDescription] = fmt.Sprintf("%s artifact pushed by model-cli", artifactType)
+	if manifest.Annotations[workflow.OCIImageVersion] == "" {
+		manifest.Annotations[workflow.OCIImageVersion] = "1.0.0"
+	}
+	if manifest.Annotations[workflow.OCIImageCreated] == "" {
+		manifest.Annotations[workflow.OCIImageCreated] = time.Now().UTC().Format(time.RFC3339)
+	}
 
 	// Add Trust Profile annotations for GitOps admission (Story #63)
 	// These annotations allow GitOps tools (Argo CD, Flux) + policy engines
