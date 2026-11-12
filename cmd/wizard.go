@@ -508,7 +508,7 @@ Examples:
 					return fmt.Errorf("%s is required to harden this artifact; install it with: %s", sbomGenerator.Name(), sbomGenerator.InstallInstructions())
 				}
 				// Tool was just installed, re-check
-				sbomGenerator, err = workflow.GetSBOMGenerator(sbomTool)
+				_, err = workflow.GetSBOMGenerator(sbomTool)
 				if err != nil {
 					return err
 				}
@@ -691,8 +691,8 @@ Examples:
 					fmt.Println(warningStyle.Render("⚠ Signing tool not installed"))
 					fmt.Printf("   Install with: %s\n", sp.InstallInstructions())
 				} else {
-					// Tool was just installed, re-check
-					sp, err = workflow.GetSigningProvider(cfg.Signer)
+					// Tool was just installed, re-check the lookup succeeds
+					_, err = workflow.GetSigningProvider(cfg.Signer)
 					if err != nil {
 						return err
 					}
@@ -729,8 +729,8 @@ Examples:
 					fmt.Println(warningStyle.Render("⚠ Signing tool not installed"))
 					fmt.Printf("   Install with: %s\n", sp.InstallInstructions())
 				} else {
-					// Tool was just installed, re-check
-					sp, err = workflow.GetSigningProvider(cfg.Signer)
+					// Tool was just installed, re-check the lookup succeeds
+					_, err = workflow.GetSigningProvider(cfg.Signer)
 					if err != nil {
 						return err
 					}

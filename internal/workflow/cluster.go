@@ -130,33 +130,11 @@ func FluxBootstrap(repoURL, repoPath string) error {
 	// Step 4: Wait for Flux to be ready
 	fmt.Println("Waiting for Flux to be ready...")
 	if err := WaitForFluxReady(300 * time.Second); err != nil {
-		return fmt.Errorf("Flux did not become ready: %v", err)
+		return fmt.Errorf("wait for Flux to be ready: %w", err)
 	}
 
 	fmt.Println("✓ Flux is ready!")
 	return nil
-}
-
-// extractOwner extracts the owner from a GitHub URL
-func extractOwner(url string) string {
-	// Handle both SSH and HTTPS URLs
-	url = strings.TrimSuffix(url, ".git")
-	parts := strings.Split(url, "/")
-	if len(parts) >= 4 {
-		return parts[3]
-	}
-	return ""
-}
-
-// extractRepo extracts the repository name from a GitHub URL
-func extractRepo(url string) string {
-	// Handle both SSH and HTTPS URLs
-	url = strings.TrimSuffix(url, ".git")
-	parts := strings.Split(url, "/")
-	if len(parts) >= 5 {
-		return parts[4]
-	}
-	return ""
 }
 
 // WaitForFluxReady waits for Flux to be ready in the cluster

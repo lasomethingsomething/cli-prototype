@@ -33,7 +33,7 @@ jobs:
         run: go vet ./...
       - name: staticcheck
         run: |
-          go install honnef.co/go/tools/cmd/staticcheck@v0.8.1
+          go install honnef.co/go/tools/cmd/staticcheck@v2026.2.2
           staticcheck ./...
 
   e2e:
