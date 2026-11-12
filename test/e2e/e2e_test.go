@@ -156,10 +156,10 @@ func TestPackageThenValidateAgainstRegistry(t *testing.T) {
 			t.Errorf("pushed annotation %s = %q, want %q", key, got, want)
 		}
 	}
-	// ORAS pushes a plain OCI artifact; the manifest must say so, not claim
-	// ModelPack (issue #102).
-	if got := pushed.Annotations[workflow.AnnotationPackagingFormat]; got != workflow.PackagingFormatOCI {
-		t.Errorf("pushed annotation %s = %q, want %q", workflow.AnnotationPackagingFormat, got, workflow.PackagingFormatOCI)
+	// ORAS pushes a plain OCI artifact: per the profile, packaging.format
+	// ("omit if not defined") must not be claimed at all (issue #102).
+	if got, ok := pushed.Annotations[workflow.AnnotationPackagingFormat]; ok {
+		t.Errorf("pushed annotation %s = %q, want absent for a plain ORAS push", workflow.AnnotationPackagingFormat, got)
 	}
 	// Packaging is only packaging: SBOM and MOF classification are the
 	// separate harden step (issue #87), so nothing of them is produced here.

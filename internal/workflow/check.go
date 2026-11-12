@@ -129,12 +129,13 @@ func (w *CheckWorkflow) checkAnnotations() {
 
 	// Required annotations based on what the package step actually writes
 	// Source of truth: the Trust Profile annotations that package/harden write
-	// These are the CNCF AI Interoperability Profile required keys
+	// These are the CNCF AI Interoperability Profile required keys.
+	// packaging.format is SHOULD ("omit if not defined") and is reported as
+	// an optional key below, not required.
 	requiredAnnotations := []string{
 		AnnotationProfileVersion,
 		AnnotationArtifactType,
 		AnnotationLifecycleStatus,
-		AnnotationPackagingFormat,
 		AnnotationSBOMFormat,
 		AnnotationSigningFramework,
 		AnnotationProvenanceType,

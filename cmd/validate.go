@@ -146,10 +146,24 @@ func runValidateManifest(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	fmt.Println("\n✓ Profile annotations valid")
-	fmt.Println("✓ MOF classification valid")
-	fmt.Println("✓ Security annotations valid")
-	fmt.Println("✓ Runtime requirements valid")
+	// CNCF AI Interoperability Profile conformance (annotation MUSTs, enums,
+	// MOF component vocabulary).
+	profileResult := workflow.ValidateProfileConformance(manifestAnnotations)
+	fmt.Println("\n  CNCF AI Interoperability Profile:")
+	for _, e := range profileResult.Errors {
+		fmt.Printf("    ✗ %s\n", e)
+	}
+	for _, w := range profileResult.Warnings {
+		fmt.Printf("    ⚠ %s\n", w)
+	}
+	if !profileResult.Valid() {
+		return fmt.Errorf("profile conformance failed: %v", strings.Join(profileResult.Errors, "; "))
+	}
+	fmt.Println("    ✓ Profile annotations valid")
+	fmt.Println("    ✓ MOF classification valid")
+	fmt.Println("    ✓ Security annotations valid")
+
+	fmt.Println("\n✓ Runtime requirements valid")
 
 	if checkRelationships {
 		printRelationships(manifestAnnotations)

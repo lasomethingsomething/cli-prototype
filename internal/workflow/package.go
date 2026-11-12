@@ -124,11 +124,16 @@ func (w *PackageWorkflow) Run() error {
 	fmt.Println("\n=== Packaging ===")
 
 	// The packaging format is a fact about this run, not a user choice: it
-	// is whatever the registry tool produces (issue #102).
+	// is whatever the registry tool produces (issue #102). The profile's
+	// packaging.format annotation is SHOULD with one documented value
+	// (modelpack) and "omit if not defined", so plain-OCI pushes carry no
+	// packaging.format claim; any provider-defined format is recorded as-is.
 	if w.annotations == nil {
 		w.annotations = NewAnnotationSet()
 	}
-	w.annotations.PackagingFormat = w.registryProvider.PackagingFormat()
+	if format := w.registryProvider.PackagingFormat(); format != "" && format != PackagingFormatOCI {
+		w.annotations.PackagingFormat = format
+	}
 
 	// Generate and add the ai.assets metadata contract annotation
 	// This is required for validate manifest to pass
