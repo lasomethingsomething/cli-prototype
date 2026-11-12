@@ -2,9 +2,10 @@ package workflow
 
 import "fmt"
 
-// Annotation constants for CNCF AI Interoperability Profile
-// Based on: https://github.com/opencontainers/image-spec/blob/main/annotations.md
-// These are sample annotations while the final spec is being worked out.
+// Annotation constants for the CNCF AI Interoperability Profile (v0.1 draft).
+// Spec: https://github.com/cncf/toc/blob/main/tags/tag-developer-experience/initiatives/cloud-native-oci-compliant-inner-loop/annotations.md
+// Keys outside the org.cncf.ai namespace (ai.node.*, ai.runtime.*, ai.skill.*)
+// are model-cli extensions and not part of the interoperability contract.
 
 // Profile annotations (MUST)
 const (
@@ -15,6 +16,21 @@ const (
 	// ArtifactType identifies the type of AI artifact
 	// Value: "model" (v1), future: "skill", "rag-context", "workflow", etc.
 	AnnotationArtifactType = "org.cncf.ai.artifact.type"
+
+	// LifecycleStatus is the maturity/promotion status of the artifact,
+	// independent of structural conformance (a fully compliant artifact can
+	// still be experimental).
+	// Value: one of LifecycleStatusExperimental, LifecycleStatusValidated,
+	// LifecycleStatusDeprecated, LifecycleStatusProductReady
+	AnnotationLifecycleStatus = "org.cncf.ai.lifecycle.status"
+)
+
+// Values of AnnotationLifecycleStatus
+const (
+	LifecycleStatusExperimental = "experimental"
+	LifecycleStatusValidated    = "validated"
+	LifecycleStatusDeprecated   = "deprecated"
+	LifecycleStatusProductReady = "product-ready"
 )
 
 // MOF (Model Openness Framework) annotations (MUST when applicable)
@@ -27,19 +43,36 @@ const (
 	// Value: semantic version (e.g., "1.0")
 	AnnotationMOFVersion = "org.cncf.ai.model.mof.version"
 
-	// MOFComponents lists which MOF components are present
-	// Value: comma-separated list (e.g., "weights,training-data,code")
+	// MOFComponents lists which MOF components are present.
+	// Value: comma-separated, no surrounding whitespace, drawn from the
+	// profile vocabulary (datasets, data-preprocessing-code, model-architecture,
+	// final-model-parameters, intermediate-model-parameters, model-metadata,
+	// training-code, inference-code, evaluation-code, evaluation-data,
+	// evaluation-results, supporting-libraries-and-tools, model-card, data-card,
+	// technical-report, research-paper, sample-model-outputs,
+	// model-openness-config-file). model-openness-config-file is always
+	// required regardless of class.
 	AnnotationMOFComponents = "org.cncf.ai.model.mof.components"
 )
+
+// MOFComponentsClassI is the full enumerated component list consistent with a
+// Class I (most open) claim under the v1 profile. Used as the default MOF
+// claim so the annotation at least conforms to the vocabulary; harden/detect
+// refines it from the actual model files.
+const MOFComponentsClassI = "datasets,data-preprocessing-code,model-architecture," +
+	"final-model-parameters,intermediate-model-parameters,model-metadata,training-code," +
+	"inference-code,evaluation-code,evaluation-data,evaluation-results," +
+	"supporting-libraries-and-tools,model-card,data-card,technical-report,research-paper," +
+	"sample-model-outputs,model-openness-config-file"
 
 // Security annotations (MUST/SHOULD)
 const (
 	// SigningFramework identifies the signing framework used
-	// Value: "sigstore-cosign", "notation", etc.
+	// Value: "sigstore", "notation" (extensible per profile open question #2)
 	AnnotationSigningFramework = "org.cncf.ai.security.signing.framework"
 
 	// SBOMFormat identifies the SBOM format
-	// Value: "spdx-json", "cyclonedx", etc.
+	// Value: "spdx", "cyclonedx"
 	AnnotationSBOMFormat = "org.cncf.ai.security.sbom.format"
 
 	// ProvenanceType identifies the provenance attestation type
@@ -56,8 +89,10 @@ const (
 // them (RegistryProvider.PackagingFormat); the annotation is deliberately not
 // defaulted so a manifest never claims a format that was not used.
 const (
-	// PackagingFormatOCI is a plain OCI artifact, as pushed with ORAS.
-	PackagingFormatOCI = "oci"
+	// PackagingFormatOCI is a plain OCI artifact, as pushed with ORAS. It uses
+	// no model packaging format, so the annotation value is "none" per the
+	// profile's allowed values ("modelpack", "none").
+	PackagingFormatOCI = "none"
 	// PackagingFormatModelPack is a CNCF ModelPack Model Spec artifact, as
 	// built and pushed with modctl.
 	PackagingFormatModelPack = "modelpack"
@@ -123,8 +158,9 @@ const (
 // AnnotationSet represents a collection of annotations for an OCI artifact
 type AnnotationSet struct {
 	// Core interop profile
-	ProfileVersion string
-	ArtifactType   string
+	ProfileVersion  string
+	ArtifactType    string
+	LifecycleStatus string
 
 	// MOF classification
 	MOFClass      string
@@ -163,9 +199,10 @@ func NewAnnotationSet() *AnnotationSet {
 	return &AnnotationSet{
 		ProfileVersion:   "1.0.0",
 		ArtifactType:     "model",
+		LifecycleStatus:  LifecycleStatusExperimental,
 		MOFVersion:       "1.0",
-		SigningFramework: "sigstore-cosign", // Default, can be overridden by user choice
-		SBOMFormat:       "spdx-json",
+		SigningFramework: "sigstore", // Default, can be overridden by user choice
+		SBOMFormat:       "spdx",
 		ProvenanceType:   "slsa-v1.0",
 		Runtime:          "",
 		Accelerator:      "",
@@ -184,6 +221,9 @@ func (a *AnnotationSet) ToMap() map[string]string {
 	}
 	if a.ArtifactType != "" {
 		annotations[AnnotationArtifactType] = a.ArtifactType
+	}
+	if a.LifecycleStatus != "" {
+		annotations[AnnotationLifecycleStatus] = a.LifecycleStatus
 	}
 
 	// MOF annotations (MUST when applicable)
@@ -259,6 +299,7 @@ func (a *AnnotationSet) Print() {
 	fmt.Println("  Profile:")
 	fmt.Printf("    %s: %s\n", AnnotationProfileVersion, a.ProfileVersion)
 	fmt.Printf("    %s: %s\n", AnnotationArtifactType, a.ArtifactType)
+	fmt.Printf("    %s: %s\n", AnnotationLifecycleStatus, a.LifecycleStatus)
 
 	fmt.Println("  MOF:")
 	fmt.Printf("    %s: %s\n", AnnotationMOFClass, a.MOFClass)
@@ -287,4 +328,17 @@ func (a *AnnotationSet) Print() {
 	fmt.Printf("    %s: %s\n", AnnotationLayerDeduplication, a.LayerDeduplication)
 	fmt.Printf("    %s: %s\n", AnnotationReferenceSkillDLC, a.ReferenceSkillDLC)
 	fmt.Printf("    %s: %s\n", AnnotationSkillReferences, a.SkillReferences)
+}
+
+// ProfileSBOMFormat maps an internal SBOM tool format (syft/trivy output
+// format) to the profile's annotation vocabulary ("spdx" or "cyclonedx").
+func ProfileSBOMFormat(format SBOMFormat) string {
+	switch format {
+	case SPDXJSON, SPDXTagValue:
+		return "spdx"
+	case CycloneDXJSON, CycloneDXXML:
+		return "cyclonedx"
+	default:
+		return "spdx"
+	}
 }

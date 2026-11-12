@@ -133,6 +133,7 @@ func (w *CheckWorkflow) checkAnnotations() {
 	requiredAnnotations := []string{
 		AnnotationProfileVersion,
 		AnnotationArtifactType,
+		AnnotationLifecycleStatus,
 		AnnotationPackagingFormat,
 		AnnotationSBOMFormat,
 		AnnotationSigningFramework,

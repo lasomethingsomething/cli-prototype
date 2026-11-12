@@ -15,15 +15,18 @@ func TestNewAnnotationSet(t *testing.T) {
 	if annotations.ArtifactType != "model" {
 		t.Errorf("ArtifactType = %q, want %q", annotations.ArtifactType, "model")
 	}
+	if annotations.LifecycleStatus != LifecycleStatusExperimental {
+		t.Errorf("LifecycleStatus = %q, want %q", annotations.LifecycleStatus, LifecycleStatusExperimental)
+	}
 	if annotations.MOFVersion != "1.0" {
 		t.Errorf("MOFVersion = %q, want %q", annotations.MOFVersion, "1.0")
 	}
-	// SigningFramework defaults to sigstore-cosign
-	if annotations.SigningFramework != "sigstore-cosign" {
-		t.Errorf("SigningFramework = %q, want %q", annotations.SigningFramework, "sigstore-cosign")
+	// SigningFramework defaults to sigstore (profile vocabulary)
+	if annotations.SigningFramework != "sigstore" {
+		t.Errorf("SigningFramework = %q, want %q", annotations.SigningFramework, "sigstore")
 	}
-	if annotations.SBOMFormat != "spdx-json" {
-		t.Errorf("SBOMFormat = %q, want %q", annotations.SBOMFormat, "spdx-json")
+	if annotations.SBOMFormat != "spdx" {
+		t.Errorf("SBOMFormat = %q, want %q", annotations.SBOMFormat, "spdx")
 	}
 	// Runtime, Accelerator, CUDAMin, MemoryMin are intentionally empty now
 	// (Batch 15) - they must be explicitly set based on model format
@@ -61,6 +64,7 @@ func TestAnnotationSetToMap(t *testing.T) {
 	expectedKeys := []string{
 		AnnotationProfileVersion,
 		AnnotationArtifactType,
+		AnnotationLifecycleStatus,
 		AnnotationMOFClass,
 		AnnotationMOFVersion,
 		AnnotationMOFComponents,

@@ -278,11 +278,11 @@ func (am *AttestationManager) ValidateAndVerify(attestation *ProvenanceAttestati
 }
 
 // signingFrameworkAnnotation maps a signing provider to the value documented
-// for AnnotationSigningFramework ("sigstore-cosign", "notation").
+// for AnnotationSigningFramework ("sigstore", "notation").
 func signingFrameworkAnnotation(sp SigningProvider) string {
 	switch sp.(type) {
 	case *SigstoreProvider:
-		return "sigstore-cosign"
+		return "sigstore"
 	case *NotaryV2Provider:
 		return "notation"
 	default:

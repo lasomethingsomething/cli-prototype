@@ -231,7 +231,7 @@ Examples:
 		// Map the signer name to the canonical annotation value
 		signingFramework := signerToUse
 		if signerToUse == "cosign" || signerToUse == "sigstore" {
-			signingFramework = "sigstore-cosign"
+			signingFramework = "sigstore"
 		} else if signerToUse == "notation" || signerToUse == "notary" || signerToUse == "notaryv2" {
 			signingFramework = "notation"
 		}
@@ -534,13 +534,13 @@ func createUnifiedOCIManifest(artifactType workflow.ArtifactType, artifactName, 
 	// These annotations allow GitOps tools (Argo CD, Flux) + policy engines
 	// (Sigstore Policy Controller, OPA/Gatekeeper) to evaluate artifact trust
 	// Note: SigningFramework is set in the push command based on the signer flag/config
-	manifest.Annotations[workflow.AnnotationSBOMFormat] = "spdx-json"
+	manifest.Annotations[workflow.AnnotationSBOMFormat] = "spdx"
 	manifest.Annotations[workflow.AnnotationProvenanceType] = "slsa-v1.0"
 
 	// Add MOF classification for compliance checking
 	manifest.Annotations[workflow.AnnotationMOFClass] = "I" // Default to most open
 	manifest.Annotations[workflow.AnnotationMOFVersion] = "1.0"
-	manifest.Annotations[workflow.AnnotationMOFComponents] = "weights,training-data,code"
+	manifest.Annotations[workflow.AnnotationMOFComponents] = workflow.MOFComponentsClassI
 
 	// Add Infrastructure Requirement annotations for GitOps admission (Story #64)
 	// These annotations allow policy engines (OPA/Gatekeeper, Kyverno) to verify

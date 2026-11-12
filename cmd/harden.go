@@ -91,7 +91,7 @@ Examples:
 				return err
 			}
 
-			if err := askString(cmd, "mof-components", &annotations.MOFComponents, "MOF Components:", "Comma-separated MOF components (e.g., weights,training-data,code); leave empty to detect"); err != nil {
+			if err := askString(cmd, "mof-components", &annotations.MOFComponents, "MOF Components:", "Comma-separated MOF components from the profile vocabulary (e.g., datasets,training-code,model-card); leave empty to detect"); err != nil {
 				return err
 			}
 		}

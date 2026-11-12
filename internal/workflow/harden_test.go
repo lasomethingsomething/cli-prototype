@@ -156,7 +156,7 @@ func TestHardenWorkflowAppliesMOFClassification(t *testing.T) {
 		for key, want := range map[string]string{
 			AnnotationMOFClass:      "II",
 			AnnotationMOFVersion:    "1.0",
-			AnnotationMOFComponents: "weights,documentation",
+			AnnotationMOFComponents: "final-model-parameters,technical-report,model-openness-config-file",
 			AnnotationRuntime:       "kserve", // written by package, must survive
 		} {
 			if got := m.Annotations[key]; got != want {
@@ -241,8 +241,8 @@ func TestHardenWorkflowRecordsSBOM(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := m.Annotations[AnnotationSBOMFormat]; got != "cyclonedx-json" {
-			t.Errorf("manifest annotation %s = %q, want cyclonedx-json", AnnotationSBOMFormat, got)
+		if got := m.Annotations[AnnotationSBOMFormat]; got != "cyclonedx" {
+			t.Errorf("manifest annotation %s = %q, want cyclonedx", AnnotationSBOMFormat, got)
 		}
 		if _, ok := m.Annotations[AnnotationMOFClass]; ok {
 			t.Error("MOF class recorded although MOF classification was disabled")

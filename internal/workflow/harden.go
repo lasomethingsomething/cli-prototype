@@ -231,9 +231,39 @@ func (w *HardenWorkflow) applyMOFClassification(detectedClass string, result *Cl
 		fmt.Printf("  ✓ MOF Class: %s (declared, matches detection)\n", w.annotations.MOFClass)
 	}
 	if w.annotations.MOFComponents == "" && len(result.Components) > 0 {
-		w.annotations.MOFComponents = strings.Join(canonicalMOFComponents(result.Components), ",")
+		w.annotations.MOFComponents = ProfileMOFComponents(canonicalMOFComponents(result.Components), w.generateMOFConfig)
 		fmt.Printf("  ✓ MOF Components: %s (detected)\n", w.annotations.MOFComponents)
 	}
+}
+
+// mofInternalToProfile maps the internal MOF classifier component names to
+// the profile's org.cncf.ai.model.mof.components vocabulary.
+var mofInternalToProfile = map[string]string{
+	"weights":       "final-model-parameters",
+	"training-data": "datasets",
+	"code":          "training-code",
+	"documentation": "technical-report",
+}
+
+// MOFComponentConfigFile is the mof.components entry the profile always
+// requires; it refers to the Model Openness Configuration File (mof.json).
+const MOFComponentConfigFile = "model-openness-config-file"
+
+// ProfileMOFComponents maps internal classifier component names onto the
+// profile vocabulary, preserving canonical MOF order, and includes the
+// always-required model-openness-config-file entry when the MOF config file
+// was generated alongside the model.
+func ProfileMOFComponents(components []string, configWritten bool) string {
+	var out []string
+	for _, c := range components {
+		if p, ok := mofInternalToProfile[c]; ok {
+			out = append(out, p)
+		}
+	}
+	if configWritten {
+		out = append(out, MOFComponentConfigFile)
+	}
+	return strings.Join(out, ",")
 }
 
 // canonicalMOFComponents orders detected components the way the MOF spec
@@ -284,7 +314,7 @@ func (w *HardenWorkflow) writeMOFConfig(result *ClassificationResult) {
 func (w *HardenWorkflow) manifestAnnotations() map[string]string {
 	annotations := make(map[string]string)
 	if w.sbomPath != "" {
-		annotations[AnnotationSBOMFormat] = string(w.sbomFormat)
+		annotations[AnnotationSBOMFormat] = ProfileSBOMFormat(w.sbomFormat)
 	}
 	if w.annotations.MOFClass != "" {
 		annotations[AnnotationMOFClass] = w.annotations.MOFClass

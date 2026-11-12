@@ -659,7 +659,7 @@ Examples:
 			// Map the signer choice to canonical annotation value
 			signingFramework := cfg.Signer
 			if cfg.Signer == "cosign" || cfg.Signer == "sigstore" {
-				signingFramework = "sigstore-cosign"
+				signingFramework = "sigstore"
 			} else if cfg.Signer == "notation" || cfg.Signer == "notary" || cfg.Signer == "notaryv2" {
 				signingFramework = "notation"
 			}

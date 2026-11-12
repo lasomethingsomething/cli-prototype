@@ -248,9 +248,9 @@ func TestPackageThenValidateAgainstRegistry(t *testing.T) {
 			t.Fatal(err)
 		}
 		for key, want := range map[string]string{
-			workflow.AnnotationSBOMFormat:    "spdx-json",
+			workflow.AnnotationSBOMFormat:    "spdx",
 			workflow.AnnotationMOFClass:      "II", // weights + README, detected
-			workflow.AnnotationMOFComponents: "weights,documentation",
+			workflow.AnnotationMOFComponents: "final-model-parameters,technical-report,model-openness-config-file",
 			workflow.AnnotationMOFVersion:    "1.0",
 			workflow.AnnotationRuntime:       "vllm", // from package, kept
 		} {
