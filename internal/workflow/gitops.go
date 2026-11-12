@@ -13,11 +13,11 @@ import (
 // DeployResult contains the result of a GitOps deployment
 type DeployResult struct {
 	Error              error
-	Deployed           bool // True if a new commit was created and pushed
-	Ready              bool // True if InferenceService reached Ready
-	PredictionVerified bool // True if a prediction was successfully served
+	Deployed           bool   // True if a new commit was created and pushed
+	Ready              bool   // True if InferenceService reached Ready
+	PredictionVerified bool   // True if a prediction was successfully served
 	ManifestGenerated  string // Path to generated manifest file, if any (non-empty means it was generated but not yet committed)
-	NewCommit          bool // True if this deploy run created a new commit
+	NewCommit          bool   // True if this deploy run created a new commit
 }
 
 // GitOpsProvider defines the interface for GitOps tools like ArgoCD and Flux
@@ -141,17 +141,17 @@ func (f *FluxProvider) Deploy(modelName, repoURL, path, modelPath, runtime, hfMo
 		return DeployResult{
 			Error:             nil,
 			ManifestGenerated: manifestPath,
-			NewCommit:        false,
+			NewCommit:         false,
 		}
 	}
-	
+
 	// If the manifest file shows up in porcelain output, it's untracked or modified
 	// Return the manifest path so the caller can offer a commit prompt
 	if len(statusOut) > 0 {
 		return DeployResult{
 			Error:             nil,
 			ManifestGenerated: manifestPath,
-			NewCommit:        false,
+			NewCommit:         false,
 		}
 	}
 

@@ -208,7 +208,7 @@ func TestInferenceServiceManifestGoldenIris(t *testing.T) {
 	modelPath := "../../models/iris"
 	repoURL := "https://github.com/lasomethingsomething/cli-prototype.git"
 	branch := "main"
-	
+
 	config, err := CreateInferenceServiceConfig(modelName, modelPath, repoURL, branch, "", "")
 	if err != nil {
 		t.Fatalf("CreateInferenceServiceConfig failed: %v", err)
@@ -307,4 +307,3 @@ func TestInferenceServiceManifestGoldenHuggingFace(t *testing.T) {
 		}
 	}
 }
-

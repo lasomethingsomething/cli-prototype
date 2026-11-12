@@ -184,7 +184,7 @@ func CreateInferenceServiceConfig(
 	// Map model format to KServe model format name and version
 	modelFormatName := strings.ToLower(string(runtimeInfo.ModelFormat))
 	modelFormatVersion := "" // Empty by default - only set for formats that need it
-	
+
 	// Validate and set model format for KServe
 	validFormats := map[string]string{
 		"sklearn":     "sklearn",
@@ -198,7 +198,7 @@ func CreateInferenceServiceConfig(
 	} else {
 		modelFormatName = "sklearn" // default to sklearn if unknown
 	}
-	
+
 	// For huggingface runtime, explicitly set format to huggingface
 	if runtime == "kserve-huggingfaceserver" {
 		modelFormatName = "huggingface"
@@ -242,7 +242,7 @@ func CreateInferenceServiceConfig(
 		ModelFormatName:    modelFormatName,
 		ModelFormatVersion: modelFormatVersion,
 		ContainerArgs:      containerArgs,
-		Annotations:       annotations,
+		Annotations:        annotations,
 	}, nil
 }
 

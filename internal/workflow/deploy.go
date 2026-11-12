@@ -18,11 +18,11 @@ type DeployWorkflow struct {
 	runtime            string // Serving runtime (e.g., "kserve-sklearnserver", "kserve-huggingfaceserver")
 	hfModelID          string // Hugging Face model ID (e.g., "facebook/opt-125m") for LLM serving
 	manifestGenerated  string // Path to generated manifest file, if not yet committed
-	deployed           bool // True if a new deploy actually happened (not no-op)
-	readyVerified      bool // True if InferenceService reached Ready
-	predictionVerified bool // True if a prediction was successfully served
-	newCommit          bool // True if a new commit was created
-	quiet              bool // If true, skip prologue/banner printing
+	deployed           bool   // True if a new deploy actually happened (not no-op)
+	readyVerified      bool   // True if InferenceService reached Ready
+	predictionVerified bool   // True if a prediction was successfully served
+	newCommit          bool   // True if a new commit was created
+	quiet              bool   // If true, skip prologue/banner printing
 }
 
 // NewDeployWorkflow creates a new deployment workflow with the given providers
@@ -103,7 +103,7 @@ func (w *DeployWorkflow) NewCommit() bool {
 func (w *DeployWorkflow) Run() error {
 	// Reset state for this run
 	w.manifestGenerated = ""
-	
+
 	if w.modelName == "" || w.repoURL == "" {
 		return fmt.Errorf("model info not set: call SetModelInfo before Run()")
 	}
@@ -147,7 +147,7 @@ func (w *DeployWorkflow) Run() error {
 	if deployResult.Error != nil {
 		return deployResult.Error
 	}
-	
+
 	// If manifest was generated but not committed, return it to the caller
 	// The caller (cmd/wizard) will handle the commit prompt
 	if deployResult.ManifestGenerated != "" {
